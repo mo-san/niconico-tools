@@ -1,4 +1,450 @@
 # coding: utf-8
+import logging
+import os
+import pickle
+import sys
+from getpass import getpass
+import re
+import requests
+from requests.cookies import RequestsCookieJar
+
+
+def get_encoding():
+    """
+    コンソールの文字コードを返す。sys.stdout.encoding が None の時には UTF-8を返す。
+
+    :rtype: str
+    """
+    return sys.stdout.encoding or "UTF-8"
+
+
+def validator(input_list):
+    """
+    動画IDが適切なものか確認する。
+
+    受け入れるのは以下の形式:
+        * "*"
+        * http://www.nicovideo.jp/watch/sm1234
+        * sm1234
+        * watch/sm123456
+        * nm1234
+        * watch/nm123456
+        * so1234
+        * watch/so123456
+        * 123456
+        * watch/123456
+
+    :param list[str] input_list:
+    :rtype: list[str]
+    """
+    matcher = re.compile("\*|(?:(?:http://www\.nicovideo\.jp/)?watch/)?(?:sm|nm|so)?\d{1,9}", re.I).match
+    for item in input_list:
+        if not matcher(item):
+            return []
+
+    return [item.replace("http://www.nicovideo.jp/watch/", "").replace("watch/", "") for item in input_list]
+
+
+class URL:
+    URL_LogIn  = "https://secure.nicovideo.jp/secure/login?site=niconico"
+    URL_Watch  = "http://www.nicovideo.jp/watch/"
+    URL_GetFlv = "http://ext.nicovideo.jp/api/getflv/"
+    URL_Info   = "http://ext.nicovideo.jp/api/getthumbinfo/"
+    URL_Pict   = "http://tn-skr1.smilevideo.jp/smile"
+    URL_GetThreadKey = "http://flapi.nicovideo.jp/api/getthreadkey"
+    URL_Message_New = "http://nmsg.nicovideo.jp/api.json/"
+
+    # 一般のマイリストを扱うためのAPI
+    URL_MyListTop  = "http://www.nicovideo.jp/my/mylist"
+    URL_ListAll    = "http://www.nicovideo.jp/api/mylistgroup/list"
+    URL_AddMyList  = "http://www.nicovideo.jp/api/mylistgroup/add"
+    URL_PurgeList  = "http://www.nicovideo.jp/api/mylistgroup/delete"
+    URL_ListOne    = "http://www.nicovideo.jp/api/mylist/list"
+    URL_AddItem    = "http://www.nicovideo.jp/api/mylist/add"
+    URL_DeleteItem = "http://www.nicovideo.jp/api/mylist/delete"
+    URL_CopyItem   = "http://www.nicovideo.jp/api/mylist/copy"
+    URL_MoveItem   = "http://www.nicovideo.jp/api/mylist/move"
+    URL_UpdateItem = "http://www.nicovideo.jp/api/mylist/update"
+
+    # とりあえずマイリストを扱うためのAPI
+    URL_ListDef   = "http://www.nicovideo.jp/api/deflist/list"
+    URL_AddDef    = "http://www.nicovideo.jp/api/deflist/add"
+    URL_DeleteDef = "http://www.nicovideo.jp/api/deflist/delete"
+    URL_CopyDef   = "http://www.nicovideo.jp/api/deflist/copy"
+    URL_MoveDef   = "http://www.nicovideo.jp/api/deflist/move"
+    URL_UpdateDef = "http://www.nicovideo.jp/api/deflist/update"
+
+
+class Msg:
+    """メッセージ集"""
+
+    LOG_FILE_NAME = "log.txt"
+    ALL_ITEM = "*"
+
+    ''' 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか '''
+    BACKSLASH = "backslashreplace"
+    CHARREF = "xmlcharrefreplace"
+    REPLACE = "replace"
+
+    ''' マイリスト編集コマンドのヘルプメッセージ '''
+    ml_default_name = "とりあえずマイリスト"
+    ml_default_id = 0
+    ml_description = "マイリストを扱います。 add, delete, move, copy の引数には " \
+                     "テキストファイルも指定できます。 その場合はファイル名の " \
+                     "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    ml_help_group_b = "マイリスト自体を操作する"
+    ml_help_group_a = "リスト中の項目を操作する"
+    ml_help_add = "指定したIDの動画を マイリストに追加します。"
+    ml_help_delete = "そのマイリストから 指定したIDの動画を削除します。" \
+                     "動画IDの代わりに * を指定すると、 マイリストを空にします。"
+    ml_help_move = "移動元から移動先へと 動画を移動します。"
+    ml_help_copy = "コピー元からコピー先へと 動画をコピーします。 " \
+                   "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。"
+    ml_help_export = "IDのみを改行で区切り、 標準出力に出力します。" \
+                     "-ee や -eee のように2回または3回指定すると" \
+                     "より詳しい情報を表示します。 " \
+                     "名前の代わりに * を指定すると 全マイリストを一覧にします。"
+    ml_help_show = "名前の代わりに * を指定すると 全マイリストを一覧にします。"
+    ml_help_outfile = "マイリストに登録された動画IDを そのファイル名で " \
+                      "テキストファイルに出力します。"
+    ml_help_purge = "そのマイリスト自体を削除します。 取り消しはできません。"
+    ml_help_create = "指定した名前で 新しくマイリストを作成します。"
+    ml_help_src = "移動(コピー)元、 あるいは各種の操作対象の、マイリストの名前"
+    ml_help_to = "移動(コピー)先のマイリストの名前"
+    ml_help_id = "マイリストの指定に、 名前の代わりにそのIDを使います。"
+
+    '''動画ダウンロードコマンドのヘルプメッセージ'''
+    nd_description = "ニコニコ動画のデータを ダウンロードします。"
+    nd_help_video_id = "ダウンロードしたい動画ID。 例: sm12345678 " \
+                       "テキストファイルも指定できます。 その場合はファイル名の " \
+                       "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    nd_help_password = "パスワード"
+    nd_help_username = "メールアドレス"
+    nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
+    nd_help_outfile = "--info の結果をそのファイル名で テキストファイルに出力します。"
+    nd_help_comment = "指定すると、 コメントをダウンロードします。"
+    nd_help_video = "指定すると、 動画をダウンロードします。"
+    nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
+    nd_help_mylistname = "動画を登録したい マイリストの名前。 無ければ作成されます。"
+    nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
+    nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
+    nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
+
+    input_mail = "メールアドレスを入力してください。"
+    input_pass = "パスワードを入力してください(画面には表示されません)。"
+
+    ''' ログに書くメッセージ '''
+    nd_start_download = "{} 件の動画の情報を取りに行きます。"
+    nd_download_done = "{} に保存しました。"
+    nd_download_video = "({}/{}) ID: {} (タイトル: {}) の動画をダウンロードします。"
+    nd_download_pict = "({}/{}) ID: {} (タイトル: {}) のサムネイルをダウンロードします。"
+    nd_download_comment = "({}/{}) ID: {} (タイトル: {}) のコメントをダウンロードします。"
+    nd_start_dl_video = "{} 件の動画をダウンロードします。"
+    nd_start_dl_pict = "{} 件のサムネイルをダウンロードします。"
+    nd_start_dl_comment = "{} 件のコメントをダウンロードします。"
+    nd_file_name = "{0}_{1}.{2}"
+    nd_video_url_is = "{} の動画URL: {}"
+    nd_deleted_or_private = "{} は削除されているか、非公開です。"
+
+    ml_exported = "{} に出力しました"
+    ml_items_counts = "含まれる項目の数:"
+    ml_fetching_mylist_id = "マイリスト: {} の ID を問い合わせています..."
+    ml_showing_mylist = "マイリスト「{}」の詳細を読み込んでいます..."
+    ml_loading_mylists = "マイリストページを読み込んでいます..."
+    ml_mylist_found = "ID: {}, NAME: {}, DESC: {}"
+
+    ml_ask_delete_all = "{} に登録されている以下の全ての項目を削除します。"
+    ml_confirmation = "この操作は取り消せません。よろしいですか? (Y/N)"
+    ml_answer_yes = "処理を開始します。"
+    ml_answer_no = "操作を中止しました。"
+    ml_answer_invalid = "Y または N を入力してください。"
+    ml_deleted_or_private = "{0[video_id]} {0[title]} は削除されているか非公開です。"
+
+    ml_done_add = "[完了:追加] ({}/{}) 動画: {}"
+    ml_done_delete = "[完了:削除] ({}/{}) 動画: {}"
+    ml_done_copy = "[完了:コピー] ({}/{}) 動画ID: {}"
+    ml_done_move = "[完了:移動] ({}/{}) 動画ID: {}"
+    ml_done_purge = "[完了:マイリスト削除] 名前: {}"
+    ml_done_create = "[完了:マイリスト作成] 名前: {} (公開: {}), 説明文: {}"
+
+    ml_will_add = "[作業内容:追加] 対象: {}, 動画ID: {}"
+    ml_will_delete = "[作業内容:削除] {} から, 動画ID: {}"
+    ml_will_copyormove = "[作業内容:{}] {} から {} へ, 動画ID: {}"
+    ml_will_purge = "[作業内容:マイリスト削除] マイリスト「{}」を完全に削除します。"
+
+
+class Err:
+    """ エラーメッセージ """
+
+    lack_arg = "[エラー] 引数が足りません: {}"
+    invalid_auth = "メールアドレスとパスワードを入力してください。"
+    invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
+                      "http://www.nicovideo.jp/watch/sm1234," \
+                      " sm1234, nm1234, so1234, 123456, watch/123456"
+    args_ambiguous = "引数が曖昧です。"
+    list_names_are_same = "[エラー] 発信元と受信先の名前が同じです。"
+    cant_move_to_deflist = "[エラー] とりあえずマイリストには移動もコピーもできません。"
+    cant_perform_all = "[エラー] このコマンドに * は指定できません。"
+    only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
+    no_commands = "[エラー] コマンドを指定してください。"
+    item_not_contained = "[エラー] 以下の項目は {} に存在しません: {}"
+    name_ambiguous = "同名のマイリストが {}件あります。名前の代わりに" \
+                     "IDで(--id を使って)指定し直してください。"
+    name_ambiguous_detail = "名前: {0[name]}, ID: {0[id]}, {0[publicity]}," \
+                            " 作成日: {0[since]}, 説明文: {0[description]}"
+    mylist_not_exist = "[エラー] {} という名前のマイリストは存在しません。"
+    mylist_id_not_exist = "[エラー] {} というIDのマイリストは存在しません。"
+    over_load = "[エラー] {} にはこれ以上追加できません。"
+    remaining = "以下の項目は処理されませんでした。"
+    already_exist = "[エラー]すでに存在しています。 ID: {} (タイトル: {})"
+    known_error = "[エラー] 動画: {} サーバーからの返事: {}"
+    unknown_error_itemid = "[エラー] ({}/{}) 動画: {}, サーバーからの返事: {}"
+    unknown_error = "[エラー] ({}/{}) 動画: {}, サーバーからの返事: {}"
+    unknown_error_list = "[エラー] サーバーからの返事: {}"
+    failed_to_create = "[エラー] {} の作成に失敗しました。 サーバーからの返事: {}"
+    failed_to_purge = "[エラー] {} の削除に失敗しました。 サーバーからの返事: {}"
+    invalid_spec = "[エラー] {} は不正です。マイリストの名前またはIDは" \
+                   "文字列か整数で入力してください。"
+    no_items = "[エラー] 動画が1件も登録されていません。"
+
+    '''
+    APIから返ってくるエラーメッセージ
+    {'error': {'code': 'MAXERROR', 'description': 'このマイリストにはもう登録できません'},'status':'fail'}
+    {'error': {'code': 'EXIST', 'description': 'すでに登録されています'}, 'status': 'fail'}
+    {'error': {'code': 'NONEXIST', 'description': 'アイテムが存在しません'}, 'status': 'fail'}
+
+    {'error': {'code': 'COMMANDERROR', 'description': '未定義のコマンドです'}, 'status': 'fail'}
+    {'error': {'code': 'PARAMERROR', 'description': 'パラメータエラー'}, 'status': 'fail'}
+    {'error': {'code': 'INVALIDTOKEN', 'description': '不正なトークンです'}, 'status': 'fail'}
+    {'error': {'code': 'NOAUTH', 'description': '認証できませんでした'}, 'status': 'fail'}
+
+    '''
+    # エラーだが対処可能
+    MAXERROR = "MAXERROR"
+    EXIST = "EXIST"
+    NONEXIST = "NONEXIST"
+
+    # コマンドが不正
+    COMMANDERROR = "COMMANDERROR"
+    PARAMERROR = "PARAMERROR"
+    INVALIDTOKEN = "INVALIDTOKEN"
+    EXPIRETOKEN = "EXPIRETOKEN"
+    NOAUTH = "NOAUTH"
+    SECRETUSER = "SECRETUSER"
+    INVALIDUSER = "INVALIDUSER"
+    INVALIDVIDEO = "INVALIDVIDEO"
+
+    # サーバーが不調
+    MAINTENANCE = "MAINTENANCE"
+    INTERNAL = "INTERNAL"
+
+
+class LogIn:
+    COOKIE_FILE_NAME = "requests_cookie"
+
+    def __init__(self, auth, session=None, logger=None):
+        """
+        :param tuple[typing.Optional[str], typing.Optional[str]] auth:
+        :param typing.Optional[requests.Session] session: セッションオブジェクト
+        :param T <= logging.logger logger:
+        """
+        self.auth = None
+        if auth is None and session is None:
+            self.auth = self.get_credentials()
+        # アドレスとパスワードの両方が空のときだけ素通りする
+        elif auth[0] is not None or auth[1] is not None:
+            self.auth = self.get_credentials(mail=auth[0], password=auth[1])
+        self.session = session if session else self.get_session()  # type: requests.Session
+        self.token = self.get_token()  # type: str
+        self.logger = logger
+
+    def get_session(self, force_login=False):
+        """
+        :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
+        :return: セッションオブジェクト
+        """
+        self.session = requests.session()
+        if force_login:
+            # if self._loggable: self.logger.info("ログインしています...")
+            while True:
+                res = self.session.post(URL.URL_LogIn, params=self.auth)
+                if "<title>niconico</title>" in res.text:
+                    self.save_cookies(self.session.cookies)
+                    break
+                if "ログイン - niconico</title>" in res.text:
+                    print(Err.invalid_auth)
+                    self.auth = self.get_credentials()
+                    continue
+                else:
+                    print("Couldn't determine whether we could log in."
+                          " This is the returned HTML:\n{}".format(res.text))
+                    continue
+        else:
+            cook = self.load_cookies()
+            if cook:
+                self.session.cookies = cook
+        return self.session
+
+    def get_token(self):
+        """
+        マイリストの操作に必要な"NicoAPI.token"を取ってくる。
+
+        :rtype: str
+        """
+        if self.session is None: self.get_session()
+
+        text = self.session.get(URL.URL_MyListTop).text
+        try:
+            fragment = text.split("NicoAPI.token = \"")[1]
+            self.token = fragment[:fragment.find("\"")]
+            # if self._loggable: self.logger.debug("API トークン: {}".format(self.token))
+            return self.token
+        except IndexError:
+            self.get_session(force_login=True)
+            return self.get_token()
+
+    def get_credentials(self, mail=None, password=None):
+        """
+
+        :param str mail: メールアドレス。
+        :param str password: パスワード
+        :rtype: dict[str, str]
+        """
+        un, pw = mail, password
+        if un is None:
+            r = re.compile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
+            while True:
+                print(Msg.input_mail)
+                un = input("-=>")
+                if not un: continue
+                if r.match(un): break
+        if pw is None:
+            while True:
+                print(Msg.input_pass)
+                pw = getpass("-=>")
+                if pw: break
+        return {
+            "mail_tel": un,
+            "password": pw
+        }
+
+    def save_cookies(self, requests_cookiejar, file_name=COOKIE_FILE_NAME):
+        """
+        :param RequestsCookieJar requests_cookiejar:
+        :param str file_name:
+        """
+        with open(file_name, "wb") as fd:
+            pickle.dump(requests_cookiejar, fd)
+            # if self._loggable: self.logger.debug("クッキーを保存しました。")
+
+    def load_cookies(self, file_name=COOKIE_FILE_NAME):
+        """
+        :param str file_name:
+        :return: クッキーオブジェクト
+        """
+        try:
+            with open(file_name, "rb") as fd:
+                return pickle.load(fd)
+        except (FileNotFoundError, EOFError):
+            # if self._loggable: self.logger.debug("クッキーファイルが見つかりませんでした。")
+            return None
+
+
+class MyLogger(logging.Logger):
+    def __init__(self, log_file_name=None, name="root", log_level=logging.INFO):
+        if isinstance(log_level, (str, int)):
+            log_level = logging.getLevelName(log_level)
+        else:
+            raise ValueError("Invalid Logging Level. You Entered: %s", log_level)
+
+        self.enco = get_encoding()
+        self.log_level = log_level
+        formatter = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
+
+        logging.Logger.__init__(self, name, log_level)
+        self.logger = logging.getLogger()
+
+        # initializing stdout handler
+        log_stdout = logging.StreamHandler(sys.stdout)
+        log_stdout.setLevel(log_level)
+        log_stdout.setFormatter(formatter)
+        self.addHandler(log_stdout)
+
+        # initializing file handler
+        if log_file_name is None:
+            log_file_name = os.path.join(os.path.abspath(os.path.dirname(__file__)), "log.txt")
+        log_file = logging.FileHandler(filename=log_file_name, encoding="utf-8")
+        log_file.setLevel(log_level)
+        log_file.setFormatter(formatter)
+        self.addHandler(log_file)
+
+    def forwarding(self, level, msg, *args, **kwargs):
+        _msg = msg.encode(self.enco, Msg.BACKSLASH).decode(self.enco)
+        _args = tuple([item.encode(self.enco, Msg.BACKSLASH).decode(self.enco)
+                       if isinstance(item, str) else item for item in args[0]])
+        self._log(level, _msg, _args, **kwargs)
+
+    def debug(self, msg, *args, **kwargs): self.forwarding(logging.DEBUG, msg, args, **kwargs)
+
+    def info(self, msg, *args, **kwargs): self.forwarding(logging.INFO, msg, args, **kwargs)
+
+    def warning(self, msg, *args, **kwargs): self.forwarding(logging.WARNING, msg, args, **kwargs)
+
+    def error(self, msg, *args, **kwargs): self.forwarding(logging.ERROR, msg, args, **kwargs)
+
+    def critical(self, msg, *args, **kwargs): self.forwarding(logging.CRITICAL, msg, args, **kwargs)
+
+
+class Key:
+    """
+    データの集まりのキーとなる文字列たち。
+
+    DATE ("first_retrieve"):
+        例えば…        2014-07-26
+        もともとは…    2014-07-26T19:27:07+09:00
+
+    MOVIE_TYPE ("movie_type"):
+        one of "mp4", "flv" and "swf"
+    URL_PIC ("thumbnail_url"):
+        例えば… http://tn-skr1.smilevideo.jp/smile?i=24093152
+    """
+    CH_ID           = "ch_id"           # チャンネル動画のみ
+    CH_NAME         = "ch_name"         # チャンネル動画のみ
+    CH_ICON_URL     = "ch_icon_url"     # チャンネル動画のみ
+    COMMENT_NUM     = "comment_num"
+    FIRST_RETRIEVE  = "first_retrieve"  # 例えば: 2014-07-26 もともとは: 2014-07-26T19:27:07+09:00
+    DELETED         = "deleted"
+    DESCRIPTION     = "description"
+    EMBEDDABLE      = "embeddable"      # int; 0 or 1
+    FILE_NAME       = "file_name"
+    LAST_RES_BODY   = "last_res_body"
+    LENGTH          = "length"          # str
+    LENGTH_SECONDS  = "length_seconds"  # int
+    NUM_RES         = "num_res"         # int
+    MYLIST_COUNTER  = "mylist_counter"  # int
+    MOVIE_TYPE      = "movie_type"      # いずれか: mp4, flv, swf
+    NO_LIVE_PLAY    = "no_live_play"    # int; 0 or 1
+    SIZE_HIGH       = "size_high"       # int
+    SIZE_LOW        = "size_low"        # int
+    TAGS            = "tags"
+    TAGS_LIST       = "tags_list"       # list
+    THUMBNAIL_URL   = "thumbnail_url"   # 例えば: http://tn-skr1.smilevideo.jp/smile?i=24093152
+    TITLE           = "title"
+    USER_ID         = "user_id"         # int
+    USER_NAME       = "user_nickname"
+    USER_ICON_URL   = "user_icon_url"
+    VIDEO_ID        = "video_id"
+    VIEW_COUNTER    = "view_counter"    # int
+
+
+class MKey:
+    ID = "id"
+    NAME = "name"
+    IS_PUBLIC = "is_public"
+    PUBLICITY = "publicity"
+    SINCE = "since"
+    DESCRIPTION = "description"
+    ITEM_DATA = "item_data"
 
 
 if __name__ == "__main__":
