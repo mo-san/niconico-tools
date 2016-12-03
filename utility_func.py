@@ -78,7 +78,9 @@ class URL:
 class Msg:
     """メッセージ集"""
 
-    LOG_FILE_NAME = "log.txt"
+    LOG_FILE_ND = "nicodown_log.txt"
+    LOG_FILE_ML = "nicoml_log.txt"
+    COOKIE_FILE_NAME = "nicodown.pickle"
     ALL_ITEM = "*"
 
     ''' 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか '''
@@ -240,8 +242,6 @@ class Err:
 
 
 class LogIn:
-    COOKIE_FILE_NAME = "requests_cookie"
-
     def __init__(self, auth, session=None, logger=None):
         """
         :param tuple[typing.Optional[str], typing.Optional[str]] auth:
@@ -265,7 +265,6 @@ class LogIn:
         """
         self.session = requests.session()
         if force_login:
-            # if self._loggable: self.logger.info("ログインしています...")
             while True:
                 res = self.session.post(URL.URL_LogIn, params=self.auth)
                 if "<title>niconico</title>" in res.text:
@@ -297,7 +296,6 @@ class LogIn:
         try:
             fragment = text.split("NicoAPI.token = \"")[1]
             self.token = fragment[:fragment.find("\"")]
-            # if self._loggable: self.logger.debug("API トークン: {}".format(self.token))
             return self.token
         except IndexError:
             self.get_session(force_login=True)
@@ -328,30 +326,28 @@ class LogIn:
             "password": pw
         }
 
-    def save_cookies(self, requests_cookiejar, file_name=COOKIE_FILE_NAME):
+    def save_cookies(self, requests_cookiejar, file_name=Msg.COOKIE_FILE_NAME):
         """
         :param RequestsCookieJar requests_cookiejar:
         :param str file_name:
         """
-        with open(file_name, "wb") as fd:
+        with open(os.path.join(os.path.abspath(os.environ["USERPROFILE"]), file_name), "wb") as fd:
             pickle.dump(requests_cookiejar, fd)
-            # if self._loggable: self.logger.debug("クッキーを保存しました。")
 
-    def load_cookies(self, file_name=COOKIE_FILE_NAME):
+    def load_cookies(self, file_name=Msg.COOKIE_FILE_NAME):
         """
         :param str file_name:
         :return: クッキーオブジェクト
         """
         try:
-            with open(file_name, "rb") as fd:
+            with open(os.path.join(os.path.abspath(os.environ["USERPROFILE"]), file_name), "rb") as fd:
                 return pickle.load(fd)
         except (FileNotFoundError, EOFError):
-            # if self._loggable: self.logger.debug("クッキーファイルが見つかりませんでした。")
             return None
 
 
 class MyLogger(logging.Logger):
-    def __init__(self, log_file_name=None, name="root", log_level=logging.INFO):
+    def __init__(self, log_file_name=Msg.LOG_FILE_ND, name="root", log_level=logging.INFO):
         if isinstance(log_level, (str, int)):
             log_level = logging.getLevelName(log_level)
         else:
@@ -364,15 +360,14 @@ class MyLogger(logging.Logger):
         logging.Logger.__init__(self, name, log_level)
         self.logger = logging.getLogger()
 
-        # initializing stdout handler
+        # 標準出力用ハンドラー
         log_stdout = logging.StreamHandler(sys.stdout)
         log_stdout.setLevel(log_level)
         log_stdout.setFormatter(formatter)
         self.addHandler(log_stdout)
 
-        # initializing file handler
-        if log_file_name is None:
-            log_file_name = os.path.join(os.path.abspath(os.path.dirname(__file__)), "log.txt")
+        # ファイル書き込み用ハンドラー
+        log_file_name = os.path.join(os.path.abspath(os.environ["USERPROFILE"]), log_file_name)
         log_file = logging.FileHandler(filename=log_file_name, encoding="utf-8")
         log_file.setLevel(log_level)
         log_file.setFormatter(formatter)

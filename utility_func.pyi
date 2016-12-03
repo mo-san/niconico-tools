@@ -39,7 +39,9 @@ class URL:
 
 
 class Msg:
-    LOG_FILE_NAME = ...  # type: str
+    LOG_FILE_ND = ...  # type: str
+    LOG_FILE_ML = ...  # type: str
+    COOKIE_FILE_NAME = ...  # type: str
     ALL_ITEM = ...  # type: str
 
     BACKSLASH = ...  # type: str
@@ -66,7 +68,6 @@ class Err:
 
 
 class LogIn:
-    COOKIE_FILE_NAME = ...  # type: str
     def __init__(self, auth: Tuple[Optional[str], Optional[str]],
                  logger:LoggerType=..., session: requests.Session=...) -> None:
         self.session = ...  #type: Optional[requests.Session]
@@ -79,7 +80,7 @@ class LogIn:
     def get_credentials(self, mail: str=..., password: str=...) -> Dict[str, str]: ...
     def save_cookies(self, requests_cookiejar: RequestsCookieJar,
                      file_name: str=...) -> None: ...
-    def load_cookies(self, file_name: str=COOKIE_FILE_NAME) -> RequestsCookieJar: ...
+    def load_cookies(self, file_name: str=...) -> RequestsCookieJar: ...
 
 
 class MyLogger(logging.Logger):

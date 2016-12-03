@@ -253,21 +253,20 @@ class GetVideos(GetResources):
                 Msg.nd_download_video.format(
                     index + 1, len(database), video_id,
                     self.database[video_id][Key.TITLE]))
-            self.download(video_id, save_dir)
+            self.download(video_id)
             if len(database) > 1:
                 time.sleep(1)
 
-    def download(self, video_id, save_dir, chunk_size=1024 * 10):
+    def download(self, video_id, chunk_size=1024 * 10):
         """
-        :param str save_dir:
-        :param str video_id:: 動画ID (e.g. sm1234)
+        :param str video_id: 動画ID (e.g. sm1234)
         :param int chunk_size:
         :rtype: bool
         """
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             self.so_video_id = video_id
-            return self.download(redirected, save_dir)
+            return self.download(redirected)
 
         response = self.session.get(URL.URL_GetFlv + video_id +
                                     ("", "?as3=1")[video_id.startswith("nm")])
@@ -294,21 +293,22 @@ class GetVideos(GetResources):
         else:
             file_size = self.database[video_id][Key.SIZE_LOW]
 
+        file_path = os.path.join(self.save_dir, file_name)
         if progressbar is None:
-            with open(os.path.join(save_dir, file_name), "wb") as f:
+            with open(file_path, "wb") as f:
                 [f.write(chunk) for chunk in
                  video_data.iter_content(chunk_size=chunk_size) if chunk]
         else:
             pbar = progressbar.ProgressBar(widgets=self.widgets, max_value=file_size)
             pbar.start()
-            with open(os.path.join(save_dir, file_name), "wb") as f:
+            with open(file_path, "wb") as f:
                 downloaded_size = 0
                 for chunk in video_data.iter_content(chunk_size=chunk_size):
                     if chunk:
                         downloaded_size += f.write(chunk)
                         pbar.update(downloaded_size)
             pbar.finish()
-        self.logger.info(Msg.nd_download_done.format(file_name))
+        self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
     def make_file_name(self, video_id):
@@ -340,22 +340,21 @@ class GetThumbnails(GetResources):
                 Msg.nd_download_pict.format(
                     index + 1, len(database), video_id,
                     self.database[video_id][Key.TITLE]))
-            self.download(video_id, save_dir)
+            self.download(video_id)
 
-    def download(self, video_id, save_dir):
+    def download(self, video_id):
         """
-        :param str save_dir:
         :param str video_id:: 動画ID (e.g. sm1234)
         :rtype: bool
         """
         image_data = self._download(video_id)
         if not image_data:
             return False
-        file_name = self.make_file_name(video_id)
+        file_path = os.path.join(self.save_dir, self.make_file_name(video_id))
 
-        with open(os.path.join(save_dir, file_name), 'wb') as f:
+        with open(file_path, 'wb') as f:
             f.write(image_data.content)
-        self.logger.info(Msg.nd_download_done.format(file_name))
+        self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
     def _download(self, video_id, is_large=True, retry=1):
@@ -416,25 +415,24 @@ class GetComments(GetResources):
                 Msg.nd_download_comment.format(
                     index + 1, len(database), video_id,
                     self.database[video_id][Key.TITLE]))
-            self.download(video_id, save_dir)
+            self.download(video_id)
             time.sleep(1.5)
 
-    def download(self, video_id, save_dir):
+    def download(self, video_id):
         """
-        :param str save_dir:
         :param str video_id:: 動画ID (e.g. sm1234)
         :rtype: bool
         """
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             self.so_video_id = video_id
-            return self.download(redirected, save_dir)
+            return self.download(redirected)
 
         response = self.session.get(URL.URL_GetFlv + video_id + ("", "?as3=1")[video_id.startswith("nm")])
 
         if "error=access_locked" in response.text:
             time.sleep(6)
-            return self.download(video_id, save_dir)
+            return self.download(video_id)
 
         parameters = response.text.split("&")
         thread_id = [p[10:] for p in parameters if p.startswith("thread_id=")][0]  # type: str
@@ -445,7 +443,7 @@ class GetComments(GetResources):
         if video_id.startswith(("sm", "nm")):
             comment_data = self.session.post(url=msg_server, data=self.make_param_xml(thread_id, user_id))
             file_name = self.make_file_name(video_id)
-            with open(os.path.join(save_dir, file_name), "wb") as f:
+            with open(os.path.join(self.save_dir, file_name), "wb") as f:
                 data = comment_data.content.replace(b"><", b">\r\n<") + b"\r\n"
                 f.write(data)
         else:
@@ -462,7 +460,7 @@ class GetComments(GetResources):
                 self.so_video_id = None
             else:
                 file_name = self.make_file_name(video_id)
-            with open(os.path.join(save_dir, file_name), "wb") as f:
+            with open(os.path.join(self.save_dir, file_name), "wb") as f:
                 data = comment_data.content.replace(b"}, ", b"},\r\n") + b"\r\n"
                 f.write(data)
 
@@ -596,7 +594,7 @@ def main(args):
     if not os.path.isdir(args.dest):
         os.makedirs(args.dest)
 
-    logger = MyLogger(log_level=args.loglevel, log_file_name=Msg.LOG_FILE_NAME)
+    logger = MyLogger(log_level=args.loglevel, log_file_name=Msg.LOG_FILE_ND)
     database = get_infos(videoid, logger=logger)
 
     username = getattr(args, "user")[0] if isinstance(getattr(args, "user"), list) else None

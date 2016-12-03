@@ -772,7 +772,7 @@ def main(args):
     """
     if args.what: print(args) or exit()
 
-    logger = MyLogger(log_level=args.loglevel, log_file_name=Msg.LOG_FILE_NAME)
+    logger = MyLogger(log_level=args.loglevel, log_file_name=Msg.LOG_FILE_ML)
 
     username = getattr(args, "user")[0] if isinstance(getattr(args, "user"), list) else None
     password = getattr(args, "pass")[0] if isinstance(getattr(args, "pass"), list) else None
