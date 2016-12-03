@@ -23,6 +23,7 @@ from utility_func import Msg, URL, Key, MyLogger, LogIn, get_encoding, validator
     nicodown --thumbnail --dest ".\Downloads" sm1 sm2 sm3 sm4 sm5
     nicodown --comment --video --thumbnail --dest ".\Downloads" sm1 sm2 sm3 sm4 sm5
     nicodown -cvt -d ".\Downloads" +ids.txt
+    nicodown -cvt --xml -dest ".\Downloads" sm1
 
 他のコマンド:
     引数がどの様に解釈されるかを確認したいとき (確認するだけで、プログラムは実行しません):
@@ -344,7 +345,7 @@ class GetThumbnails(GetResources):
 
     def download(self, video_id):
         """
-        :param str video_id:: 動画ID (e.g. sm1234)
+        :param str video_id: 動画ID (e.g. sm1234)
         :rtype: bool
         """
         image_data = self._download(video_id)
@@ -361,7 +362,7 @@ class GetThumbnails(GetResources):
         """
         サムネイル画像をダウンロードしにいく。
 
-        :param str video_id:: 動画ID (e.g. sm1234)
+        :param str video_id: 動画ID (e.g. sm1234)
         :param bool is_large: 大きいサイズのサムネイルを取りに行くかどうか
         :param int retry: 再試行回数
         :rtype: typing.Union[bool, requests.Response]
@@ -400,9 +401,10 @@ class GetComments(GetResources):
         super().__init__(auth=auth, session=session, logger=logger)
         self.so_video_id = None
 
-    def start(self, database, save_dir):
+    def start(self, database, save_dir, xml_mode=False):
         """
 
+        :param bool xml_mode:
         :param dict[str, dict[str, typing.Union[int, str]]] database:
         :param str save_dir:
         """
@@ -415,12 +417,14 @@ class GetComments(GetResources):
                 Msg.nd_download_comment.format(
                     index + 1, len(database), video_id,
                     self.database[video_id][Key.TITLE]))
-            self.download(video_id)
-            time.sleep(1.5)
+            self.download(video_id, xml_mode)
+            if len(self.database) > 1:
+                time.sleep(1.5)
 
-    def download(self, video_id):
+    def download(self, video_id, xml_mode=False):
         """
-        :param str video_id:: 動画ID (e.g. sm1234)
+        :param str video_id: 動画ID (e.g. sm1234)
+        :param bool xml_mode:
         :rtype: bool
         """
         if video_id.startswith("so"):
@@ -431,52 +435,53 @@ class GetComments(GetResources):
         response = self.session.get(URL.URL_GetFlv + video_id + ("", "?as3=1")[video_id.startswith("nm")])
 
         if "error=access_locked" in response.text:
-            time.sleep(6)
+            time.sleep(3)
+            print("アクセス制限が解除されるのを待っています…")
+            time.sleep(3)
             return self.download(video_id)
 
         parameters = response.text.split("&")
         thread_id = [p[10:] for p in parameters if p.startswith("thread_id=")][0]  # type: str
         msg_server = [unquote(p[3:]) for p in parameters if p.startswith("ms=")][0]  # type:str
         user_id = [p[8:] for p in parameters if p.startswith("user_id=")][0]  # type: str
-        user_key = [p[8:] for p in parameters if p.startswith("userkey=")][0]  # type: str
+        user_key = [unquote(p[8:]) for p in parameters if p.startswith("userkey=")][0]  # type: str
 
-        if video_id.startswith(("sm", "nm")):
-            comment_data = self.session.post(url=msg_server, data=self.make_param_xml(thread_id, user_id))
-            file_name = self.make_file_name(video_id)
-            with open(os.path.join(self.save_dir, file_name), "wb") as f:
-                data = comment_data.content.replace(b"><", b">\r\n<") + b"\r\n"
-                f.write(data)
+        if xml_mode and video_id.startswith(("sm", "nm")):
+            comment_data = (self.session.post(url=msg_server, data=self.make_param_xml(thread_id, user_id))
+                            .content.replace(b"><", b">\r\n<") + b"\r\n")
         else:
-            opt_thread_id = [p[19:] for p in parameters if p.startswith("optional_thread_id=")][0]  # type: str
-            # needs_key = [p[10:] for p in parameters if p.startswith("needs_key=")][0]  # type: str
-            # thread_key, force_184 = "", "0"
-            # if needs_key == "1":
-            thread_key, force_184 = self.get_thread_key(video_id)
-            parameters = self.make_param_json(user_id, user_key, thread_id, opt_thread_id, thread_key, force_184)
-            comment_data = self.session.post(URL.URL_Message_New, json=parameters)
-
-            if self.so_video_id:
-                file_name = self.make_file_name(self.so_video_id)
-                self.so_video_id = None
+            if video_id.startswith(("sm", "nm")):
+                parameters = self.make_param_json(False, user_id, user_key, thread_id)
             else:
-                file_name = self.make_file_name(video_id)
-            with open(os.path.join(self.save_dir, file_name), "wb") as f:
-                data = comment_data.content.replace(b"}, ", b"},\r\n") + b"\r\n"
-                f.write(data)
+                opt_thread_id = [p[19:] for p in parameters if p.startswith("optional_thread_id=")][0]  # type: str
+                needs_key = [p[10:] for p in parameters if p.startswith("needs_key=")][0]  # type: str
+                thread_key, force_184 = self.get_thread_key(video_id, needs_key)
+                parameters = self.make_param_json(
+                    True, user_id, user_key, thread_id, opt_thread_id, thread_key, force_184)
 
-        self.logger.info(Msg.nd_download_done.format(file_name))
+            comment_data = (self.session.post(URL.URL_Message_New, json=parameters)
+                            .content.replace(b"}, ", b"},\r\n") + b"\r\n")
+
+        file_path = os.path.join(self.save_dir, self.make_file_name(self.so_video_id or video_id, xml_mode))
+        self.so_video_id = None
+        with open(file_path, "wb") as f:
+            f.write(comment_data)
+        self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
-    def make_file_name(self, video_id):
-        ext = "xml" if video_id.startswith(("sm", "nm")) else "json"
+    def make_file_name(self, video_id, xml_mode=False):
+        ext = "xml" if xml_mode else "json"
         return Msg.nd_file_name.format(video_id, self.database[video_id][Key.FILE_NAME], ext)
 
-    def get_thread_key(self, video_id):
+    def get_thread_key(self, video_id, needs_key="1"):
         """
 
+        :param str needs_key:
         :param str video_id:
         :rtype: tuple[str, str]
         """
+        if needs_key != "1":
+            return "", "0"
         response = self.session.get(URL.URL_GetThreadKey, params={"thread": video_id})
         parameters = response.text.split("&")
         threadkey = [p[10:] for p in parameters if p.startswith("threadkey=")][0]  # type: str
@@ -501,25 +506,27 @@ class GetComments(GetResources):
               '0-99999:9999,1000</thread_leaves>' \
               '</packet>'.format(thread_id, user_id)
 
-    def make_param_json(self, user_id, user_key, thread_id, optional_thread_id, thread_key, force_184):
+    def make_param_json(self, official_video, user_id, user_key, thread_id,
+                        optional_thread_id=None, thread_key=None, force_184=None):
         """
         fork="1" があると投稿者コメントを取得する。
         0-99999:9999,1000: 「0分～99999分までの範囲で
         一分間あたり9999件、直近の1000件を取得する」の意味。
 
+        :param bool official_video: 公式動画なら True
         :param str user_id:
         :param str user_key:
         :param str thread_id:
-        :param str optional_thread_id:
-        :param str thread_key:
-        :param str force_184:
+        :param str | None optional_thread_id:
+        :param str | None thread_key:
+        :param str | None force_184:
         """
-        return [
+        result = [
             {"ping": {"content": "rs:0"}},
             {"ping": {"content": "ps:0"}},
             {
                 "thread": {
-                    "thread"     : optional_thread_id,
+                    "thread"     : optional_thread_id or thread_id,
                     "version"    : "20090904",
                     "language"   : 0,
                     "user_id"    : user_id,
@@ -533,7 +540,7 @@ class GetComments(GetResources):
             {"ping": {"content": "ps:1"}},
             {
                 "thread_leaves": {
-                    "thread"  : optional_thread_id,
+                    "thread"  : optional_thread_id or thread_id,
                     "language": 0,
                     "user_id" : user_id,
                     # "content" : "0-4:100,250",  # 公式仕様のデフォルト値
@@ -543,39 +550,42 @@ class GetComments(GetResources):
                     "userkey" : user_key
                 }
             },
-            {"ping": {"content": "pf:1"}},
-            {"ping": {"content": "ps:2"}},
-            {
-                "thread": {
-                    "thread"     : thread_id,
-                    "version"    : "20090904",
-                    "language"   : 0,
-                    "user_id"    : user_id,
-                    "force_184"  : force_184,
-                    "with_global": 1,
-                    "scores"     : 1,
-                    "nicoru"     : 0,
-                    "threadkey"  : thread_key
-                }
-            },
-            {"ping": {"content": "pf:2"}},
-            {"ping": {"content": "ps:3"}},
-            {
-                "thread_leaves": {
-                    "thread"   : thread_id,
-                    "language" : 0,
-                    "user_id"  : user_id,
-                    # "content"  : "0-4:100,250",  # 公式仕様のデフォルト値
-                    "content"  : "0-99999:9999,1000",
-                    "scores"   : 1,
-                    "nicoru"   : 0,
-                    "force_184": force_184,
-                    "threadkey": thread_key
-                }
-            },
-            {"ping": {"content": "pf:3"}},
-            {"ping": {"content": "rf:0"}}
+            {"ping": {"content": "pf:1"}}
         ]
+
+        if official_video:
+            result += [{"ping": {"content": "ps:2"}},
+                {
+                    "thread": {
+                        "thread"     : thread_id,
+                        "version"    : "20090904",
+                        "language"   : 0,
+                        "user_id"    : user_id,
+                        "force_184"  : force_184,
+                        "with_global": 1,
+                        "scores"     : 1,
+                        "nicoru"     : 0,
+                        "threadkey"  : thread_key
+                    }
+                },
+                {"ping": {"content": "pf:2"}},
+                {"ping": {"content": "ps:3"}},
+                {
+                    "thread_leaves": {
+                        "thread"   : thread_id,
+                        "language" : 0,
+                        "user_id"  : user_id,
+                        # "content"  : "0-4:100,250",  # 公式仕様のデフォルト値
+                        "content"  : "0-99999:9999,1000",
+                        "scores"   : 1,
+                        "nicoru"   : 0,
+                        "force_184": force_184,
+                        "threadkey": thread_key
+                    }
+                },
+                {"ping": {"content": "pf:3"}}]
+        result += [{"ping": {"content": "rf:0"}}]
+        return result
 
 
 def main(args):
@@ -606,7 +616,7 @@ def main(args):
         GetThumbnails(logger=logger).start(database, args.dest)
 
     if args.comment:
-        GetComments(logger=logger, session=session).start(database, args.dest)
+        GetComments(logger=logger, session=session).start(database, args.dest, args.xml)
 
     if args.video:
         GetVideos(logger=logger, session=session).start(database, args.dest)
@@ -623,6 +633,7 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
     parser.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
     parser.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
+    parser.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
     parser.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="ファイル名")
     parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
     parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",

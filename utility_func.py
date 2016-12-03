@@ -127,7 +127,8 @@ class Msg:
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
     nd_help_video = "指定すると、 動画をダウンロードします。"
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
-    nd_help_mylistname = "動画を登録したい マイリストの名前。 無ければ作成されます。"
+    nd_help_xml = "コメントをXML形式でダウンロードしたい場合に指定します。" \
+                  "チャンネル動画の場合は無視されます。"
     nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
