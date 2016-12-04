@@ -4,7 +4,7 @@ import html
 import os
 import time
 from abc import ABCMeta, abstractmethod
-from sys import exit, argv, stderr, stdout
+from sys import exit, argv
 from urllib.parse import unquote
 from xml.etree import ElementTree
 
@@ -17,7 +17,7 @@ try:
 except ImportError:
     progressbar = None
 
-from utility_func import Msg, URL, Key, MyLogger, LogIn, get_encoding, validator, Err
+from utils import Msg, URL, Key, NDLogger, LogIn, get_encoding, validator, Err
 
 """
 使い方:
@@ -80,7 +80,7 @@ def get_infos(queue, logger=None):
     * view_counter      int
 
     :param list[str] queue: 動画IDのリスト
-    :param typing.Optional[MyLogger] logger: ログ出力
+    :param typing.Optional[NDLogger] logger: ログ出力
     :rtype: dict[str, dict[str, typing.Union[int, str, list]]]
     """
     if logger: logger.info(Msg.nd_start_download.format(len(queue)))
@@ -159,34 +159,19 @@ def t2filename(text):
 
 
 class GetResources(LogIn, metaclass=ABCMeta):
-    def __init__(self, auth, session, logger):
+    def __init__(self, auth, logger, session):
         """
         :param typing.Optional[tuple] auth:
         :param typing.Optional[requests.Session] session:
-        :param typing.Optional[MyLogger] logger:
+        :param typing.Optional[NDLogger] logger:
         """
-        super().__init__(auth=auth, session=session, logger=logger)
+        super().__init__(auth=auth, logger=logger, session=session)
         self.database = None
         self.save_dir = None
         self.logger = logger if logger else self.AltLogger()
         if not hasattr(logger, "handlers"):
             self.logger = self.AltLogger()
         self.session = session
-
-    class AltLogger:
-        def emitter(self, text, err=False, en=get_encoding()):
-            print(text.encode(en, Msg.BACKSLASH).decode(en),
-                  file=[stdout, stderr][err])
-
-        def debug(self, text):    self.emitter(text)
-
-        def info(self, text):     self.emitter(text)
-
-        def error(self, text):    self.emitter(text, True)
-
-        def warning(self, text):  self.emitter(text, True)
-
-        def critical(self, text): self.emitter(text, True)
 
     def make_dir(self, directory):
         """
@@ -216,17 +201,17 @@ class GetResources(LogIn, metaclass=ABCMeta):
 
 
 class GetVideos(GetResources):
-    def __init__(self, auth=(None, None), session=None, logger=None):
+    def __init__(self, auth=(None, None), logger=None, session=None):
         """
         インスタンス変数 so_video_id は動画IDが so で始まる場合(つまり
         公式チャンネルの動画)にのみ使用する。一時的にso**** のIDを
         保持しておき、ファイル名につけるのに使う。そうしないと
         リダイレクトされた先の「スレッドID」の数字が名前になってしまう。
 
-        :param MyLogger logger:
+        :param NDLogger logger:
         :param requests.Session session:
         """
-        super().__init__(auth=auth, session=session, logger=logger)
+        super().__init__(auth=auth, logger=logger, session=session)
         if progressbar is None:
             self.widgets = None
         else:
@@ -324,9 +309,9 @@ class GetVideos(GetResources):
 class GetThumbnails(GetResources):
     def __init__(self, auth=(None, None), logger=None):
         """
-        :param MyLogger logger:
+        :param NDLogger logger:
         """
-        super().__init__(auth=auth, session=None, logger=logger)
+        super().__init__(auth=auth, logger=logger, session=None)
 
     def start(self, database, save_dir):
         """
@@ -395,12 +380,12 @@ class GetThumbnails(GetResources):
 
 
 class GetComments(GetResources):
-    def __init__(self, auth=(None, None), session=None, logger=None):
+    def __init__(self, auth=(None, None), logger=None, session=None):
         """
         :param requests.Session session:
-        :param MyLogger logger:
+        :param NDLogger logger:
         """
-        super().__init__(auth=auth, session=session, logger=logger)
+        super().__init__(auth=auth, logger=logger, session=session)
         self.so_video_id = None
 
     def start(self, database, save_dir, xml_mode=False):
@@ -606,7 +591,7 @@ def main(args):
     if not os.path.isdir(args.dest):
         os.makedirs(args.dest)
 
-    logger = MyLogger(log_level=args.loglevel, log_file_name=Msg.LOG_FILE_ND)
+    logger = NDLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
     database = get_infos(videoid, logger=logger)
 
     username = getattr(args, "user")[0] if isinstance(getattr(args, "user"), list) else None

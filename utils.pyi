@@ -1,6 +1,7 @@
 # coding: utf-8
 import logging
 from typing import Optional, Union, Dict, TypeVar, Tuple, List
+
 import requests
 from requests.cookies import RequestsCookieJar
 
@@ -73,8 +74,16 @@ class LogIn:
         self.session = ...  #type: Optional[requests.Session]
         self.token = ...  # type: Optional[str]
         self.auth = ...  # type: Optional[Dict[str, str]]
-        self.logger = ...  #type: Optional[MyLogger]
+        self.logger = ...  #type: Optional[NDLogger]
         self.is_silent = ...  # type: bool
+    class AltLogger:
+        def emitter(self, text: str, err: bool=..., en: str=...) -> None: ...
+        def debug(self, text: str) -> None: ...
+        def info(self, text: str) -> None: ...
+        def error(self, text: str) -> None: ...
+        def warning(self, text: str) -> None: ...
+        def critical(self, text: str) -> None: ...
+
     def get_session(self, force_login: bool=...) -> requests.Session: ...
     def get_token(self) -> str: ...
     def get_credentials(self, mail: str=..., password: str=...) -> Dict[str, str]: ...
@@ -83,8 +92,8 @@ class LogIn:
     def load_cookies(self, file_name: str=...) -> RequestsCookieJar: ...
 
 
-class MyLogger(logging.Logger):
-    def __init__(self, log_file_name: str=..., name: str=...,
+class NDLogger(logging.Logger):
+    def __init__(self, file_name: str=..., name: str=...,
                  log_level: Union[str, int]=logging.INFO):
         self.enco = ...  # type: str
         self.log_level = ...  # type: str

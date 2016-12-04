@@ -4,7 +4,7 @@ import pickle
 import re
 from getpass import getpass
 from os.path import join, expanduser
-from sys import stdout
+from sys import stdout, stderr
 
 import requests
 
@@ -243,11 +243,11 @@ class Err:
 
 
 class LogIn:
-    def __init__(self, auth, session=None, logger=None):
+    def __init__(self, auth, logger=None, session=None):
         """
         :param tuple[typing.Optional[str], typing.Optional[str]] auth:
-        :param typing.Optional[requests.Session] session: セッションオブジェクト
         :param T <= logging.logger logger:
+        :param typing.Optional[requests.Session] session: セッションオブジェクト
         """
         self.auth = None
         if auth is None and session is None:
@@ -258,6 +258,21 @@ class LogIn:
         self.session = session if session else self.get_session()  # type: requests.Session
         self.token = self.get_token()  # type: str
         self.logger = logger
+
+    class AltLogger:
+        """ logger がなかった場合の保険 """
+        def emitter(self, text, err=False, en=get_encoding()):
+            print(text.encode(en, Msg.BACKSLASH).decode(en), file=[stdout, stderr][err])
+
+        def debug(self, text)   : self.emitter(text)
+
+        def info(self, text)    : self.emitter(text)
+
+        def error(self, text)   : self.emitter(text, True)
+
+        def warning(self, text) : self.emitter(text, True)
+
+        def critical(self, text): self.emitter(text, True)
 
     def get_session(self, force_login=False):
         """
@@ -347,8 +362,8 @@ class LogIn:
             return None
 
 
-class MyLogger(logging.Logger):
-    def __init__(self, log_file_name=Msg.LOG_FILE_ND, name="root", log_level=logging.INFO):
+class NDLogger(logging.Logger):
+    def __init__(self, file_name=Msg.LOG_FILE_ND, name="root", log_level=logging.INFO):
         if isinstance(log_level, (str, int)):
             log_level = logging.getLevelName(log_level)
         else:
@@ -368,8 +383,7 @@ class MyLogger(logging.Logger):
         self.addHandler(log_stdout)
 
         # ファイル書き込み用ハンドラー
-        log_file_name = join(expanduser("~"), log_file_name)
-        log_file = logging.FileHandler(filename=log_file_name, encoding="utf-8")
+        log_file = logging.FileHandler(filename=join(expanduser("~"), file_name), encoding="utf-8")
         log_file.setLevel(log_level)
         log_file.setFormatter(formatter)
         self.addHandler(log_file)

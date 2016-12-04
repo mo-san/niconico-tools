@@ -4,7 +4,7 @@ import json
 from argparse import ArgumentParser
 from datetime import datetime, timezone, timedelta
 from os.path import abspath
-from sys import exit, argv, stderr, stdout
+from sys import exit, argv
 from time import sleep
 from xml.etree import ElementTree
 try:
@@ -12,7 +12,7 @@ try:
 except ImportError:
     PrettyTable = None
 
-from utility_func import Msg, Err, URL, Key, MKey, MyLogger, LogIn, get_encoding, validator
+from utils import Msg, Err, URL, Key, MKey, NDLogger, LogIn, get_encoding, validator
 
 
 class NicoMyList(LogIn):
@@ -24,7 +24,7 @@ class NicoMyList(LogIn):
         "8": "非公開",
     }
 
-    def __init__(self, auth, session=None, logger=None):
+    def __init__(self, auth, logger=None, session=None):
         """
         使い方:
 
@@ -81,34 +81,19 @@ class NicoMyList(LogIn):
 
         :param tuple[typing.Optional[str], typing.Optional[str]] auth: メールアドレスとパスワードの組
         :param T <= logging.Logger logger:
+        :param typing.Optional[requests.Session] session: requests モジュールのセッション
         :rtype: None
         """
-        super().__init__(auth, session, logger)
+        super().__init__(auth, logger, session)
         if not hasattr(logger, "handlers"):
             self.logger = self.AltLogger()
         self.mylists = self.get_mylist_ids()
-
-    class AltLogger:
-        """ logger がなかった場合の保険 """
-        def emitter(self, text, err=False, en=get_encoding()):
-            print(text.encode(en, Msg.BACKSLASH).decode(en),
-                  file=[stdout, stderr][err])
-
-        def debug(self, text)   : self.emitter(text)
-
-        def info(self, text)    : self.emitter(text)
-
-        def error(self, text)   : self.emitter(text, True)
-
-        def warning(self, text) : self.emitter(text, True)
-
-        def critical(self, text): self.emitter(text, True)
 
     def get_mylist_ids(self):
         """
         全てのマイリストのメタ情報を得る。
 
-        :rtype: dict
+        :rtype: dict[int, dict]
         """
         jsonliketext = self.session.get(URL.URL_ListAll).text
         jtext = json.loads(jsonliketext)
@@ -233,7 +218,7 @@ class NicoMyList(LogIn):
         else:
             return html.unescape(document[0].find("title").text)
 
-    def confirmation(self, mode, list_name, contents_to_be_deleted=None):
+    def _confirmation(self, mode, list_name, contents_to_be_deleted=None):
         """
         マイリスト自体を削除したり、マイリスト中の全てを削除する場合にユーザーの確認を取る。
 
@@ -262,14 +247,14 @@ class NicoMyList(LogIn):
                 print(Msg.ml_answer_invalid)
                 continue
 
-    def should_continue(self, res, vd_id, list_name, count_now, count_whole):
+    def _should_continue(self, res, video_id, list_name, count_now, count_whole):
         """
         次の項目に進んでよいかを判断する。
 
         致命的なエラーならば False を返し、差し支えないエラーならば True を返す。
 
         :param dict[str, str] res:
-        :param str vd_id:
+        :param str video_id:
         :param str list_name:
         :param int count_now:
         :param int count_whole:
@@ -279,26 +264,26 @@ class NicoMyList(LogIn):
             reason = res["error"]
             if (reason["code"] == Err.INTERNAL or
                         reason["code"] == Err.MAINTENANCE):
-                self.logger.error(Err.known_error.format(vd_id, reason["description"]))
+                self.logger.error(Err.known_error.format(video_id, reason["description"]))
                 return False
             elif reason["code"] == Err.MAXERROR:
                 self.logger.error(Err.over_load.format(list_name))
                 return False
             elif reason["code"] == Err.EXIST:
-                title = self.get_title(vd_id)
-                self.logger.error(Err.already_exist.format(vd_id, title))
+                title = self.get_title(video_id)
+                self.logger.error(Err.already_exist.format(video_id, title))
                 return True
             elif reason["code"] == Err.NONEXIST:
-                self.logger.error(Err.item_not_contained.format(list_name, vd_id))
+                self.logger.error(Err.item_not_contained.format(list_name, video_id))
                 return True
             elif hasattr(Err, reason["code"]):
-                self.logger.error(Err.known_error.format(vd_id, reason["description"]))
+                self.logger.error(Err.known_error.format(video_id, reason["description"]))
                 return True
             else:
                 return False
         except KeyError:
             self.logger.error(Err.unknown_error_itemid.format(
-                count_now, count_whole, vd_id, res))
+                count_now, count_whole, video_id, res))
             return False
 
     def get_response(self, mode, is_def, list_id_to, video_or_item_id, list_id_from=None):
@@ -390,7 +375,7 @@ class NicoMyList(LogIn):
         """
         list_id, list_name = self.get_id(list_id)
 
-        if not self.confirmation("purge", list_name):
+        if not self._confirmation("purge", list_name):
             exit(Msg.ml_answer_no)
 
         res = self.get_response("purge", False, list_id, None)
@@ -421,7 +406,7 @@ class NicoMyList(LogIn):
             _counter += 1
             res = self.get_response("add", list_id == Msg.ml_default_id, list_id, vd_id)
 
-            if res["status"] != "ok" and not self.should_continue(res, vd_id, list_name, _counter, len(videoids)):
+            if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name, _counter, len(videoids)):
                 # エラーが起きた場合
                 self.logger.error(Err.remaining)
                 self.logger.error(" ".join([i for i in videoids if i not in _done]))
@@ -443,7 +428,7 @@ class NicoMyList(LogIn):
         """
         if list_id_from == list_id_to:
             exit(Err.list_names_are_same)
-        return self._copy_or_move_item(True, list_id_from, list_id_to, *videoids)
+        return self._copy_or_move(True, list_id_from, list_id_to, *videoids)
 
     def move(self, list_id_from, list_id_to, *videoids):
         """
@@ -458,9 +443,9 @@ class NicoMyList(LogIn):
             exit(Err.list_names_are_same)
         if list_id_to == Msg.ml_default_name:
             exit(Err.cant_move_to_deflist)
-        return self._copy_or_move_item(False, list_id_from, list_id_to, *videoids)
+        return self._copy_or_move(False, list_id_from, list_id_to, *videoids)
 
-    def _copy_or_move_item(self, is_copy, list_id_from, list_id_to, *videoids):
+    def _copy_or_move(self, is_copy, list_id_from, list_id_to, *videoids):
         """
         そのマイリストに、 指定した動画を移動またはコピーする。
 
@@ -495,7 +480,7 @@ class NicoMyList(LogIn):
                 res = self.get_response("move", list_id_from == Msg.ml_default_id,
                                         list_id_to, item_ids[vd_id], list_id_from)
 
-            if res["status"] != "ok" and not self.should_continue(res, vd_id, list_name_to, _counter, len(item_ids)):
+            if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name_to, _counter, len(item_ids)):
                 # エラーが起きた場合
                 self.logger.error(Err.remaining)
                 self.logger.error(" ".join([i for i in videoids if i not in _done]))
@@ -521,7 +506,7 @@ class NicoMyList(LogIn):
 
         if len(videoids) == 1 and Msg.ALL_ITEM in videoids:
             # 全体モード
-            if not self.confirmation("delete", list_name, sorted(item_ids.keys())):
+            if not self._confirmation("delete", list_name, sorted(item_ids.keys())):
                 print(Msg.ml_answer_no) or exit()
             self.logger.info(Msg.ml_will_delete.format(list_name, sorted(item_ids.keys())))
         else:
@@ -539,7 +524,7 @@ class NicoMyList(LogIn):
             _counter += 1
             res = self.get_response("delete", list_id == Msg.ml_default_id, list_id, item_ids[vd_id])
 
-            if res["status"] != "ok" and not self.should_continue(res, vd_id, list_name, _counter, len(item_ids)):
+            if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name, _counter, len(item_ids)):
                 # エラーが起きた場合
                 self.logger.error(Err.remaining)
                 self.logger.error(" ".join([i for i in videoids if i not in _done]))
@@ -575,7 +560,7 @@ class NicoMyList(LogIn):
             ])
         return container
 
-    def show_one(self, list_id):
+    def show(self, list_id, with_header=True):
         """
         そのマイリストに登録された動画を一覧する。
 
@@ -586,6 +571,7 @@ class NicoMyList(LogIn):
             * 8 = 投稿者による非公開
 
         :param int |  str list_id: マイリストの名前またはID。
+        :param bool with_header:
         :rtype: list[list[str]]
         """
         list_id, list_name = self.get_id(list_id)
@@ -597,14 +583,17 @@ class NicoMyList(LogIn):
             jtext = json.loads(self.session.get(URL.URL_ListOne,
                                                 params={"group_id": list_id}).text)
 
-        container = [[
-            "動画 ID", "タイトル",
-            "投稿日", "再生数",
-            "コメント数", "マイリスト数",
-            "長さ", "状態",
-            "メモ", "所屬",
-            # "最近のコメント",
-        ]]
+        if with_header:
+            container = [[
+                "動画 ID", "タイトル",
+                "投稿日", "再生数",
+                "コメント数", "マイリスト数",
+                "長さ", "状態",
+                "メモ", "所屬",
+                # "最近のコメント",
+            ]]
+        else:
+            container = []
 
         for item in jtext["mylistitem"]:
             data = item[MKey.ITEM_DATA]
@@ -625,20 +614,20 @@ class NicoMyList(LogIn):
             ])
         return container
 
-    def show_through(self, simple=False):
+    def show_all_through(self, with_info=True):
         """
         全てのマイリストを表示する。
 
-        :param bool simple:
+        :param bool with_info:
         :rtype: list[list[str]]
         """
         container = []
-        if simple:
+        if with_info:
             for l_id in self.mylists.keys():
-                container.extend([[item[0]] for item in self.show_one(l_id)[1:]])
+                container.extend(self.show(l_id, False))
         else:
             for l_id in self.mylists.keys():
-                container.extend(self.show_one(l_id)[1:])
+                container.extend([[item[0]] for item in self.show(l_id, False)])
         return container
 
     def export(self, list_id, file_name=None, table=False, tsv=False, mode_is_show=False):
@@ -657,22 +646,22 @@ class NicoMyList(LogIn):
                 if mode_is_show:
                     self._export_table(self.show_meta(), file_name)
                 else:
-                    self._export_table(self.show_through(), file_name)
+                    self._export_table(self.show_all_through(), file_name)
             else:
-                self._export_table(self.show_one(list_id), file_name)
+                self._export_table(self.show(list_id), file_name)
         elif tsv:  # タブ区切りテキストの場合
             if list_id == Msg.ALL_ITEM:
                 if mode_is_show:
                     self._export_tsv(self.show_meta(), file_name)
                 else:
-                    self._export_tsv(self.show_through(), file_name)
+                    self._export_tsv(self.show_all_through(), file_name)
             else:
-                self._export_tsv(self.show_one(list_id), file_name)
+                self._export_tsv(self.show(list_id), file_name)
         else:  # 装飾を求めない場合
             if list_id == Msg.ALL_ITEM:
-                self._export_id_only(self.show_through(simple=True), file_name)
+                self._export_id_only(self.show_all_through(False), file_name)
             else:
-                self._export_id_only(self.show_one(list_id)[1:], file_name)
+                self._export_id_only(self.show(list_id, False), file_name)
 
     def _export_id_only(self, container, file_name=None):
         """
@@ -772,7 +761,7 @@ def main(args):
     """
     if args.what: print(args) or exit()
 
-    logger = MyLogger(log_level=args.loglevel, log_file_name=Msg.LOG_FILE_ML)
+    logger = NDLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
 
     username = getattr(args, "user")[0] if isinstance(getattr(args, "user"), list) else None
     password = getattr(args, "pass")[0] if isinstance(getattr(args, "pass"), list) else None

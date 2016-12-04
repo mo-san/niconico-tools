@@ -1,16 +1,17 @@
 # coding: utf-8
+import logging
 from abc import ABCMeta, abstractmethod
 from typing import Any, List, Dict, Union, Optional, TypeVar, Tuple
-import logging
+
 import requests
 
-from utility_func import MyLogger, LogIn
+from utils import NDLogger, LogIn
 
 DatabaseType = Dict[str, Dict[str, Union[int, str, List[str]]]]
 LoggerType = TypeVar("LoggerType", bound=logging.Logger)
 
-def print_info(queue: List[str], file_name: str=None) -> None: ...
-def get_infos(queue: List[str], logger: MyLogger) -> DatabaseType: ...
+def print_info(queue: List[str], file_name: Optional[str]=...) -> None: ...
+def get_infos(queue: List[str], logger: Optional[NDLogger]=...) -> DatabaseType: ...
 def t2filename(text: str) -> str: ...
 
 
@@ -23,13 +24,6 @@ class GetResources(LogIn, metaclass=ABCMeta):
         self.logger = ...  # type: Union[LoggerType, "AltLogger"]
         self.session = ...  # type: requests.Session
         ...
-    class AltLogger:
-        def emitter(self, text: str, err: bool=..., en: str=...) -> None: ...
-        def debug(self, text: str) -> None: ...
-        def info(self, text: str) -> None: ...
-        def error(self, text: str) -> None: ...
-        def warning(self, text: str) -> None: ...
-        def critical(self, text: str) -> None: ...
     def make_dir(self, save_dir: str) -> None: ...
     @abstractmethod
     def start(self, database: DatabaseType, save_dir: str) ->None: ...
@@ -39,9 +33,9 @@ class GetResources(LogIn, metaclass=ABCMeta):
 
 class GetVideos(GetResources):
     def __init__(self, auth: Tuple[Optional[str], Optional[str]]=...,
-                 session: Optional[requests.Session]=...,
-                 logger: Optional[MyLogger]=...) -> None:
-        super().__init__(auth, session, logger)
+                 logger: Optional[NDLogger]=...,
+                 session: Optional[requests.Session]=...) -> None:
+        super().__init__(auth, logger, session)
         self.widgets = ...  # type: List
         self.so_video_id = ...  # type: str
         ...
@@ -52,8 +46,8 @@ class GetVideos(GetResources):
 
 class GetThumbnails(GetResources):
     def __init__(self, auth: Tuple[Optional[str], Optional[str]]=...,
-                 logger: Optional[MyLogger]=...) -> None:
-        super().__init__(auth, None, logger)
+                 logger: Optional[NDLogger]=...) -> None:
+        super().__init__(auth, logger, None)
         ...
     def start(self, database: DatabaseType, save_dir: str) ->None: ...
     def _download(self, video_id: str, is_large: bool=..., retry: int=...) \
@@ -64,9 +58,9 @@ class GetThumbnails(GetResources):
 
 class GetComments(GetResources):
     def __init__(self, auth: Tuple[Optional[str], Optional[str]]=...,
-                 session: Optional[requests.Session]=...,
-                 logger: Optional[MyLogger]=...) -> None:
-        super().__init__(logger, session)
+                 logger: Optional[NDLogger]=...,
+                 session: Optional[requests.Session]=...) -> None:
+        super().__init__(auth, session, logger)
         self.so_video_id = ...  # type: str
         ...
     def start(self, database: DatabaseType, save_dir: str, xml_mode: bool=...) ->None: ...
