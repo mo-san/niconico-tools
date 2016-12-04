@@ -1,12 +1,12 @@
 # coding: utf-8
 import logging
-import os
 import pickle
-import sys
-from getpass import getpass
 import re
+from getpass import getpass
+from os.path import join, expanduser
+from sys import stdout
+
 import requests
-from requests.cookies import RequestsCookieJar
 
 
 def get_encoding():
@@ -15,7 +15,7 @@ def get_encoding():
 
     :rtype: str
     """
-    return sys.stdout.encoding or "UTF-8"
+    return stdout.encoding or "UTF-8"
 
 
 def validator(input_list):
@@ -329,10 +329,10 @@ class LogIn:
 
     def save_cookies(self, requests_cookiejar, file_name=Msg.COOKIE_FILE_NAME):
         """
-        :param RequestsCookieJar requests_cookiejar:
+        :param requests.cookies.RequestsCookieJar requests_cookiejar:
         :param str file_name:
         """
-        with open(os.path.join(os.path.abspath(os.environ["USERPROFILE"]), file_name), "wb") as fd:
+        with open(join(expanduser("~"), file_name), "wb") as fd:
             pickle.dump(requests_cookiejar, fd)
 
     def load_cookies(self, file_name=Msg.COOKIE_FILE_NAME):
@@ -341,7 +341,7 @@ class LogIn:
         :return: クッキーオブジェクト
         """
         try:
-            with open(os.path.join(os.path.abspath(os.environ["USERPROFILE"]), file_name), "rb") as fd:
+            with open(join(expanduser("~"), file_name), "rb") as fd:
                 return pickle.load(fd)
         except (FileNotFoundError, EOFError):
             return None
@@ -362,13 +362,13 @@ class MyLogger(logging.Logger):
         self.logger = logging.getLogger()
 
         # 標準出力用ハンドラー
-        log_stdout = logging.StreamHandler(sys.stdout)
+        log_stdout = logging.StreamHandler(stdout)
         log_stdout.setLevel(log_level)
         log_stdout.setFormatter(formatter)
         self.addHandler(log_stdout)
 
         # ファイル書き込み用ハンドラー
-        log_file_name = os.path.join(os.path.abspath(os.environ["USERPROFILE"]), log_file_name)
+        log_file_name = join(expanduser("~"), log_file_name)
         log_file = logging.FileHandler(filename=log_file_name, encoding="utf-8")
         log_file.setLevel(log_level)
         log_file.setFormatter(formatter)

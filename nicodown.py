@@ -7,9 +7,11 @@ from abc import ABCMeta, abstractmethod
 from sys import exit, argv, stderr, stdout
 from urllib.parse import unquote
 from xml.etree import ElementTree
+
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+
 try:
     import progressbar
 except ImportError:
@@ -448,7 +450,7 @@ class GetComments(GetResources):
 
         if xml_mode and video_id.startswith(("sm", "nm")):
             comment_data = (self.session.post(url=msg_server, data=self.make_param_xml(thread_id, user_id))
-                            .content.replace(b"><", b">\r\n<") + b"\r\n")
+                            .text.replace("><", ">\n<"))
         else:
             if video_id.startswith(("sm", "nm")):
                 parameters = self.make_param_json(False, user_id, user_key, thread_id)
@@ -460,12 +462,12 @@ class GetComments(GetResources):
                     True, user_id, user_key, thread_id, opt_thread_id, thread_key, force_184)
 
             comment_data = (self.session.post(URL.URL_Message_New, json=parameters)
-                            .content.replace(b"}, ", b"},\r\n") + b"\r\n")
+                            .text.replace("}, ", "},\n"))
 
         file_path = os.path.join(self.save_dir, self.make_file_name(self.so_video_id or video_id, xml_mode))
         self.so_video_id = None
-        with open(file_path, "wb") as f:
-            f.write(comment_data)
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(comment_data + "\n")
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
