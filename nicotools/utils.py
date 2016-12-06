@@ -36,12 +36,14 @@ def validator(input_list):
     :param list[str] input_list:
     :rtype: list[str]
     """
-    matcher = re.compile("\*|(?:(?:http://www\.nicovideo\.jp/)?watch/)?(?:sm|nm|so)?\d{1,9}", re.I).match
+    matcher = re.compile("\s*(?:\*|(?:(?:http://www\.nicovideo\.jp/)?watch/)?(?:sm|nm|so)?\d{1,9})\s*", re.I).match
     for item in input_list:
         if not matcher(item):
             return []
 
-    return [item.replace("http://www.nicovideo.jp/watch/", "").replace("watch/", "") for item in input_list]
+    return [item.strip()
+                .replace("http://www.nicovideo.jp/watch/", "")
+                .replace("watch/", "") for item in input_list]
 
 
 class URL:
