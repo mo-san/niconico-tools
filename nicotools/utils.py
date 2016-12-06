@@ -2,11 +2,10 @@
 import logging
 import pickle
 import re
+import requests
 from getpass import getpass
 from os.path import join, expanduser
 from sys import stdout, stderr
-
-import requests
 
 
 def get_encoding():

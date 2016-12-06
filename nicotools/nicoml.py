@@ -1,10 +1,10 @@
 # coding: UTF-8
 import html
 import json
+import sys
 from argparse import ArgumentParser
 from datetime import datetime, timezone, timedelta
 from os.path import abspath
-from sys import exit, argv
 from time import sleep
 from xml.etree import ElementTree
 try:
@@ -12,7 +12,7 @@ try:
 except ImportError:
     PrettyTable = None
 
-from utils import Msg, Err, URL, Key, MKey, NDLogger, LogIn, get_encoding, validator
+from .utils import Msg, Err, URL, Key, MKey, NDLogger, LogIn, get_encoding, validator
 
 
 class NicoMyList(LogIn):
@@ -134,14 +134,14 @@ class NicoMyList(LogIn):
         if isinstance(search_for, int):
             value = self.mylists.get(search_for, None)
             if value is None:
-                exit(Err.mylist_id_not_exist.format(search_for))
+                sys.exit(Err.mylist_id_not_exist.format(search_for))
             return search_for, value["name"]
 
         elif isinstance(search_for, str):
             value = [(l_id, info) for l_id, info in self.mylists.items()
                      if info["name"] == search_for]
             if len(value) == 0:
-                exit(Err.mylist_not_exist.format(search_for))
+                sys.exit(Err.mylist_not_exist.format(search_for))
             if len(value) == 1:
                 return value[0][0], search_for
             else:
@@ -149,9 +149,9 @@ class NicoMyList(LogIn):
                 self.logger.error(Err.name_ambiguous.format(len(value)))
                 for single in value:
                     self.logger.error(Err.name_ambiguous_detail.format(single[1]))
-                exit()
+                sys.exit()
         else:
-            exit(Err.invalid_spec.format(search_for))
+            sys.exit(Err.invalid_spec.format(search_for))
 
     def get_item_ids(self, list_id, *videoids):
         """
@@ -189,7 +189,7 @@ class NicoMyList(LogIn):
             if whole or data["video_id"] in videoids:
                 results.update({data["video_id"]: item["item_id"]})
 
-        if len(results) == 0: exit(Err.no_items)
+        if len(results) == 0: sys.exit(Err.no_items)
         return results
 
     def get_jst_from_utime(self, timestamp):
@@ -233,7 +233,7 @@ class NicoMyList(LogIn):
             print(Msg.ml_ask_delete_all.format(list_name))
             print("{}".format(contents_to_be_deleted))
         else:
-            exit(mode)
+            sys.exit(mode)
 
         print(Msg.ml_confirmation)
         while True:
@@ -253,7 +253,7 @@ class NicoMyList(LogIn):
 
         致命的なエラーならば False を返し、差し支えないエラーならば True を返す。
 
-        :param dict[str, str] res:
+        :param dict[str, dict|str] res:
         :param str video_id:
         :param str list_name:
         :param int count_now:
@@ -376,7 +376,7 @@ class NicoMyList(LogIn):
         list_id, list_name = self.get_id(list_id)
 
         if not self._confirmation("purge", list_name):
-            exit(Msg.ml_answer_no)
+            sys.exit(Msg.ml_answer_no)
 
         res = self.get_response("purge", False, list_id, None)
         try:
@@ -427,7 +427,7 @@ class NicoMyList(LogIn):
         :rtype: bool
         """
         if list_id_from == list_id_to:
-            exit(Err.list_names_are_same)
+            sys.exit(Err.list_names_are_same)
         return self._copy_or_move(True, list_id_from, list_id_to, *videoids)
 
     def move(self, list_id_from, list_id_to, *videoids):
@@ -440,9 +440,9 @@ class NicoMyList(LogIn):
         :rtype: bool
         """
         if list_id_from == list_id_to:
-            exit(Err.list_names_are_same)
+            sys.exit(Err.list_names_are_same)
         if list_id_to == Msg.ml_default_name:
-            exit(Err.cant_move_to_deflist)
+            sys.exit(Err.cant_move_to_deflist)
         return self._copy_or_move(False, list_id_from, list_id_to, *videoids)
 
     def _copy_or_move(self, is_copy, list_id_from, list_id_to, *videoids):
@@ -507,7 +507,7 @@ class NicoMyList(LogIn):
         if len(videoids) == 1 and Msg.ALL_ITEM in videoids:
             # 全体モード
             if not self._confirmation("delete", list_name, sorted(item_ids.keys())):
-                print(Msg.ml_answer_no) or exit()
+                print(Msg.ml_answer_no) or sys.exit()
             self.logger.info(Msg.ml_will_delete.format(list_name, sorted(item_ids.keys())))
         else:
             # 個別モード
@@ -754,12 +754,39 @@ class NicoMyList(LogIn):
         self.logger.info(Msg.ml_exported.format(abspath(file_name)))
 
 
-def main(args):
+def main():
     """
-    :param args: ArgumentParserに解析された引数。
     :rtype: None
     """
-    if args.what: print(args) or exit()
+    parser = ArgumentParser(fromfile_prefix_chars="+", description=Msg.ml_description)
+    parser.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
+    parser.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
+    parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
+    parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",
+                        help=Msg.nd_help_loglevel,
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+    parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
+    parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD")
+    group_one = parser.add_argument_group(Msg.ml_help_group_a)
+    group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
+    group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
+    group_one.add_argument("-d", "--delete", nargs="+", help=Msg.ml_help_delete, metavar="sm...")
+    group_one.add_argument("-m", "--move", nargs="+", help=Msg.ml_help_move, metavar="sm...")
+    group_one.add_argument("-c", "--copy", nargs="+", help=Msg.ml_help_copy, metavar="sm...")
+    group_two = parser.add_argument_group(Msg.ml_help_group_b)
+    group_two.add_argument("-s", "--show", action="store_true", help=Msg.ml_help_show)
+    group_two.add_argument("-r", "--create", action="store_true", help=Msg.ml_help_create)
+    group_two.add_argument("--purge", action="store_true", help=Msg.ml_help_purge)
+    group_two.add_argument("-e", "--export", action="count", help=Msg.ml_help_export)
+    group_one.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="ファイル名")
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit()
+
+    args = parser.parse_args()
+
+    if args.what: print(args) or sys.exit()
 
     logger = NDLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
 
@@ -775,22 +802,22 @@ def main(args):
 
     """ エラーの除外 """
     if (args.add or args.create or args.purge) and Msg.ALL_ITEM == target:
-        exit(Err.cant_perform_all)
+        sys.exit(Err.cant_perform_all)
     if args.show and Msg.ALL_ITEM != target:
-        exit(Err.only_perform_all)
+        sys.exit(Err.only_perform_all)
     if (args.copy or args.move) and dest is None:
-        exit(Err.lack_arg.format("--to"))
+        sys.exit(Err.lack_arg.format("--to"))
     if (args.delete and (len(args.delete) > 1 and Msg.ALL_ITEM in args.delete) or
             (args.copy and len(args.copy) > 1 and Msg.ALL_ITEM in args.copy) or
             (args.move and len(args.move) > 1 and Msg.ALL_ITEM in args.move)):
-        exit(Err.args_ambiguous)
+        sys.exit(Err.args_ambiguous)
     operand = []
     if args.add or args.copy or args.move or args.delete:
         if args.add:    operand = validator(args.add)
         elif args.copy: operand = validator(args.copy)
         elif args.move: operand = validator(args.move)
         else:           operand = validator(args.delete)
-        if not operand: exit(Err.invalid_videoid)
+        if not operand: sys.exit(Err.invalid_videoid)
 
     """ 本筋 """
     if args.export:
@@ -825,29 +852,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(fromfile_prefix_chars="+", description=Msg.ml_description)
-    parser.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
-    parser.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
-    parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",
-                        help=Msg.nd_help_loglevel,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-    parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
-    parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD")
-    group_one = parser.add_argument_group(Msg.ml_help_group_a)
-    group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
-    group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
-    group_one.add_argument("-d", "--delete", nargs="+", help=Msg.ml_help_delete, metavar="sm...")
-    group_one.add_argument("-m", "--move", nargs="+", help=Msg.ml_help_move, metavar="sm...")
-    group_one.add_argument("-c", "--copy", nargs="+", help=Msg.ml_help_copy, metavar="sm...")
-    group_two = parser.add_argument_group(Msg.ml_help_group_b)
-    group_two.add_argument("-s", "--show", action="store_true", help=Msg.ml_help_show)
-    group_two.add_argument("-r", "--create", action="store_true", help=Msg.ml_help_create)
-    group_two.add_argument("--purge", action="store_true", help=Msg.ml_help_purge)
-    group_two.add_argument("-e", "--export", action="count", help=Msg.ml_help_export)
-    group_one.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="ファイル名")
-
-    if len(argv) == 1:
-        parser.print_help()
-        exit()
-    main(parser.parse_args())
+    main()

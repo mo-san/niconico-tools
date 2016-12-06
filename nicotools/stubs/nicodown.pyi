@@ -1,11 +1,10 @@
 # coding: utf-8
 import logging
+import requests
 from abc import ABCMeta, abstractmethod
 from typing import Any, List, Dict, Union, Optional, TypeVar, Tuple
 
-import requests
-
-from utils import NDLogger, LogIn
+from nicotools.utils import NDLogger, LogIn
 
 DatabaseType = Dict[str, Dict[str, Union[int, str, List[str]]]]
 LoggerType = TypeVar("LoggerType", bound=logging.Logger)

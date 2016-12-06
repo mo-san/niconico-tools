@@ -1,10 +1,9 @@
 # coding: UTF-8
 import logging
+import requests
 from typing import Tuple, Optional, List, Any, Dict, TypeVar, Union
 
-import requests
-
-from utils import LogIn
+from nicotools.utils import LogIn
 
 VideoId = TypeVar("VideoId", List[str, ...], Tuple[str, ...])
 MylistId = TypeVar("MylistId", int, str)

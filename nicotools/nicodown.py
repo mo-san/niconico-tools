@@ -2,22 +2,21 @@
 import argparse
 import html
 import os
+import requests
+import sys
 import time
 from abc import ABCMeta, abstractmethod
-from sys import exit, argv
-from urllib.parse import unquote
-from xml.etree import ElementTree
-
-import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+from urllib.parse import unquote
+from xml.etree import ElementTree
 
 try:
     import progressbar
 except ImportError:
     progressbar = None
 
-from utils import Msg, URL, Key, NDLogger, LogIn, get_encoding, validator, Err
+from .utils import Msg, URL, Key, NDLogger, LogIn, get_encoding, validator, Err
 
 """
 使い方:
@@ -192,9 +191,8 @@ class GetResources(LogIn, metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def download(self, video_id, save_dir):
+    def download(self, video_id):
         """
-        :param str save_dir:
         :param str video_id:
         """
         pass
@@ -230,7 +228,7 @@ class GetVideos(GetResources):
         :param str save_dir:
         """
         if database is None or save_dir is None:
-            exit("database and/or directory is not specified")
+            sys.exit("database and/or directory is not specified")
         self.make_dir(save_dir)
         self.database = database
         self.save_dir = save_dir
@@ -575,19 +573,42 @@ class GetComments(GetResources):
         return result
 
 
-def main(args):
+def main():
+    parser = argparse.ArgumentParser(fromfile_prefix_chars="+", description=Msg.nd_description)
+    parser.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
+    parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
+    parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD")
+    parser.add_argument("-d", "--dest", nargs="?", type=str, default=os.getcwd(),
+                        help=Msg.nd_help_destination)
+    parser.add_argument("-c", "--comment", action="store_true", help=Msg.nd_help_comment)
+    parser.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
+    parser.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
+    parser.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
+    parser.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
+    parser.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="ファイル名")
+    parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
+    parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",
+                        help=Msg.nd_help_loglevel,
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit()
+
+    args = parser.parse_args()
+
     if args.what:
         print(args)
-        exit()
+        sys.exit()
 
     videoid = validator(args.VIDEO_ID)
     if not videoid:
-        exit(Err.invalid_videoid)
+        sys.exit(Err.invalid_videoid)
 
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
         print_info(videoid, file_name)
-        exit()
+        sys.exit()
     if not os.path.isdir(args.dest):
         os.makedirs(args.dest)
 
@@ -610,24 +631,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(fromfile_prefix_chars="+", description=Msg.nd_description)
-    parser.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
-    parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
-    parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD")
-    parser.add_argument("-d", "--dest", nargs="?", type=str, default=os.getcwd(),
-                        help=Msg.nd_help_destination)
-    parser.add_argument("-c", "--comment", action="store_true", help=Msg.nd_help_comment)
-    parser.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
-    parser.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
-    parser.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
-    parser.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
-    parser.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="ファイル名")
-    parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",
-                        help=Msg.nd_help_loglevel,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-
-    if len(argv) == 1:
-        parser.print_help()
-        exit()
-    main(parser.parse_args())
+    main()

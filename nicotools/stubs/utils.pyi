@@ -1,9 +1,8 @@
 # coding: utf-8
 import logging
-from typing import Optional, Union, Dict, TypeVar, Tuple, List
-
 import requests
 from requests.cookies import RequestsCookieJar
+from typing import Optional, Union, Dict, TypeVar, Tuple, List
 
 LoggerType = TypeVar("LoggerType", bound=logging.Logger)
 
