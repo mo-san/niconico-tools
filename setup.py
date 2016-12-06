@@ -19,7 +19,7 @@ setup(
         'Programming Language :: Python :: 3.5'
     ],
     include_package_data=True,
-    keywords=['niconico', 'ニコニコ動画'],
+    keywords=['niconico', 'nicovideo', 'ニコニコ動画'],
     install_requires=[
         'requests',
         'prettytable',
