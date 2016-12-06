@@ -121,8 +121,6 @@ musics/
 thumbnails/
 videos/
 external/
-jquery-3.1.1.js
-nicoapi.js
 secrets.py
 *.m4a
 *.mp3
