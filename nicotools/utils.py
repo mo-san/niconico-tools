@@ -101,13 +101,12 @@ class Msg:
     ml_help_move = "移動元から移動先へと 動画を移動します。"
     ml_help_copy = "コピー元からコピー先へと 動画をコピーします。 " \
                    "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。"
-    ml_help_export = "IDのみを改行で区切り、 標準出力に出力します。" \
-                     "-ee や -eee のように2回または3回指定すると" \
-                     "より詳しい情報を表示します。 " \
+    ml_help_export = "登録された動画IDのみを改行で区切り、 出力します。" \
                      "名前の代わりに * を指定すると 全マイリストを一覧にします。"
-    ml_help_show = "名前の代わりに * を指定すると 全マイリストを一覧にします。"
-    ml_help_outfile = "マイリストに登録された動画IDを そのファイル名で " \
-                      "テキストファイルに出力します。"
+    ml_help_show = "登録された動画の情報をタブ区切り形式で出力します。" \
+                   "名前の代わりに * を指定すると マイリスト全体のメタデータを出力します。" \
+                   "-ss のように2回指定すると表形式で表示します。"
+    ml_help_outfile = "そのファイル名で テキストファイルに出力します。"
     ml_help_purge = "そのマイリスト自体を削除します。 取り消しはできません。"
     ml_help_create = "指定した名前で 新しくマイリストを作成します。"
     ml_help_src = "移動(コピー)元、 あるいは各種の操作対象の、マイリストの名前"
@@ -122,7 +121,7 @@ class Msg:
     nd_help_password = "パスワード"
     nd_help_username = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
-    nd_help_outfile = "--info の結果をそのファイル名で テキストファイルに出力します。"
+    nd_help_outfile = "--getthumbinfo の結果をそのファイル名で テキストファイルに出力します。"
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
     nd_help_video = "指定すると、 動画をダウンロードします。"
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
@@ -361,7 +360,7 @@ class LogIn:
             return None
 
 
-class NDLogger(logging.Logger):
+class NTLogger(logging.Logger):
     def __init__(self, file_name=Msg.LOG_FILE_ND, name="root", log_level=logging.INFO):
         if isinstance(log_level, (str, int)):
             log_level = logging.getLevelName(log_level)

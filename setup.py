@@ -26,7 +26,6 @@ setup(
         'progressbar2'
     ],
     entry_points={
-        'console_scripts': ['nicodown = nicotools.nicodown:main',
-                            'nicoml = nicotools.nicoml:main']
+        'console_scripts': ['nicotools = nicotools.__init__:main']
     }
 )

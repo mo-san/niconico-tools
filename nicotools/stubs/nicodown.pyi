@@ -4,13 +4,15 @@ import requests
 from abc import ABCMeta, abstractmethod
 from typing import Any, List, Dict, Union, Optional, TypeVar, Tuple
 
-from nicotools.utils import NDLogger, LogIn
+from nicotools.utils import NTLogger, LogIn
 
 DatabaseType = Dict[str, Dict[str, Union[int, str, List[str]]]]
 LoggerType = TypeVar("LoggerType", bound=logging.Logger)
 
 def print_info(queue: List[str], file_name: Optional[str]=...) -> None: ...
-def get_infos(queue: List[str], logger: Optional[NDLogger]=...) -> DatabaseType: ...
+
+
+def get_infos(queue: List[str], logger: Optional[NTLogger] = ...) -> DatabaseType: ...
 def t2filename(text: str) -> str: ...
 
 
@@ -32,7 +34,7 @@ class GetResources(LogIn, metaclass=ABCMeta):
 
 class GetVideos(GetResources):
     def __init__(self, auth: Tuple[Optional[str], Optional[str]]=...,
-                 logger: Optional[NDLogger]=...,
+                 logger: Optional[NTLogger] = ...,
                  session: Optional[requests.Session]=...) -> None:
         super().__init__(auth, logger, session)
         self.widgets = ...  # type: List
@@ -45,7 +47,7 @@ class GetVideos(GetResources):
 
 class GetThumbnails(GetResources):
     def __init__(self, auth: Tuple[Optional[str], Optional[str]]=...,
-                 logger: Optional[NDLogger]=...) -> None:
+                 logger: Optional[NTLogger] = ...) -> None:
         super().__init__(auth, logger, None)
         ...
     def start(self, database: DatabaseType, save_dir: str) ->None: ...
@@ -57,7 +59,7 @@ class GetThumbnails(GetResources):
 
 class GetComments(GetResources):
     def __init__(self, auth: Tuple[Optional[str], Optional[str]]=...,
-                 logger: Optional[NDLogger]=...,
+                 logger: Optional[NTLogger] = ...,
                  session: Optional[requests.Session]=...) -> None:
         super().__init__(auth, session, logger)
         self.so_video_id = ...  # type: str

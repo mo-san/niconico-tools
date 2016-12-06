@@ -2,7 +2,6 @@
 import html
 import json
 import sys
-from argparse import ArgumentParser
 from datetime import datetime, timezone, timedelta
 from os.path import abspath
 from time import sleep
@@ -12,7 +11,7 @@ try:
 except ImportError:
     PrettyTable = None
 
-from .utils import Msg, Err, URL, Key, MKey, NDLogger, LogIn, get_encoding, validator
+from .utils import Msg, Err, URL, Key, MKey, NTLogger, LogIn, get_encoding, validator
 
 
 class NicoMyList(LogIn):
@@ -123,7 +122,7 @@ class NicoMyList(LogIn):
         """
         指定されたIDまたは名前を持つマイリストのIDを得る。
 
-        :param int | str search_for:
+        :param int | str search_for: マイリスト名またはマイリストID
         :rtype: (int, str)
         """
         if self.mylists is None: self.get_mylist_ids()  # 保険のため
@@ -198,7 +197,7 @@ class NicoMyList(LogIn):
 
         1471084020 -> '2016-08-13 19:27:00'
 
-        :param int timestamp: UNIXTIMEの数字。
+        :param int timestamp: UNIXTIMEの数字
         :rtype: str
         """
         return str(datetime.fromtimestamp(timestamp, timezone(timedelta(hours=+9))))[:-6]
@@ -222,9 +221,9 @@ class NicoMyList(LogIn):
         """
         マイリスト自体を削除したり、マイリスト中の全てを削除する場合にユーザーの確認を取る。
 
-        :param str mode:
-        :param str list_name:
-        :param list[str] contents_to_be_deleted:
+        :param str mode: "purge" or "delete"
+        :param str list_name: マイリスト名
+        :param list[str] | None contents_to_be_deleted:
         :rtype: bool
         """
         if mode == "purge":
@@ -253,11 +252,11 @@ class NicoMyList(LogIn):
 
         致命的なエラーならば False を返し、差し支えないエラーならば True を返す。
 
-        :param dict[str, dict|str] res:
-        :param str video_id:
-        :param str list_name:
-        :param int count_now:
-        :param int count_whole:
+        :param dict[str, dict|str] res: APIからの返事
+        :param str video_id: 動画ID
+        :param str list_name: マイリスト名
+        :param int count_now: 現在の番号
+        :param int count_whole: 全体の件数
         :rtype: bool
         """
         try:
@@ -286,7 +285,17 @@ class NicoMyList(LogIn):
                 count_now, count_whole, video_id, res))
             return False
 
-    def get_response(self, mode, is_def, list_id_to, video_or_item_id, list_id_from=None):
+    def get_response(self, mode, is_def, list_id_to, video_or_item_id=None, list_id_from=None):
+        """
+        マイリストAPIにアクセスして結果を受け取る。
+
+        :param str mode: "add", "copy", "move", "delete", "purge" のいずれか
+        :param bool is_def: 「とりあえずマイリスト」が対象であれば True
+        :param int list_id_to: マイリストのID
+        :param str | None video_or_item_id: 動画IDまたは動画の item ID
+        :param int | None list_id_from: マイリストのID
+        :rtype: dict
+        """
         if mode == "add":
             payload = {
                 "item_type"      : 0,
@@ -338,7 +347,7 @@ class NicoMyList(LogIn):
 
     def create_mylist(self, mylist_name, is_public=False, desc=None):
         """
-        name を名前に持つマイリストを作る。
+        mylist_name を名前に持つマイリストを作る。
 
         :param str mylist_name: マイリストの名前
         :param bool is_public: True なら公開マイリストになる
@@ -534,7 +543,7 @@ class NicoMyList(LogIn):
             _done.append(vd_id)
         return True
 
-    def show_meta(self):
+    def fetch_meta(self):
         """
         マイリストのメタ情報を表示する。
 
@@ -560,9 +569,9 @@ class NicoMyList(LogIn):
             ])
         return container
 
-    def show(self, list_id, with_header=True):
+    def fetch_one(self, list_id, with_header=True):
         """
-        そのマイリストに登録された動画を一覧する。
+        単一のマイリストに登録された動画情報を文字列にする。
 
         deleted について:
             * 1 = 投稿者による削除
@@ -614,9 +623,9 @@ class NicoMyList(LogIn):
             ])
         return container
 
-    def show_all_through(self, with_info=True):
+    def fetch_all(self, with_info=True):
         """
-        全てのマイリストを表示する。
+        全てのマイリストに登録された動画情報を文字列にする。
 
         :param bool with_info:
         :rtype: list[list[str]]
@@ -624,81 +633,71 @@ class NicoMyList(LogIn):
         container = []
         if with_info:
             for l_id in self.mylists.keys():
-                container.extend(self.show(l_id, False))
+                container.extend(self.fetch_one(l_id, False))
         else:
             for l_id in self.mylists.keys():
-                container.extend([[item[0]] for item in self.show(l_id, False)])
+                container.extend([[item[0]] for item in self.fetch_one(l_id, False)])
         return container
 
-    def export(self, list_id, file_name=None, table=False, tsv=False, mode_is_show=False):
+    def show(self, list_id, file_name=None, table=False, tsv=False):
         """
-        そのマイリストに登録された動画のIDを一覧する。
+        そのマイリストに登録された動画を一覧する。
 
         :param int |  str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
         :param typing.Optional[str] file_name: ファイル名。ここにリストを書き出す。
         :param bool table: Trueで表形式で出力する。
         :param bool tsv: FalseでIDのみを、TrueでIDに加え他の情報もTSV表記で出力する。
-        :param bool mode_is_show: show コマンドならば True。
         :rtype: None
         """
         if table:  # 表形式の場合
             if list_id == Msg.ALL_ITEM:
-                if mode_is_show:
-                    self._export_table(self.show_meta(), file_name)
-                else:
-                    self._export_table(self.show_all_through(), file_name)
+                self._writer(self._construct_table(self.fetch_meta()), file_name)
             else:
-                self._export_table(self.show(list_id), file_name)
+                self._writer(self._construct_table(self.fetch_one(list_id)), file_name)
         elif tsv:  # タブ区切りテキストの場合
             if list_id == Msg.ALL_ITEM:
-                if mode_is_show:
-                    self._export_tsv(self.show_meta(), file_name)
-                else:
-                    self._export_tsv(self.show_all_through(), file_name)
+                self._writer(self._construct_tsv(self.fetch_meta()), file_name)
             else:
-                self._export_tsv(self.show(list_id), file_name)
-        else:  # 装飾を求めない場合
-            if list_id == Msg.ALL_ITEM:
-                self._export_id_only(self.show_all_through(False), file_name)
-            else:
-                self._export_id_only(self.show(list_id, False), file_name)
+                self._writer(self._construct_tsv(self.fetch_one(list_id)), file_name)
 
-    def _export_id_only(self, container, file_name=None):
+    def export(self, list_id, file_name=None):
+        """
+        そのマイリストに登録された動画のIDを一覧する。
+
+        :param int |  str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
+        :param typing.Optional[str] file_name: ファイル名。ここにリストを書き出す。
+        :rtype: None
+        """
+        if list_id == Msg.ALL_ITEM:
+            self._writer(self._export_id(self.fetch_all(False)), file_name)
+        else:
+            self._writer(self._export_id(self.fetch_one(list_id, False)), file_name)
+
+    def _export_id(self, container):
         """
         動画IDだけを出力する。
 
         :param list[list[str]] container: 表示したい動画IDのリスト。
-        :param str file_name: ファイル名。ここにリストを書き出す。
+        :rtype: str
         """
-        _ids = [item[0] for item in container if item is not None and len(item) > 0]
+        return "\n".join([item[0] for item in container if item is not None and len(item) > 0])
 
-        if file_name:
-            self.writer("\n".join(_ids), file_name)
-        else:
-            print("\n".join(_ids))
-
-    def _export_tsv(self, container, file_name=None):
+    def _construct_tsv(self, container):
         """
         TSV形式で出力する。
 
         :param list[list[str]] container: 表示したい内容を含むリスト。
-        :param typing.Optional[str] file_name: ファイル名。ここにリストを書き出す。
+        :rtype: str
         """
-        enco = get_encoding()
-
         if len(container) > 1: print(Msg.ml_items_counts, len(container) - 1)
 
         rows = [container.pop(0)]
         for row in container:
             rows.append([str(item) for item in row])
 
-        if file_name:
-            self.writer("\n".join(["\t".join(row) for row in rows]), file_name)
-        else:
-            for row in rows:
-                print("\t".join(row).encode(enco, Msg.BACKSLASH).decode(enco))
+        return "\n".join(["\t".join(row) for row in rows])
 
-    def _export_table(self, container, file_name=None):
+    def _construct_table(self, container):
         """
         Asciiテーブル形式でリストの中身を表示する。
 
@@ -725,10 +724,8 @@ class NicoMyList(LogIn):
         と表示される。
 
         :param list[list[str]] container: 表示したい内容を含むリスト。
-        :param typing.Optional[str] file_name: ファイル名。ここにリストを書き出す。
+        :rtype: str
         """
-        enco = get_encoding()
-
         if len(container) > 1: print(Msg.ml_items_counts, len(container) - 1)
 
         cols = container.pop(0)
@@ -738,61 +735,35 @@ class NicoMyList(LogIn):
         for row in container:
             table.add_row(row)
 
-        if file_name:
-            self.writer(table.get_string(), file_name)
-        else:
-            print(table.get_string().encode(enco, Msg.BACKSLASH).decode(enco))
+        return table.get_string()
 
-    def writer(self, text, file_name):
+    def _writer(self, text, file_name):
         """
+        ファイルまたは標準出力に書き出す。
 
         :param str text: 内容。
-        :param str file_name: ファイル名。
+        :param str | None file_name: ファイル名。
+        :rtype: None
         """
-        with open(file_name, encoding="utf-8", mode="w") as fd:
-            fd.write("{}\n".format(text))
-        self.logger.info(Msg.ml_exported.format(abspath(file_name)))
+        enco = get_encoding()
+        if file_name:
+            with open(file_name, encoding="utf-8", mode="w") as fd:
+                fd.write("{}\n".format(text))
+            self.logger.info(Msg.ml_exported.format(abspath(file_name)))
+        else:
+            print(text.encode(enco, Msg.BACKSLASH).decode(enco))
 
 
-def main():
+def main(args):
     """
+    メイン。
+
+    :param args: ArgumentParser.parse_args() によって解釈された引数。
     :rtype: None
     """
-    parser = ArgumentParser(fromfile_prefix_chars="+", description=Msg.ml_description)
-    parser.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
-    parser.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
-    parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",
-                        help=Msg.nd_help_loglevel,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-    parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
-    parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD")
-    group_one = parser.add_argument_group(Msg.ml_help_group_a)
-    group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
-    group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
-    group_one.add_argument("-d", "--delete", nargs="+", help=Msg.ml_help_delete, metavar="sm...")
-    group_one.add_argument("-m", "--move", nargs="+", help=Msg.ml_help_move, metavar="sm...")
-    group_one.add_argument("-c", "--copy", nargs="+", help=Msg.ml_help_copy, metavar="sm...")
-    group_two = parser.add_argument_group(Msg.ml_help_group_b)
-    group_two.add_argument("-s", "--show", action="store_true", help=Msg.ml_help_show)
-    group_two.add_argument("-r", "--create", action="store_true", help=Msg.ml_help_create)
-    group_two.add_argument("--purge", action="store_true", help=Msg.ml_help_purge)
-    group_two.add_argument("-e", "--export", action="count", help=Msg.ml_help_export)
-    group_one.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="ファイル名")
+    logger = NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
 
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit()
-
-    args = parser.parse_args()
-
-    if args.what: print(args) or sys.exit()
-
-    logger = NDLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
-
-    username = getattr(args, "user")[0] if isinstance(getattr(args, "user"), list) else None
-    password = getattr(args, "pass")[0] if isinstance(getattr(args, "pass"), list) else None
-    instnc = NicoMyList((username, password), logger=logger)
+    instnc = NicoMyList((args.user, args.password), logger=logger)
 
     target = args.src[0]
     if args.id and target.isdecimal(): target = int(target)
@@ -803,8 +774,6 @@ def main():
     """ エラーの除外 """
     if (args.add or args.create or args.purge) and Msg.ALL_ITEM == target:
         sys.exit(Err.cant_perform_all)
-    if args.show and Msg.ALL_ITEM != target:
-        sys.exit(Err.only_perform_all)
     if (args.copy or args.move) and dest is None:
         sys.exit(Err.lack_arg.format("--to"))
     if (args.delete and (len(args.delete) > 1 and Msg.ALL_ITEM in args.delete) or
@@ -821,20 +790,12 @@ def main():
 
     """ 本筋 """
     if args.export:
-        if args.export == 1:  # 簡略化モード
-            instnc.export(target, file_name)
-        elif args.export == 2:  # TSVモード
-            instnc.export(target, file_name, tsv=True)
-        elif args.export >= 3:
-            if PrettyTable:
-                instnc.export(target, file_name, table=True)
-            else:
-                instnc.export(target, file_name, tsv=True)
+        instnc.export(target, file_name)
     elif args.show:
-        if PrettyTable:
-            instnc.export(Msg.ALL_ITEM, file_name, table=True, mode_is_show=True)
-        else:
-            instnc.export(Msg.ALL_ITEM, file_name, tsv=True, mode_is_show=True)
+        if args.show >= 2 and PrettyTable:  # Tableモード
+            instnc.show(target, file_name, table=True)
+        else:  # TSVモード
+            instnc.show(target, file_name, tsv=True)
     elif args.create:
         instnc.create_mylist(target)
     elif args.purge:
@@ -852,4 +813,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    pass

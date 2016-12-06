@@ -1,5 +1,4 @@
 # coding: utf-8
-import argparse
 import html
 import os
 import requests
@@ -16,7 +15,7 @@ try:
 except ImportError:
     progressbar = None
 
-from .utils import Msg, URL, Key, NDLogger, LogIn, get_encoding, validator, Err
+from .utils import Msg, URL, Key, NTLogger, LogIn, get_encoding, validator, Err
 
 """
 使い方:
@@ -40,7 +39,7 @@ def print_info(queue, file_name=None):
     GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
 
     :param list queue:
-    :param typing.Optional[str] file_name:
+    :param str | None file_name:
     :return:
     """
     text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
@@ -79,8 +78,8 @@ def get_infos(queue, logger=None):
     * view_counter      int
 
     :param list[str] queue: 動画IDのリスト
-    :param typing.Optional[NDLogger] logger: ログ出力
-    :rtype: dict[str, dict[str, typing.Union[int, str, list]]]
+    :param typing.Optional[NTLogger] logger: ログ出力
+    :rtype: dict[str, dict[str, int | str | list]]
     """
     if logger: logger.info(Msg.nd_start_download.format(len(queue)))
 
@@ -160,9 +159,9 @@ def t2filename(text):
 class GetResources(LogIn, metaclass=ABCMeta):
     def __init__(self, auth, logger, session):
         """
-        :param typing.Optional[tuple] auth:
+        :param typing.Optional[tuple[str]] auth:
         :param typing.Optional[requests.Session] session:
-        :param typing.Optional[NDLogger] logger:
+        :param typing.Optional[NTLogger] logger:
         """
         super().__init__(auth=auth, logger=logger, session=session)
         self.database = None
@@ -185,7 +184,7 @@ class GetResources(LogIn, metaclass=ABCMeta):
     def start(self, database, save_dir):
         """
 
-        :param dict[str, dict[str, typing.Union[int, str]]] database:
+        :param dict[str, dict[str, int | str]] database:
         :param str save_dir:
         """
         pass
@@ -201,12 +200,15 @@ class GetResources(LogIn, metaclass=ABCMeta):
 class GetVideos(GetResources):
     def __init__(self, auth=(None, None), logger=None, session=None):
         """
+        動画をダウンロードする。
+
         インスタンス変数 so_video_id は動画IDが so で始まる場合(つまり
         公式チャンネルの動画)にのみ使用する。一時的にso**** のIDを
         保持しておき、ファイル名につけるのに使う。そうしないと
         リダイレクトされた先の「スレッドID」の数字が名前になってしまう。
 
-        :param NDLogger logger:
+        :param typing.Optional[tuple[str]] auth:
+        :param NTLogger logger:
         :param requests.Session session:
         """
         super().__init__(auth=auth, logger=logger, session=session)
@@ -224,7 +226,7 @@ class GetVideos(GetResources):
     def start(self, database, save_dir):
         """
 
-        :param dict[str, dict[str, typing.Union[int, str]]] database:
+        :param dict[str, dict[str, int | str]] database:
         :param str save_dir:
         """
         if database is None or save_dir is None:
@@ -307,14 +309,15 @@ class GetVideos(GetResources):
 class GetThumbnails(GetResources):
     def __init__(self, auth=(None, None), logger=None):
         """
-        :param NDLogger logger:
+        :param typing.Optional[tuple[str]] auth:
+        :param NTLogger logger:
         """
         super().__init__(auth=auth, logger=logger, session=None)
 
     def start(self, database, save_dir):
         """
 
-        :param dict[str, dict[str, typing.Union[int, str]]] database:
+        :param dict[str, dict[str, int | str]] database:
         :param str save_dir:
         """
         self.database = database
@@ -380,8 +383,9 @@ class GetThumbnails(GetResources):
 class GetComments(GetResources):
     def __init__(self, auth=(None, None), logger=None, session=None):
         """
+        :param typing.Optional[tuple[str]] auth:
         :param requests.Session session:
-        :param NDLogger logger:
+        :param NTLogger logger:
         """
         super().__init__(auth=auth, logger=logger, session=session)
         self.so_video_id = None
@@ -389,9 +393,9 @@ class GetComments(GetResources):
     def start(self, database, save_dir, xml_mode=False):
         """
 
-        :param bool xml_mode:
-        :param dict[str, dict[str, typing.Union[int, str]]] database:
+        :param dict[str, dict[str, int | str]] database:
         :param str save_dir:
+        :param bool xml_mode:
         """
         self.database = database
         self.make_dir(save_dir)
@@ -455,11 +459,19 @@ class GetComments(GetResources):
         return True
 
     def make_file_name(self, video_id, xml_mode=False):
+        """
+        ファイル名を構成する。
+
+        :param str video_id: 動画ID
+        :param bool xml_mode: 取りに行くコメントがXML形式かどうか。JSONならば False。
+        :return:
+        """
         ext = "xml" if xml_mode else "json"
         return Msg.nd_file_name.format(video_id, self.database[video_id][Key.FILE_NAME], ext)
 
     def get_thread_key(self, video_id, needs_key="1"):
         """
+        専用のAPIにアクセスして thread_key を取得する。
 
         :param str needs_key:
         :param str video_id:
@@ -475,6 +487,8 @@ class GetComments(GetResources):
 
     def make_param_xml(self, thread_id, user_id):
         """
+        コメント取得用のxmlを構成する。
+
         fork="1" があると投稿者コメントを取得する。
         0-99999:9999,1000: 「0分～99999分までの範囲で
         一分間あたり9999件、直近の1000件を取得する」の意味。
@@ -494,6 +508,8 @@ class GetComments(GetResources):
     def make_param_json(self, official_video, user_id, user_key, thread_id,
                         optional_thread_id=None, thread_key=None, force_184=None):
         """
+        コメント取得用のjsonを構成する。
+
         fork="1" があると投稿者コメントを取得する。
         0-99999:9999,1000: 「0分～99999分までの範囲で
         一分間あたり9999件、直近の1000件を取得する」の意味。
@@ -573,34 +589,13 @@ class GetComments(GetResources):
         return result
 
 
-def main():
-    parser = argparse.ArgumentParser(fromfile_prefix_chars="+", description=Msg.nd_description)
-    parser.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
-    parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
-    parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD")
-    parser.add_argument("-d", "--dest", nargs="?", type=str, default=os.getcwd(),
-                        help=Msg.nd_help_destination)
-    parser.add_argument("-c", "--comment", action="store_true", help=Msg.nd_help_comment)
-    parser.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
-    parser.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
-    parser.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
-    parser.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
-    parser.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="ファイル名")
-    parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",
-                        help=Msg.nd_help_loglevel,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+def main(args):
+    """
+    メイン。
 
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit()
-
-    args = parser.parse_args()
-
-    if args.what:
-        print(args)
-        sys.exit()
-
+    :param args: ArgumentParser.parse_args() によって解釈された引数
+    :rtype: None
+    """
     videoid = validator(args.VIDEO_ID)
     if not videoid:
         sys.exit(Err.invalid_videoid)
@@ -612,13 +607,11 @@ def main():
     if not os.path.isdir(args.dest):
         os.makedirs(args.dest)
 
-    logger = NDLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
+    logger = NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
     database = get_infos(videoid, logger=logger)
 
-    username = getattr(args, "user")[0] if isinstance(getattr(args, "user"), list) else None
-    password = getattr(args, "pass")[0] if isinstance(getattr(args, "pass"), list) else None
     # ログインしてそのセッションを使いまわす
-    session = LogIn((username, password), logger=logger).session
+    session = LogIn((args.user, args.password), logger=logger).session
 
     if args.thumbnail:
         GetThumbnails(logger=logger).start(database, args.dest)
@@ -631,4 +624,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    pass
