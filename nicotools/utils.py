@@ -135,49 +135,49 @@ class Msg:
     input_pass = "パスワードを入力してください(画面には表示されません)。"
 
     ''' ログに書くメッセージ '''
-    nd_start_download = "{} 件の動画の情報を取りに行きます。"
-    nd_download_done = "{} に保存しました。"
-    nd_download_video = "({}/{}) ID: {} (タイトル: {}) の動画をダウンロードします。"
-    nd_download_pict = "({}/{}) ID: {} (タイトル: {}) のサムネイルをダウンロードします。"
-    nd_download_comment = "({}/{}) ID: {} (タイトル: {}) のコメントをダウンロードします。"
-    nd_start_dl_video = "{} 件の動画をダウンロードします。"
-    nd_start_dl_pict = "{} 件のサムネイルをダウンロードします。"
-    nd_start_dl_comment = "{} 件のコメントをダウンロードします。"
+    nd_start_download = "{0} 件の動画の情報を取りに行きます。"
+    nd_download_done = "{0} に保存しました。"
+    nd_download_video = "({0}/{1}) ID: {2} (タイトル: {3}) の動画をダウンロードします。"
+    nd_download_pict = "({0}/{1}) ID: {2} (タイトル: {3}) のサムネイルをダウンロードします。"
+    nd_download_comment = "({0}/{1}) ID: {2} (タイトル: {3}) のコメントをダウンロードします。"
+    nd_start_dl_video = "{0} 件の動画をダウンロードします。"
+    nd_start_dl_pict = "{0} 件のサムネイルをダウンロードします。"
+    nd_start_dl_comment = "{0} 件のコメントをダウンロードします。"
     nd_file_name = "{0}_{1}.{2}"
-    nd_video_url_is = "{} の動画URL: {}"
-    nd_deleted_or_private = "{} は削除されているか、非公開です。"
+    nd_video_url_is = "{0} の動画URL: {1}"
+    nd_deleted_or_private = "{0} は削除されているか、非公開です。"
 
-    ml_exported = "{} に出力しました"
+    ml_exported = "{0} に出力しました"
     ml_items_counts = "含まれる項目の数:"
-    ml_fetching_mylist_id = "マイリスト: {} の ID を問い合わせています..."
-    ml_showing_mylist = "マイリスト「{}」の詳細を読み込んでいます..."
+    ml_fetching_mylist_id = "マイリスト: {0} の ID を問い合わせています..."
+    ml_showing_mylist = "マイリスト「{0}」の詳細を読み込んでいます..."
     ml_loading_mylists = "マイリストページを読み込んでいます..."
-    ml_mylist_found = "ID: {}, NAME: {}, DESC: {}"
+    ml_mylist_found = "ID: {0}, NAME: {1}, DESC: {2}"
 
-    ml_ask_delete_all = "{} に登録されている以下の全ての項目を削除します。"
+    ml_ask_delete_all = "{0} に登録されている以下の全ての項目を削除します。"
     ml_confirmation = "この操作は取り消せません。よろしいですか? (Y/N)"
     ml_answer_yes = "処理を開始します。"
     ml_answer_no = "操作を中止しました。"
     ml_answer_invalid = "Y または N を入力してください。"
     ml_deleted_or_private = "{0[video_id]} {0[title]} は削除されているか非公開です。"
 
-    ml_done_add = "[完了:追加] ({}/{}) 動画: {}"
-    ml_done_delete = "[完了:削除] ({}/{}) 動画: {}"
-    ml_done_copy = "[完了:コピー] ({}/{}) 動画ID: {}"
-    ml_done_move = "[完了:移動] ({}/{}) 動画ID: {}"
-    ml_done_purge = "[完了:マイリスト削除] 名前: {}"
-    ml_done_create = "[完了:マイリスト作成] 名前: {} (公開: {}), 説明文: {}"
+    ml_done_add = "[完了:追加] ({0}/{1}) 動画: {2}"
+    ml_done_delete = "[完了:削除] ({0}/{1}) 動画: {2}"
+    ml_done_copy = "[完了:コピー] ({0}/{1}) 動画ID: {2}"
+    ml_done_move = "[完了:移動] ({0}/{1}) 動画ID: {2}"
+    ml_done_purge = "[完了:マイリスト削除] 名前: {0}"
+    ml_done_create = "[完了:マイリスト作成] 名前: {0} (公開: {1}), 説明文: {2}"
 
-    ml_will_add = "[作業内容:追加] 対象: {}, 動画ID: {}"
-    ml_will_delete = "[作業内容:削除] {} から, 動画ID: {}"
-    ml_will_copyormove = "[作業内容:{}] {} から {} へ, 動画ID: {}"
-    ml_will_purge = "[作業内容:マイリスト削除] マイリスト「{}」を完全に削除します。"
+    ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
+    ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
+    ml_will_copyormove = "[作業内容:{0}] {1} から {2} へ, 動画ID: {3}"
+    ml_will_purge = "[作業内容:マイリスト削除] マイリスト「{0}」を完全に削除します。"
 
 
 class Err:
     """ エラーメッセージ """
 
-    lack_arg = "[エラー] 引数が足りません: {}"
+    lack_arg = "[エラー] 引数が足りません: {0}"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
     invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
                       "http://www.nicovideo.jp/watch/sm1234," \
@@ -188,23 +188,23 @@ class Err:
     cant_perform_all = "[エラー] このコマンドに * は指定できません。"
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
     no_commands = "[エラー] コマンドを指定してください。"
-    item_not_contained = "[エラー] 以下の項目は {} に存在しません: {}"
-    name_ambiguous = "同名のマイリストが {}件あります。名前の代わりに" \
+    item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
+    name_ambiguous = "同名のマイリストが {0}件あります。名前の代わりに" \
                      "IDで(--id を使って)指定し直してください。"
     name_ambiguous_detail = "名前: {0[name]}, ID: {0[id]}, {0[publicity]}," \
                             " 作成日: {0[since]}, 説明文: {0[description]}"
-    mylist_not_exist = "[エラー] {} という名前のマイリストは存在しません。"
-    mylist_id_not_exist = "[エラー] {} というIDのマイリストは存在しません。"
-    over_load = "[エラー] {} にはこれ以上追加できません。"
-    remaining = "以下の項目は処理されませんでした。"
-    already_exist = "[エラー]すでに存在しています。 ID: {} (タイトル: {})"
-    known_error = "[エラー] 動画: {} サーバーからの返事: {}"
-    unknown_error_itemid = "[エラー] ({}/{}) 動画: {}, サーバーからの返事: {}"
-    unknown_error = "[エラー] ({}/{}) 動画: {}, サーバーからの返事: {}"
-    unknown_error_list = "[エラー] サーバーからの返事: {}"
-    failed_to_create = "[エラー] {} の作成に失敗しました。 サーバーからの返事: {}"
-    failed_to_purge = "[エラー] {} の削除に失敗しました。 サーバーからの返事: {}"
-    invalid_spec = "[エラー] {} は不正です。マイリストの名前またはIDは" \
+    mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
+    mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
+    over_load = "[エラー] {0} にはこれ以上追加できません。"
+    remaining = "以下の項目は処理されませんでした: [{0}]"
+    already_exist = "[エラー]すでに存在しています。 ID: {0} (タイトル: {1})"
+    known_error = "[エラー] 動画: {0} サーバーからの返事: {1}"
+    unknown_error_itemid = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
+    unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
+    unknown_error_list = "[エラー] サーバーからの返事: {0}"
+    failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
+    failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
+    invalid_spec = "[エラー] {0} は不正です。マイリストの名前またはIDは" \
                    "文字列か整数で入力してください。"
     no_items = "[エラー] 動画が1件も登録されていません。"
 
@@ -290,7 +290,7 @@ class LogIn:
                     continue
                 else:
                     print("Couldn't determine whether we could log in."
-                          " This is the returned HTML:\n{}".format(res.text))
+                          " This is the returned HTML:\n{0}".format(res.text))
                     continue
         else:
             cook = self.load_cookies()

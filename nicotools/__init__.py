@@ -32,6 +32,7 @@ def main():
     parser_ml.set_defaults(func=nicoml.main)
     parser_ml.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
+    parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="ファイル名")
     group_one = parser_ml.add_argument_group(Msg.ml_help_group_a)
     group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
     group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
@@ -43,7 +44,6 @@ def main():
     group_two.add_argument("--purge", action="store_true", help=Msg.ml_help_purge)
     group_two.add_argument("-s", "--show", action="count", help=Msg.ml_help_show)
     group_two.add_argument("-e", "--export", action="store_true", help=Msg.ml_help_export)
-    group_one.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="ファイル名")
 
     args = parser.parse_args()
     if len(sys.argv) == 1:
