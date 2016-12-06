@@ -417,7 +417,7 @@ class NicoMyList(LogIn):
 
             if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name, _counter, len(videoids)):
                 # エラーが起きた場合
-                self.logger.error(Err.remaining.format(" ".join([i for i in videoids if i not in _done])))
+                self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
             elif res["status"] == "ok":
                 self.logger.info(Msg.ml_done_add.format(_counter, len(videoids), vd_id))
@@ -490,7 +490,7 @@ class NicoMyList(LogIn):
 
             if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name_to, _counter, len(item_ids)):
                 # エラーが起きた場合
-                self.logger.error(Err.remaining.format(" ".join([i for i in videoids if i not in _done])))
+                self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
             if is_copy:
                 self.logger.info(Msg.ml_done_copy.format(_counter, len(item_ids), vd_id))
@@ -533,7 +533,7 @@ class NicoMyList(LogIn):
 
             if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name, _counter, len(item_ids)):
                 # エラーが起きた場合
-                self.logger.error(Err.remaining.format(" ".join([i for i in videoids if i not in _done])))
+                self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
             elif res["status"] == "ok":
                 self.logger.info(Msg.ml_done_delete.format(_counter, len(item_ids), vd_id))
