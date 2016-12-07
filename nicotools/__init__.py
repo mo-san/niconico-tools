@@ -4,7 +4,7 @@ import sys
 from argparse import ArgumentParser
 
 from . import nicodown, nicoml
-from .utils import Msg
+from .utils import Msg, Err
 
 
 def main():
@@ -17,7 +17,7 @@ def main():
                         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
     subparsers = parser.add_subparsers()
 
-    parser_nd = subparsers.add_parser("down", help=Msg.nd_description)
+    parser_nd = subparsers.add_parser("download", aliases=["d"], help=Msg.nd_description)
     parser_nd.set_defaults(func=nicodown.main)
     parser_nd.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
     parser_nd.add_argument("-d", "--dest", nargs="?", type=str, default=os.getcwd(), help=Msg.nd_help_destination)
@@ -28,7 +28,7 @@ def main():
     parser_nd.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
     parser_nd.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="ファイル名")
 
-    parser_ml = subparsers.add_parser("mylist", help=Msg.ml_description)
+    parser_ml = subparsers.add_parser("mylist", aliases=["m"], help=Msg.ml_description)
     parser_ml.set_defaults(func=nicoml.main)
     parser_ml.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
@@ -53,7 +53,10 @@ def main():
         print(args)
         sys.exit()
 
-    args.func(args)
+    try:
+        args.func(args)
+    except KeyboardInterrupt:
+        sys.exit(Err.keyboard_interrupt)
 
 if __name__ == "__main__":
     main()

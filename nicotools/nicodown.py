@@ -4,7 +4,6 @@ import os
 import requests
 import sys
 import time
-from abc import ABCMeta, abstractmethod
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from urllib.parse import unquote
@@ -156,49 +155,8 @@ def t2filename(text):
     return text
 
 
-class GetResources(LogIn, metaclass=ABCMeta):
-    def __init__(self, auth, logger, session):
-        """
-        :param typing.Optional[tuple[str]] auth:
-        :param typing.Optional[requests.Session] session:
-        :param typing.Optional[NTLogger] logger:
-        """
-        super().__init__(auth=auth, logger=logger, session=session)
-        self.database = None
-        self.save_dir = None
-        self.logger = logger if logger else self.AltLogger()
-        if not hasattr(logger, "handlers"):
-            self.logger = self.AltLogger()
-        self.session = session
-
-    def make_dir(self, directory):
-        """
-        保存場所に指定されたフォルダーがない場合につくる。
-
-        :param str directory: フォルダー名
-        """
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
-
-    @abstractmethod
-    def start(self, database, save_dir):
-        """
-
-        :param dict[str, dict[str, int | str]] database:
-        :param str save_dir:
-        """
-        pass
-
-    @abstractmethod
-    def download(self, video_id):
-        """
-        :param str video_id:
-        """
-        pass
-
-
-class GetVideos(GetResources):
-    def __init__(self, auth=(None, None), logger=None, session=None):
+class GetVideos(LogIn):
+    def __init__(self, auth=None, logger=None, session=None):
         """
         動画をダウンロードする。
 
@@ -207,11 +165,14 @@ class GetVideos(GetResources):
         保持しておき、ファイル名につけるのに使う。そうしないと
         リダイレクトされた先の「スレッドID」の数字が名前になってしまう。
 
-        :param typing.Optional[tuple[str]] auth:
-        :param NTLogger logger:
+        :param tuple[str | None, str | None] | None auth:
+        :param T <= logging.logger logger:
         :param requests.Session session:
         """
         super().__init__(auth=auth, logger=logger, session=session)
+        self.database = None
+        self.save_dir = None
+
         if progressbar is None:
             self.widgets = None
         else:
@@ -305,14 +266,26 @@ class GetVideos(GetResources):
             self.database[video_id][Key.FILE_NAME],
             self.database[video_id][Key.MOVIE_TYPE])
 
+    def make_dir(self, directory):
+        """
+        保存場所に指定されたフォルダーがない場合につくる。
 
-class GetThumbnails(GetResources):
-    def __init__(self, auth=(None, None), logger=None):
+        :param str directory: フォルダー名
         """
-        :param typing.Optional[tuple[str]] auth:
-        :param NTLogger logger:
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+
+
+class GetThumbnails:
+    def __init__(self, logger=None):
         """
-        super().__init__(auth=auth, logger=logger, session=None)
+        :param T <= logging.logger logger:
+        """
+        self.database = None
+        self.save_dir = None
+        self.logger = logger
+        if not logger or not hasattr(logger, "handlers"):
+            self.logger = NTLogger()
 
     def start(self, database, save_dir):
         """
@@ -363,9 +336,8 @@ class GetThumbnails(GetResources):
             session.mount("http://", HTTPAdapter(max_retries=retries))
 
             # connect timeoutを10秒, read timeoutを30秒に設定
-            response = session.get(url=(self.database[video_id][Key.THUMBNAIL_URL] +
-                                        ("", ".L")[is_large]),
-                                   timeout=(10.0, 30.0))
+            url = self.database[video_id][Key.THUMBNAIL_URL] + ("", ".L")[is_large]
+            response = session.get(url=url, timeout=(10.0, 30.0))
 
             # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
             if response.status_code == 404 and is_large:
@@ -379,15 +351,26 @@ class GetThumbnails(GetResources):
         return Msg.nd_file_name.format(
             video_id, self.database[video_id][Key.FILE_NAME], "jpg")
 
-
-class GetComments(GetResources):
-    def __init__(self, auth=(None, None), logger=None, session=None):
+    def make_dir(self, directory):
         """
-        :param typing.Optional[tuple[str]] auth:
+        保存場所に指定されたフォルダーがない場合につくる。
+
+        :param str directory: フォルダー名
+        """
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+
+
+class GetComments(LogIn):
+    def __init__(self, auth=None, logger=None, session=None):
+        """
+        :param tuple[str | None, str | None] | None auth:
+        :param T <= logging.logger logger:
         :param requests.Session session:
-        :param NTLogger logger:
         """
         super().__init__(auth=auth, logger=logger, session=session)
+        self.database = None
+        self.save_dir = None
         self.so_video_id = None
 
     def start(self, database, save_dir, xml_mode=False):
@@ -468,6 +451,15 @@ class GetComments(GetResources):
         """
         ext = "xml" if xml_mode else "json"
         return Msg.nd_file_name.format(video_id, self.database[video_id][Key.FILE_NAME], ext)
+
+    def make_dir(self, directory):
+        """
+        保存場所に指定されたフォルダーがない場合につくる。
+
+        :param str directory: フォルダー名
+        """
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
 
     def get_thread_key(self, video_id, needs_key="1"):
         """
@@ -597,24 +589,27 @@ def main(args):
     :rtype: None
     """
     videoid = validator(args.VIDEO_ID)
+
+    """ エラーの除外 """
     if not videoid:
         sys.exit(Err.invalid_videoid)
+    if not (args.thumbnail or args.comment or args.video):
+        sys.exit(Err.lack_arg.format("--thumbnail、 --comment、 --video のいずれか"))
 
+    """ 本筋 """
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
         print_info(videoid, file_name)
-        sys.exit()
     if not os.path.isdir(args.dest):
         os.makedirs(args.dest)
-
-    logger = NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
+    logger = NTLogger(log_level=args.loglevel)
     database = get_infos(videoid, logger=logger)
-
-    # ログインしてそのセッションを使いまわす
-    session = LogIn((args.user, args.password), logger=logger).session
 
     if args.thumbnail:
         GetThumbnails(logger=logger).start(database, args.dest)
+
+    # ログインしてそのセッションを使いまわす
+    session = LogIn((args.user, args.password), logger=logger).session
 
     if args.comment:
         GetComments(logger=logger, session=session).start(database, args.dest, args.xml)

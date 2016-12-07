@@ -5,7 +5,7 @@ import re
 import requests
 from getpass import getpass
 from os.path import join, expanduser
-from sys import stdout, stderr
+from sys import stdout
 
 
 def get_encoding():
@@ -23,7 +23,7 @@ def validator(input_list):
 
     受け入れるのは以下の形式:
         * "*"
-        * http://www.nicovideo.jp/watch/sm1234
+        * http://www.nicovideo.jp/watch/sm123456
         * sm1234
         * watch/sm123456
         * nm1234
@@ -79,9 +79,9 @@ class URL:
 class Msg:
     """メッセージ集"""
 
-    LOG_FILE_ND = "nicodown_log.txt"
-    LOG_FILE_ML = "nicoml_log.txt"
-    COOKIE_FILE_NAME = "nicodown.pickle"
+    LOG_FILE_ND = "nicotools_download.log"
+    LOG_FILE_ML = "nicotools_mylist.log"
+    COOKIE_FILE_NAME = "nicotools_cookie.pickle"
     ALL_ITEM = "*"
 
     ''' 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか '''
@@ -179,6 +179,7 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    keyboard_interrupt = "操作を中断しました。"
     lack_arg = "[エラー] 引数が足りません: {0}"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
     invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
@@ -243,36 +244,23 @@ class Err:
 
 
 class LogIn:
-    def __init__(self, auth, logger=None, session=None):
+    def __init__(self, auth=None, logger=None, session=None):
         """
-        :param tuple[typing.Optional[str], typing.Optional[str]] auth:
-        :param T <= logging.logger logger:
-        :param typing.Optional[requests.Session] session: セッションオブジェクト
+        :param tuple[str | None, str | None] | None auth:
+        :param None | T <= logging.logger logger:
+        :param requests.Session | None session: セッションオブジェクト
         """
         self.auth = None
         if auth is None and session is None:
             self.auth = self.get_credentials()
         # アドレスとパスワードの両方が空のときだけ素通りする
-        elif auth[0] is not None or auth[1] is not None:
+        elif auth and (auth[0] or auth[1]):
             self.auth = self.get_credentials(mail=auth[0], password=auth[1])
         self.session = session if session else self.get_session()  # type: requests.Session
         self.token = self.get_token()  # type: str
         self.logger = logger
-
-    class AltLogger:
-        """ logger がなかった場合の保険 """
-        def emitter(self, text, err=False, en=get_encoding()):
-            print(text.encode(en, Msg.BACKSLASH).decode(en), file=[stdout, stderr][err])
-
-        def debug(self, text)   : self.emitter(text)
-
-        def info(self, text)    : self.emitter(text)
-
-        def error(self, text)   : self.emitter(text, True)
-
-        def warning(self, text) : self.emitter(text, True)
-
-        def critical(self, text): self.emitter(text, True)
+        if not logger or not hasattr(logger, "handlers"):
+            self.logger = NTLogger()
 
     def get_session(self, force_login=False):
         """

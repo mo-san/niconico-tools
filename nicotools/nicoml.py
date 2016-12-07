@@ -84,8 +84,6 @@ class NicoMyList(LogIn):
         :rtype: None
         """
         super().__init__(auth, logger, session)
-        if not hasattr(logger, "handlers"):
-            self.logger = self.AltLogger()
         self.mylists = self.get_mylist_ids()
 
     def get_mylist_ids(self):
