@@ -1,0 +1,11 @@
+language: python
+python:
+  - "3.3"
+  - "3.4"
+  - "3.5"
+# command to install dependencies
+install:
+  - pip install requests progressbar2 prettytable pytest pytest-catchlog
+  - pip install -e .
+# command to run tests
+script: test/test-nicotools.py

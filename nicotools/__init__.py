@@ -7,12 +7,12 @@ from . import nicodown, nicoml
 from .utils import Msg, Err
 
 
-def main():
+def main(args=None):
     parser = ArgumentParser(fromfile_prefix_chars="+")
     parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
     parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD", dest="password")
     parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser.add_argument("-l", "--loglevel", type=str.upper, default="INFO",
+    parser.add_argument("--loglevel", type=str.upper, default="INFO",
                         help=Msg.nd_help_loglevel,
                         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
     subparsers = parser.add_subparsers()
@@ -20,19 +20,23 @@ def main():
     parser_nd = subparsers.add_parser("download", aliases=["d"], help=Msg.nd_description)
     parser_nd.set_defaults(func=nicodown.main)
     parser_nd.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
-    parser_nd.add_argument("-d", "--dest", nargs="?", type=str, default=os.getcwd(), help=Msg.nd_help_destination)
+    parser_nd.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
+    parser_nd.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="WORD", dest="password")
+    parser_nd.add_argument("-d", "--dest", nargs=1, type=str, default=os.getcwd(), help=Msg.nd_help_destination)
     parser_nd.add_argument("-c", "--comment", action="store_true", help=Msg.nd_help_comment)
     parser_nd.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
     parser_nd.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
     parser_nd.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
     parser_nd.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
-    parser_nd.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="ファイル名")
+    parser_nd.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="FILE")
 
     parser_ml = subparsers.add_parser("mylist", aliases=["m"], help=Msg.ml_description)
     parser_ml.set_defaults(func=nicoml.main)
     parser_ml.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
+    parser_ml.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
+    parser_ml.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="WORD", dest="password")
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
-    parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="ファイル名")
+    parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="FILE")
     group_one = parser_ml.add_argument_group(Msg.ml_help_group_a)
     group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
     group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
@@ -45,8 +49,8 @@ def main():
     group_two.add_argument("-s", "--show", action="count", help=Msg.ml_help_show)
     group_two.add_argument("-e", "--export", action="store_true", help=Msg.ml_help_export)
 
-    args = parser.parse_args()
-    if len(sys.argv) == 1:
+    args = parser.parse_args(args)
+    if len(sys.argv) <= 2 and not os.getenv("PYTHON_DEBUG") == "1":
         parser.print_help()
         sys.exit()
     if args.what:
@@ -59,4 +63,5 @@ def main():
         sys.exit(Err.keyboard_interrupt)
 
 if __name__ == "__main__":
-    main()
+    _ = globals().get("DEBUG_ARGS")
+    main(_)

@@ -5,7 +5,9 @@ import requests
 import sys
 import time
 from requests.adapters import HTTPAdapter
+from requests.exceptions import ConnectTimeout
 from requests.packages.urllib3.util.retry import Retry
+from requests.packages.urllib3.exceptions import MaxRetryError
 from urllib.parse import unquote
 from xml.etree import ElementTree
 
@@ -77,7 +79,7 @@ def get_infos(queue, logger=None):
     * view_counter      int
 
     :param list[str] queue: 動画IDのリスト
-    :param typing.Optional[NTLogger] logger: ログ出力
+    :param NTLogger | None logger: ログ出力
     :rtype: dict[str, dict[str, int | str | list]]
     """
     if logger: logger.info(Msg.nd_start_download.format(len(queue)))
@@ -156,7 +158,7 @@ def t2filename(text):
 
 
 class GetVideos(LogIn):
-    def __init__(self, auth=None, logger=None, session=None):
+    def __init__(self, auth=(None, None), logger=None, session=None):
         """
         動画をダウンロードする。
 
@@ -165,7 +167,7 @@ class GetVideos(LogIn):
         保持しておき、ファイル名につけるのに使う。そうしないと
         リダイレクトされた先の「スレッドID」の数字が名前になってしまう。
 
-        :param tuple[str | None, str | None] | None auth:
+        :param tuple[str | None, str | None] auth:
         :param T <= logging.logger logger:
         :param requests.Session session:
         """
@@ -326,7 +328,7 @@ class GetThumbnails:
         :param str video_id: 動画ID (e.g. sm1234)
         :param bool is_large: 大きいサイズのサムネイルを取りに行くかどうか
         :param int retry: 再試行回数
-        :rtype: typing.Union[bool, requests.Response]
+        :rtype: bool | requests.Response
         """
         with requests.Session() as session:
             # retry設定
@@ -335,16 +337,21 @@ class GetThumbnails:
                             status_forcelist=[500, 502, 503, 504])
             session.mount("http://", HTTPAdapter(max_retries=retries))
 
-            # connect timeoutを10秒, read timeoutを30秒に設定
             url = self.database[video_id][Key.THUMBNAIL_URL] + ("", ".L")[is_large]
-            response = session.get(url=url, timeout=(10.0, 30.0))
+            try:
+                # connect timeoutを10秒, read timeoutを30秒に設定
+                response = session.get(url=url, timeout=(5.0, 10.0))
 
-            # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
-            if response.status_code == 404 and is_large:
-                return self._download(video_id, is_large=False)
-            elif response.ok:
-                return response
-            else:
+                # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
+                if response.status_code == 404 and is_large:
+                    return self._download(video_id, is_large=False)
+                elif response.ok:
+                    return response
+                else:
+                    return False
+            except (ConnectTimeout, MaxRetryError):
+                self.logger.error(Err.connection_timeout.format(
+                    video_id, self.database[video_id][Key.TITLE]))
                 return False
 
     def make_file_name(self, video_id):
@@ -362,9 +369,9 @@ class GetThumbnails:
 
 
 class GetComments(LogIn):
-    def __init__(self, auth=None, logger=None, session=None):
+    def __init__(self, auth=(None, None), logger=None, session=None):
         """
-        :param tuple[str | None, str | None] | None auth:
+        :param tuple[str | None, str | None] auth:
         :param T <= logging.logger logger:
         :param requests.Session session:
         """
@@ -600,22 +607,27 @@ def main(args):
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
         print_info(videoid, file_name)
-    if not os.path.isdir(args.dest):
+        sys.exit()
+
+    destination = args.dest[0] if isinstance(args.dest, list) else args.dest  # type: str
+    if not os.path.isdir(destination):
         os.makedirs(args.dest)
-    logger = NTLogger(log_level=args.loglevel)
+    logger = NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
     database = get_infos(videoid, logger=logger)
 
     if args.thumbnail:
-        GetThumbnails(logger=logger).start(database, args.dest)
+        GetThumbnails(logger=logger).start(database, destination)
 
     # ログインしてそのセッションを使いまわす
-    session = LogIn((args.user, args.password), logger=logger).session
+    username = args.user[0] if args.user else None
+    password = args.password[0] if args.password else None
+    session = LogIn((username, password), logger=logger).session
 
     if args.comment:
-        GetComments(logger=logger, session=session).start(database, args.dest, args.xml)
+        GetComments(logger=logger, session=session).start(database, destination, args.xml)
 
     if args.video:
-        GetVideos(logger=logger, session=session).start(database, args.dest)
+        GetVideos(logger=logger, session=session).start(database, destination)
 
 
 if __name__ == "__main__":

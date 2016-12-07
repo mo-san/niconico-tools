@@ -5,7 +5,7 @@ import re
 import requests
 from getpass import getpass
 from os.path import join, expanduser
-from sys import stdout
+from sys import stdout, exit
 
 
 def get_encoding():
@@ -179,6 +179,7 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
     keyboard_interrupt = "操作を中断しました。"
     lack_arg = "[エラー] 引数が足りません: {0}"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
@@ -244,28 +245,29 @@ class Err:
 
 
 class LogIn:
-    def __init__(self, auth=None, logger=None, session=None):
+    def __init__(self, auth=(None, None), logger=None, session=None):
         """
-        :param tuple[str | None, str | None] | None auth:
+        :param tuple[str | None, str | None] auth:
         :param None | T <= logging.logger logger:
         :param requests.Session | None session: セッションオブジェクト
         """
-        self.auth = None
-        if auth is None and session is None:
-            self.auth = self.get_credentials()
-        # アドレスとパスワードの両方が空のときだけ素通りする
-        elif auth and (auth[0] or auth[1]):
-            self.auth = self.get_credentials(mail=auth[0], password=auth[1])
-        self.session = session if session else self.get_session()  # type: requests.Session
-        self.token = self.get_token()  # type: str
         self.logger = logger
         if not logger or not hasattr(logger, "handlers"):
             self.logger = NTLogger()
+        self.auth = None
+        if auth == (None, None) and session:
+            self.session = session
+        elif auth == (None, None) and session is None:
+            self.session = self.get_session()
+        else:
+            self.auth = self.get_credentials(mail=auth[0], password=auth[1])
+            self.session = self.get_session(force_login=True)
+        self.token = self.get_token()
 
     def get_session(self, force_login=False):
         """
         :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
-        :return: セッションオブジェクト
+        :rtype: requests.Session
         """
         self.session = requests.session()
         if force_login:
@@ -282,6 +284,7 @@ class LogIn:
                     print("Couldn't determine whether we could log in."
                           " This is the returned HTML:\n{0}".format(res.text))
                     continue
+            self.logger.debug(res.headers["x-niconico-id"])
         else:
             cook = self.load_cookies()
             if cook:
@@ -313,18 +316,21 @@ class LogIn:
         :rtype: dict[str, str]
         """
         un, pw = mail, password
-        if un is None:
-            r = re.compile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
-            while True:
-                print(Msg.input_mail)
-                un = input("-=>")
-                if not un: continue
-                if r.match(un): break
-        if pw is None:
-            while True:
-                print(Msg.input_pass)
-                pw = getpass("-=>")
-                if pw: break
+        try:
+            if un is None:
+                r = re.compile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
+                while True:
+                    print(Msg.input_mail)
+                    un = input("-=>")
+                    if not un: continue
+                    if r.match(un): break
+            if pw is None:
+                while True:
+                    print(Msg.input_pass)
+                    pw = getpass("-=>")
+                    if pw: break
+        except (EOFError, KeyboardInterrupt):
+            exit(Err.keyboard_interrupt)
         return {
             "mail_tel": un,
             "password": pw
@@ -341,7 +347,7 @@ class LogIn:
     def load_cookies(self, file_name=Msg.COOKIE_FILE_NAME):
         """
         :param str file_name:
-        :return: クッキーオブジェクト
+        :rtype: requests.cookies.RequestsCookieJar
         """
         try:
             with open(join(expanduser("~"), file_name), "rb") as fd:

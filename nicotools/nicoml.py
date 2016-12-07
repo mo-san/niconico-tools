@@ -78,9 +78,9 @@ class NicoMyList(LogIn):
                 * 「"マイ'リ'スト"」 を指定するには 「"\"マイ'リ'スト\""」
                 * 「'マイ"リ"スト'」 を指定するには 「"'マイ\"リ\"スト'"」
 
-        :param tuple[typing.Optional[str], typing.Optional[str]] auth: メールアドレスとパスワードの組
+        :param tuple[str | None, str | None] auth: メールアドレスとパスワードの組
         :param T <= logging.Logger logger:
-        :param typing.Optional[requests.Session] session: requests モジュールのセッション
+        :param requests.Session | None session: requests モジュールのセッション
         :rtype: None
         """
         super().__init__(auth, logger, session)
@@ -349,7 +349,7 @@ class NicoMyList(LogIn):
 
         :param str mylist_name: マイリストの名前
         :param bool is_public: True なら公開マイリストになる
-        :param typing.Optional[str] desc: マイリストの説明文
+        :param str | None desc: マイリストの説明文
         :rtype: bool
         """
         payload = {
@@ -427,9 +427,9 @@ class NicoMyList(LogIn):
         """
         そのマイリストに、 指定した動画をコピーする。
 
-        :param int |  str list_id_from: 移動元のIDまたは名前
-        :param int |  str list_id_to: 移動先のIDまたは名前
-        :param list[str] |  tuple[str] videoids: 動画ID
+        :param int | str list_id_from: 移動元のIDまたは名前
+        :param int | str list_id_to: 移動先のIDまたは名前
+        :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
         if list_id_from == list_id_to:
@@ -440,9 +440,9 @@ class NicoMyList(LogIn):
         """
         そのマイリストに、 指定した動画を移動する。
 
-        :param int |  str list_id_from: 移動元のIDまたは名前
-        :param int |  str list_id_to: 移動先のIDまたは名前
-        :param list[str] |  tuple[str] videoids: 動画ID
+        :param int | str list_id_from: 移動元のIDまたは名前
+        :param int | str list_id_to: 移動先のIDまたは名前
+        :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
         if list_id_from == list_id_to:
@@ -456,9 +456,9 @@ class NicoMyList(LogIn):
         そのマイリストに、 指定した動画を移動またはコピーする。
 
         :param bool is_copy: コピーか移動かのフラグ (True でコピー、False で移動)
-        :param int |  str list_id_from: 移動元のIDまたは名前
-        :param int |  str list_id_to: 移動先のIDまたは名前
-        :param list[str] |  tuple[str] videoids: 動画ID
+        :param int | str list_id_from: 移動元のIDまたは名前
+        :param int | str list_id_to: 移動先のIDまたは名前
+        :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
         list_id_from, list_name_from = self.get_id(list_id_from)
@@ -501,8 +501,8 @@ class NicoMyList(LogIn):
         """
         そのマイリストから、指定した動画を削除する。
 
-        :param int |  str list_id: 移動元のIDまたは名前
-        :param list[str] |  tuple[str] videoids: 動画ID
+        :param int | str list_id: 移動元のIDまたは名前
+        :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
         list_id, list_name = self.get_id(list_id)
@@ -574,7 +574,7 @@ class NicoMyList(LogIn):
             * 3 = 権利者による削除
             * 8 = 投稿者による非公開
 
-        :param int |  str list_id: マイリストの名前またはID。
+        :param int | str list_id: マイリストの名前またはID。
         :param bool with_header:
         :rtype: list[list[str]]
         """
@@ -638,8 +638,8 @@ class NicoMyList(LogIn):
         """
         そのマイリストに登録された動画を一覧する。
 
-        :param int |  str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
-        :param typing.Optional[str] file_name: ファイル名。ここにリストを書き出す。
+        :param int | str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
+        :param str | None file_name: ファイル名。ここにリストを書き出す。
         :param bool table: Trueで表形式で出力する。
         :param bool tsv: FalseでIDのみを、TrueでIDに加え他の情報もTSV表記で出力する。
         :rtype: None
@@ -659,8 +659,8 @@ class NicoMyList(LogIn):
         """
         そのマイリストに登録された動画のIDを一覧する。
 
-        :param int |  str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
-        :param typing.Optional[str] file_name: ファイル名。ここにリストを書き出す。
+        :param int | str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
+        :param str | None file_name: ファイル名。ここにリストを書き出す。
         :rtype: None
         """
         if list_id == Msg.ALL_ITEM:
@@ -758,7 +758,9 @@ def main(args):
     """
     logger = NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
 
-    instnc = NicoMyList((args.user, args.password), logger=logger)
+    username = args.user[0] if args.user else None
+    password = args.password[0] if args.password else None
+    instnc = NicoMyList((username, password), logger=logger)
 
     target = args.src[0]
     if args.id and target.isdecimal(): target = int(target)
