@@ -2,19 +2,20 @@
 import html
 import json
 import sys
+import time
 from datetime import datetime, timezone, timedelta
-from os.path import abspath
-from time import sleep
+from pathlib import Path
 from xml.etree import ElementTree
 try:
     from prettytable import PrettyTable
 except ImportError:
     PrettyTable = None
 
-from .utils import Msg, Err, URL, Key, MKey, NTLogger, LogIn, get_encoding, validator
+from . import utils
+from .utils import Msg, Err, URL, Key, MKey
 
 
-class NicoMyList(LogIn):
+class NicoMyList(utils.LogIn):
     WHY_DELETED = {
         "0": "公開",
         "1": "削除",
@@ -86,136 +87,8 @@ class NicoMyList(LogIn):
         super().__init__(auth, logger, session)
         self.mylists = self.get_mylist_ids()
 
-    def get_mylist_ids(self):
-        """
-        全てのマイリストのメタ情報を得る。
-
-        :rtype: dict[int, dict]
-        """
-        jsonliketext = self.session.get(URL.URL_ListAll).text
-        jtext = json.loads(jsonliketext)
-
-        candidate = {}
-
-        for item in jtext["mylistgroup"]:
-            name = html.unescape(item["name"].replace(r"\/", "/"))
-            description = html.unescape(item["description"]
-                                        .strip()
-                                        .replace("\r", "").replace("\n", " ")
-                                        .replace(r"\/", "/"))
-            publicity = "公開" if item["public"] == "1" else "非公開"
-
-            candidate[int(item["id"])] = {
-                MKey.ID: int(item["id"]),
-                MKey.NAME: name,
-                MKey.IS_PUBLIC: item["public"] == "1",  # type: bool
-                MKey.PUBLICITY: publicity,
-                MKey.SINCE: self.get_jst_from_utime(item["create_time"]),  # type: str
-                MKey.DESCRIPTION: description,
-            }
-        self.mylists = candidate
-        return candidate
-
-    def get_id(self, search_for):
-        """
-        指定されたIDまたは名前を持つマイリストのIDを得る。
-
-        :param int | str search_for: マイリスト名またはマイリストID
-        :rtype: (int, str)
-        """
-        if self.mylists is None: self.get_mylist_ids()  # 保険のため
-
-        if search_for == Msg.ml_default_name:
-            return Msg.ml_default_id, Msg.ml_default_name
-
-        if isinstance(search_for, int):
-            value = self.mylists.get(search_for, None)
-            if value is None:
-                sys.exit(Err.mylist_id_not_exist.format(search_for))
-            return search_for, value["name"]
-
-        elif isinstance(search_for, str):
-            value = [(l_id, info) for l_id, info in self.mylists.items()
-                     if info["name"] == search_for]
-            if len(value) == 0:
-                sys.exit(Err.mylist_not_exist.format(search_for))
-            if len(value) == 1:
-                return value[0][0], search_for
-            else:
-                # 同じ名前のマイリストが複数あったとき
-                self.logger.error(Err.name_ambiguous.format(len(value)))
-                for single in value:
-                    self.logger.error(Err.name_ambiguous_detail.format(single[1]))
-                sys.exit()
-        else:
-            sys.exit(Err.invalid_spec.format(search_for))
-
-    def get_item_ids(self, list_id, *videoids):
-        """
-        そのマイリストに含まれている item_id の一覧を返す。
-
-        全て、あるいは指定した(中での生存している)動画の Item IDを返す。
-        item_id は sm1234 などの動画IDとは異なるもので、 マイリスト間の移動や複製に必要となる。
-
-        :param int | str list_id: マイリストの名前またはID
-        :param list[str] | tuple[str] videoids:
-        :rtype: dict[str, str]
-        """
-        list_id, list_name = self.get_id(list_id)
-        # *videoids が要素数1のタプル ("*") or
-        # *videoids が要素数0のタプル(即ち未指定) -> 全体モード
-        # 何かしら指定されているなら -> 個別モード
-        whole = True if len(videoids) == 0 or (len(videoids) == 1 and Msg.ALL_ITEM in videoids) else False
-
-        # self.logger.debug("動画IDに対応するItemIDを探しています...")
-        if list_id == Msg.ml_default_id:
-            jtext = json.loads(self.session.get(URL.URL_ListDef).text)
-        else:
-            jtext = json.loads(self.session.get(URL.URL_ListOne,
-                                                params={"group_id": list_id}).text)
-
-        results = {}
-        for item in jtext["mylistitem"]:
-            data = item["item_data"]
-            # 0以外のは削除されているか非公開
-            if not whole:
-                if not "0" == data["deleted"]:
-                    self.logger.debug(Msg.ml_deleted_or_private.format(data))
-                    continue
-
-            if whole or data["video_id"] in videoids:
-                results.update({data["video_id"]: item["item_id"]})
-
-        if len(results) == 0: sys.exit(Err.no_items)
-        return results
-
-    def get_jst_from_utime(self, timestamp):
-        """
-        UNIXTIMEを日本標準時に変換する。末尾の'+09:00'は取り除く。
-
-        1471084020 -> '2016-08-13 19:27:00'
-
-        :param int timestamp: UNIXTIMEの数字
-        :rtype: str
-        """
-        return str(datetime.fromtimestamp(timestamp, timezone(timedelta(hours=+9))))[:-6]
-
-    def get_title(self, video_id):
-        """
-        getthumbinfo APIから、タイトルをもらってくる
-
-        :param str video_id: 動画ID
-        :rtype:str
-        """
-        document = ElementTree.fromstring(self.session.get(URL.URL_Info + video_id).text)
-        # 「status="ok"」 なら動画は生存 / 存在しない動画には「status="fail"」が返る
-        if not document.get("status").lower() == "ok":
-            self.logger.error(Msg.nd_deleted_or_private.format(video_id))
-            return ""
-        else:
-            return html.unescape(document[0].find("title").text)
-
-    def _confirmation(self, mode, list_name, contents_to_be_deleted=None):
+    @classmethod
+    def _confirmation(cls, mode, list_name, contents_to_be_deleted=None):
         """
         マイリスト自体を削除したり、マイリスト中の全てを削除する場合にユーザーの確認を取る。
 
@@ -283,6 +156,140 @@ class NicoMyList(LogIn):
                 count_now, count_whole, video_id, res))
             return False
 
+    def get_mylist_ids(self):
+        """
+        全てのマイリストのメタ情報を得る。
+
+        :rtype: dict[int, dict]
+        """
+        jsonliketext = self.session.get(URL.URL_ListAll).text
+        jtext = json.loads(jsonliketext)
+
+        candidate = {}
+
+        for item in jtext["mylistgroup"]:
+            name = html.unescape(item["name"].replace(r"\/", "/"))
+            description = html.unescape(item["description"]
+                                        .strip()
+                                        .replace("\r", "").replace("\n", " ")
+                                        .replace(r"\/", "/"))
+            publicity = "公開" if item["public"] == "1" else "非公開"
+
+            candidate[int(item["id"])] = {
+                MKey.ID: int(item["id"]),
+                MKey.NAME: name,
+                MKey.IS_PUBLIC: item["public"] == "1",  # type: bool
+                MKey.PUBLICITY: publicity,
+                MKey.SINCE: self.get_jst_from_utime(item["create_time"]),  # type: str
+                MKey.DESCRIPTION: description,
+            }
+        self.mylists = candidate
+        return candidate
+
+    @classmethod
+    def get_jst_from_utime(cls, timestamp):
+        """
+        UNIXTIMEを日本標準時に変換する。末尾の'+09:00'は取り除く。
+
+        1471084020 -> '2016-08-13 19:27:00'
+
+        :param int timestamp: UNIXTIMEの数字
+        :rtype: str
+        """
+        utils.check_arg(locals())
+        return str(datetime.fromtimestamp(timestamp, timezone(timedelta(hours=+9))))[:-6]
+
+    def get_id(self, search_for):
+        """
+        指定されたIDまたは名前を持つマイリストのIDを得る。
+
+        :param int | str search_for: マイリスト名またはマイリストID
+        :rtype: (int, str)
+        """
+        utils.check_arg(locals())
+        if self.mylists is None: self.get_mylist_ids()  # 保険のため
+
+        if search_for == Msg.ml_default_name:
+            return Msg.ml_default_id, Msg.ml_default_name
+
+        if isinstance(search_for, int):
+            value = self.mylists.get(search_for, None)
+            if value is None:
+                sys.exit(Err.mylist_id_not_exist.format(search_for))
+            return search_for, value["name"]
+
+        elif isinstance(search_for, str):
+            value = [(l_id, info) for l_id, info in self.mylists.items()
+                     if info["name"] == search_for]
+            if len(value) == 0:
+                sys.exit(Err.mylist_not_exist.format(search_for))
+            if len(value) == 1:
+                return value[0][0], search_for
+            else:
+                # 同じ名前のマイリストが複数あったとき
+                self.logger.error(Err.name_ambiguous.format(len(value)))
+                for single in value:
+                    self.logger.error(Err.name_ambiguous_detail.format(single[1]))
+                sys.exit()
+        else:
+            sys.exit(Err.invalid_spec.format(search_for))
+
+    def get_item_ids(self, list_id, *videoids):
+        """
+        そのマイリストに含まれている item_id の一覧を返す。
+
+        全て、あるいは指定した(中での生存している)動画の Item IDを返す。
+        item_id は sm1234 などの動画IDとは異なるもので、 マイリスト間の移動や複製に必要となる。
+
+        :param int | str list_id: マイリストの名前またはID
+        :param list[str] | tuple[str] videoids:
+        :rtype: dict[str, str]
+        """
+        utils.check_arg(locals())
+        list_id, list_name = self.get_id(list_id)
+        # *videoids が要素数1のタプル ("*") or
+        # *videoids が要素数0のタプル(即ち未指定) -> 全体モード
+        # 何かしら指定されているなら -> 個別モード
+        whole = True if len(videoids) == 0 or (len(videoids) == 1 and Msg.ALL_ITEM in videoids) else False
+
+        # self.logger.debug("動画IDに対応するItemIDを探しています...")
+        if list_id == Msg.ml_default_id:
+            jtext = json.loads(self.session.get(URL.URL_ListDef).text)
+        else:
+            jtext = json.loads(self.session.get(URL.URL_ListOne,
+                                                params={"group_id": list_id}).text)
+
+        results = {}
+        for item in jtext["mylistitem"]:
+            data = item["item_data"]
+            # 0以外のは削除されているか非公開
+            if not whole:
+                if not "0" == data["deleted"]:
+                    self.logger.info(Msg.ml_deleted_or_private.format(data))
+                    continue
+
+            if whole or data["video_id"] in videoids:
+                results.update({data["video_id"]: item["item_id"]})
+
+        if len(results) == 0: sys.exit(Err.no_items)
+        return results
+
+    def get_title(self, video_id):
+        """
+        getthumbinfo APIから、タイトルをもらってくる
+
+        :param str video_id: 動画ID
+        :rtype:str
+        """
+        utils.check_arg(locals())
+        document = ElementTree.fromstring(self.session.get(URL.URL_Info + video_id).text)
+        # 「status="ok"」 なら動画は生存 / 存在しない動画には「status="fail"」が返る
+        if not document.get("status").lower() == "ok":
+            self.logger.error(Msg.nd_deleted_or_private.format(video_id))
+            return ""
+        else:
+            return html.unescape(document[0].find("title").text)
+
     def get_response(self, mode, is_def, list_id_to, video_or_item_id=None, list_id_from=None):
         """
         マイリストAPIにアクセスして結果を受け取る。
@@ -294,6 +301,7 @@ class NicoMyList(LogIn):
         :param int | None list_id_from: マイリストのID
         :rtype: dict
         """
+        utils.check_arg({"mode": mode, "is_def": is_def, "list_id_to": list_id_to})
         if mode == "add":
             payload = {
                 "item_type"      : 0,
@@ -352,6 +360,7 @@ class NicoMyList(LogIn):
         :param str | None desc: マイリストの説明文
         :rtype: bool
         """
+        utils.check_arg({"mylist_name": mylist_name, "is_public": is_public})
         payload = {
             "name": mylist_name.encode("utf8"),
             "description": desc or "",
@@ -380,6 +389,7 @@ class NicoMyList(LogIn):
         :param int | str list_id: マイリストの名前またはID
         :rtype: bool
         """
+        utils.check_arg(locals())
         list_id, list_name = self.get_id(list_id)
 
         if not self._confirmation("purge", list_name):
@@ -405,6 +415,7 @@ class NicoMyList(LogIn):
         :param list[str] | tuple[str] videoids: 追加する動画ID
         :rtype: bool
         """
+        utils.check_arg(locals())
         list_id, list_name = self.get_id(list_id)
         self.logger.info(Msg.ml_will_add.format(list_name, list(videoids)))
 
@@ -420,7 +431,7 @@ class NicoMyList(LogIn):
             elif res["status"] == "ok":
                 self.logger.info(Msg.ml_done_add.format(_counter, len(videoids), vd_id))
             _done.append(vd_id)
-            sleep(0.5)
+            time.sleep(0.5)
         return True
 
     def copy(self, list_id_from, list_id_to, *videoids):
@@ -432,6 +443,7 @@ class NicoMyList(LogIn):
         :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
+        utils.check_arg(locals())
         if list_id_from == list_id_to:
             sys.exit(Err.list_names_are_same)
         return self._copy_or_move(True, list_id_from, list_id_to, *videoids)
@@ -445,6 +457,7 @@ class NicoMyList(LogIn):
         :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
+        utils.check_arg(locals())
         if list_id_from == list_id_to:
             sys.exit(Err.list_names_are_same)
         if list_id_to == Msg.ml_default_name:
@@ -505,6 +518,7 @@ class NicoMyList(LogIn):
         :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
+        utils.check_arg(locals())
         list_id, list_name = self.get_id(list_id)
 
         item_ids = self.get_item_ids(list_id, *videoids)
@@ -578,6 +592,7 @@ class NicoMyList(LogIn):
         :param bool with_header:
         :rtype: list[list[str]]
         """
+        utils.check_arg(locals())
         list_id, list_name = self.get_id(list_id)
 
         if self.logger: self.logger.info(Msg.ml_showing_mylist.format(list_name))
@@ -634,41 +649,46 @@ class NicoMyList(LogIn):
                 container.extend([[item[0]] for item in self.fetch_one(l_id, False)])
         return container
 
-    def show(self, list_id, file_name=None, table=False, tsv=False):
+    def show(self, list_id, file_name=None, table=False):
         """
         そのマイリストに登録された動画を一覧する。
 
         :param int | str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
-        :param str | None file_name: ファイル名。ここにリストを書き出す。
+        :param str | Path | None file_name: ファイル名。ここにリストを書き出す。
         :param bool table: Trueで表形式で出力する。
-        :param bool tsv: FalseでIDのみを、TrueでIDに加え他の情報もTSV表記で出力する。
-        :rtype: None
+        :rtype: bool
         """
+        utils.check_arg({"list_id": list_id, "table": table})
+        if file_name:
+            file_name = utils.make_dir(file_name)
         if table:  # 表形式の場合
             if list_id == Msg.ALL_ITEM:
-                self._writer(self._construct_table(self.fetch_meta()), file_name)
+                return self._writer(self._construct_table(self.fetch_meta()), file_name)
             else:
-                self._writer(self._construct_table(self.fetch_one(list_id)), file_name)
-        elif tsv:  # タブ区切りテキストの場合
+                return self._writer(self._construct_table(self.fetch_one(list_id)), file_name)
+        else:  # タブ区切りテキストの場合
             if list_id == Msg.ALL_ITEM:
-                self._writer(self._construct_tsv(self.fetch_meta()), file_name)
+                return self._writer(self._construct_tsv(self.fetch_meta()), file_name)
             else:
-                self._writer(self._construct_tsv(self.fetch_one(list_id)), file_name)
+                return self._writer(self._construct_tsv(self.fetch_one(list_id)), file_name)
 
     def export(self, list_id, file_name=None):
         """
         そのマイリストに登録された動画のIDを一覧する。
 
         :param int | str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
-        :param str | None file_name: ファイル名。ここにリストを書き出す。
-        :rtype: None
+        :param str | Path | None file_name: ファイル名。ここにリストを書き出す。
+        :rtype: bool
         """
+        utils.check_arg({"list_id": list_id})
+        file_name = utils.make_dir(file_name)
         if list_id == Msg.ALL_ITEM:
-            self._writer(self._export_id(self.fetch_all(False)), file_name)
+            return self._writer(self._construct_id(self.fetch_all(False)), file_name)
         else:
-            self._writer(self._export_id(self.fetch_one(list_id, False)), file_name)
+            return self._writer(self._construct_id(self.fetch_one(list_id, False)), file_name)
 
-    def _export_id(self, container):
+    @classmethod
+    def _construct_id(cls, container):
         """
         動画IDだけを出力する。
 
@@ -677,7 +697,8 @@ class NicoMyList(LogIn):
         """
         return "\n".join([item[0] for item in container if item is not None and len(item) > 0])
 
-    def _construct_tsv(self, container):
+    @classmethod
+    def _construct_tsv(cls, container):
         """
         TSV形式で出力する。
 
@@ -692,7 +713,8 @@ class NicoMyList(LogIn):
 
         return "\n".join(["\t".join(row) for row in rows])
 
-    def _construct_table(self, container):
+    @classmethod
+    def _construct_table(cls, container):
         """
         Asciiテーブル形式でリストの中身を表示する。
 
@@ -732,21 +754,23 @@ class NicoMyList(LogIn):
 
         return table.get_string()
 
-    def _writer(self, text, file_name):
+    def _writer(self, text, file_name=None):
         """
         ファイルまたは標準出力に書き出す。
 
         :param str text: 内容。
-        :param str | None file_name: ファイル名。
-        :rtype: None
+        :param str | Path | None file_name: ファイル名またはそのパス
+        :rtype: bool
         """
-        enco = get_encoding()
         if file_name:
-            with open(file_name, encoding="utf-8", mode="w") as fd:
+            file_name = utils.make_dir(file_name)
+            with file_name.open(mode="w", encoding="utf-8") as fd:
                 fd.write("{}\n".format(text))
-            self.logger.info(Msg.ml_exported.format(abspath(file_name)))
+            self.logger.info(Msg.ml_exported.format(file_name))
         else:
+            enco = utils.get_encoding()
             print(text.encode(enco, Msg.BACKSLASH).decode(enco))
+        return True
 
 
 def main(args):
@@ -756,7 +780,7 @@ def main(args):
     :param args: ArgumentParser.parse_args() によって解釈された引数。
     :rtype: None
     """
-    logger = NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
+    logger = utils.NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
 
     username = args.user[0] if args.user else None
     password = args.password[0] if args.password else None
@@ -772,17 +796,17 @@ def main(args):
     if (args.add or args.create or args.purge) and Msg.ALL_ITEM == target:
         sys.exit(Err.cant_perform_all)
     if (args.copy or args.move) and dest is None:
-        sys.exit(Err.lack_arg.format("--to"))
+        sys.exit(Err.not_specified.format("--to"))
     if (args.delete and (len(args.delete) > 1 and Msg.ALL_ITEM in args.delete) or
             (args.copy and len(args.copy) > 1 and Msg.ALL_ITEM in args.copy) or
             (args.move and len(args.move) > 1 and Msg.ALL_ITEM in args.move)):
         sys.exit(Err.args_ambiguous)
     operand = []
     if args.add or args.copy or args.move or args.delete:
-        if args.add:    operand = validator(args.add)
-        elif args.copy: operand = validator(args.copy)
-        elif args.move: operand = validator(args.move)
-        else:           operand = validator(args.delete)
+        if args.add:    operand = utils.validator(args.add)
+        elif args.copy: operand = utils.validator(args.copy)
+        elif args.move: operand = utils.validator(args.move)
+        else:           operand = utils.validator(args.delete)
         if not operand: sys.exit(Err.invalid_videoid)
 
     """ 本筋 """
@@ -792,7 +816,7 @@ def main(args):
         if args.show >= 2 and PrettyTable:  # Tableモード
             instnc.show(target, file_name, table=True)
         else:  # TSVモード
-            instnc.show(target, file_name, tsv=True)
+            instnc.show(target, file_name)
     elif args.create:
         instnc.create_mylist(target)
     elif args.purge:

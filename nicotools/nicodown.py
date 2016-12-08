@@ -1,14 +1,14 @@
 # coding: utf-8
 import html
-import os
 import requests
 import sys
 import time
+from pathlib import Path
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ConnectTimeout
 from requests.packages.urllib3.util.retry import Retry
 from requests.packages.urllib3.exceptions import MaxRetryError
-from urllib.parse import unquote
+from urllib.parse import parse_qs
 from xml.etree import ElementTree
 
 try:
@@ -16,8 +16,8 @@ try:
 except ImportError:
     progressbar = None
 
-from .utils import Msg, URL, Key, NTLogger, LogIn, get_encoding, validator, Err
-
+from . import utils
+from .utils import Msg, Err, URL, Key
 """
 使い方:
 
@@ -40,15 +40,16 @@ def print_info(queue, file_name=None):
     GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
 
     :param list queue:
-    :param str | None file_name:
+    :param str | Path | None file_name:
     :return:
     """
     text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
     if file_name:
-        with open(file_name, encoding="utf-8", mode="w") as fd:
+        file_name = utils.make_dir(file_name)
+        with file_name.open(encoding="utf-8", mode="w") as fd:
             fd.write(text + "\n")
     else:
-        print(text.encode(get_encoding(), Msg.BACKSLASH).decode(get_encoding()))
+        print(text.encode(utils.get_encoding(), Msg.BACKSLASH).decode(utils.get_encoding()))
 
 
 def get_infos(queue, logger=None):
@@ -77,16 +78,18 @@ def get_infos(queue, logger=None):
     * user_icon_url     str
     * video_id          str
     * view_counter      int
+    * watch_url         str
 
     :param list[str] queue: 動画IDのリスト
     :param NTLogger | None logger: ログ出力
     :rtype: dict[str, dict[str, int | str | list]]
     """
     if logger: logger.info(Msg.nd_start_download.format(len(queue)))
+    else: print(Msg.nd_start_download.format(len(queue)))
 
     # データベースとして使うための辞書。削除や非公開の動画はここに入る
     lexikon = {}
-    for video_id in queue:
+    for video_id in utils.validator(queue):
         xmldata = requests.get(URL.URL_Info + video_id).text
         root = ElementTree.fromstring(xmldata)
         # 「status="ok"」 なら動画は生存 / 存在しない動画には「status="fail"」が返る
@@ -125,11 +128,13 @@ def get_infos(queue, logger=None):
             pocket[Key.TITLE]           = html.unescape(finder(Key.TITLE).text)
             pocket[Key.VIDEO_ID]        = video_id
             pocket[Key.VIEW_COUNTER]    = int(finder(Key.VIEW_COUNTER).text)
+            pocket[Key.WATCH_URL]       = finder(Key.WATCH_URL).text
+            pocket[Key.V_OR_T_ID]       = finder(Key.WATCH_URL).text.split("/")[-1]
             if video_id.startswith(("sm", "nm")):
                 pocket[Key.USER_ID]         = int(finder(Key.USER_ID).text)
                 pocket[Key.USER_NAME]       = html.unescape(finder(Key.USER_NAME).text)
                 pocket[Key.USER_ICON_URL]   = finder(Key.USER_ICON_URL).text
-            else:
+            else:  # so1234 または 123456 の形式
                 pocket[Key.CH_ID]           = int(finder(Key.CH_ID).text)
                 pocket[Key.CH_NAME]         = html.unescape(finder(Key.CH_NAME).text)
                 pocket[Key.CH_ICON_URL]     = finder(Key.CH_ICON_URL).text
@@ -157,23 +162,33 @@ def t2filename(text):
     return text
 
 
-class GetVideos(LogIn):
+class Canopy:
+    def __init__(self):
+        self.database = None
+        self.save_dir = None  # type: Path
+
+    def make_name(self, vid, ext):
+        """
+        ファイル名を返す。
+
+        :param str vid:
+        :param str ext:
+        :rtype: Path
+        """
+        file_name =  Msg.nd_file_name.format(vid, self.database[vid][Key.FILE_NAME], ext)
+        return Path(self.save_dir).resolve() / file_name
+
+
+class GetVideos(utils.LogIn, Canopy):
     def __init__(self, auth=(None, None), logger=None, session=None):
         """
         動画をダウンロードする。
-
-        インスタンス変数 so_video_id は動画IDが so で始まる場合(つまり
-        公式チャンネルの動画)にのみ使用する。一時的にso**** のIDを
-        保持しておき、ファイル名につけるのに使う。そうしないと
-        リダイレクトされた先の「スレッドID」の数字が名前になってしまう。
 
         :param tuple[str | None, str | None] auth:
         :param T <= logging.logger logger:
         :param requests.Session session:
         """
         super().__init__(auth=auth, logger=logger, session=session)
-        self.database = None
-        self.save_dir = None
 
         if progressbar is None:
             self.widgets = None
@@ -184,19 +199,17 @@ class GetVideos(LogIn):
                 ' ', progressbar.ETA(),
                 ' ', progressbar.AdaptiveTransferSpeed(),
             ]
-        self.so_video_id = None  # type: str
 
     def start(self, database, save_dir):
         """
 
         :param dict[str, dict[str, int | str]] database:
-        :param str save_dir:
+        :param str | Path save_dir:
+        :rtype: bool
         """
-        if database is None or save_dir is None:
-            sys.exit("database and/or directory is not specified")
-        self.make_dir(save_dir)
+        utils.check_arg(locals())
+        self.save_dir = utils.make_dir(save_dir)
         self.database = database
-        self.save_dir = save_dir
         self.logger.info(Msg.nd_start_dl_video.format(len(self.database)))
 
         for index, video_id in enumerate(self.database.keys()):
@@ -207,97 +220,78 @@ class GetVideos(LogIn):
             self.download(video_id)
             if len(database) > 1:
                 time.sleep(1)
+        return True
 
-    def download(self, video_id, chunk_size=1024 * 10):
+    def download(self, video_id, chunk_size=1024 * 50):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param int chunk_size:
         :rtype: bool
         """
+        utils.check_arg(locals())
+        db = self.database[video_id]
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
-            self.so_video_id = video_id
-            return self.download(redirected)
+            db[Key.V_OR_T_ID] = redirected
 
-        response = self.session.get(URL.URL_GetFlv + video_id +
-                                    ("", "?as3=1")[video_id.startswith("nm")])
+        response = self.session.get(URL.URL_GetFlv + db[Key.V_OR_T_ID]
+                                    + ("", "?as3=1")[video_id.startswith("nm")])
 
-        parameters = response.text.split("&")
-        vid_url = [unquote(p[4:]) for p in parameters if p.startswith("url=")][0]
-        is_premium = [p[-1] for p in parameters if p.startswith("is_premium=")][0]
-        self.logger.debug(Msg.nd_video_url_is.format(video_id, vid_url))
+        parameters = parse_qs(response.text)
+        vid_url = parameters["url"][0]
+        is_premium = parameters["is_premium"][0]
+        # self.logger.debug(Msg.nd_video_url_is.format(video_id, vid_url))
+
+        file_path = self.make_name(video_id, db[Key.MOVIE_TYPE])
+
+        if is_premium == "1":
+            file_size = db[Key.SIZE_HIGH]
+        else:
+            file_size = db[Key.SIZE_LOW]
 
         # 動画視聴ページに行ってCookieをもらってくる
         self.session.get(URL.URL_Watch + video_id)
         # connect timeoutを10秒, read timeoutを30秒に設定
         video_data = self.session.get(url=vid_url, stream=True, timeout=(10.0, 30.0))
 
-        if self.so_video_id:
-            file_name = self.make_file_name(self.so_video_id)
-            video_id = self.so_video_id
-            self.so_video_id = None
-        else:
-            file_name = self.make_file_name(video_id)
-
-        if is_premium == "1":
-            file_size = self.database[video_id][Key.SIZE_HIGH]
-        else:
-            file_size = self.database[video_id][Key.SIZE_LOW]
-
-        file_path = os.path.join(self.save_dir, file_name)
         if progressbar is None:
-            with open(file_path, "wb") as f:
+            with file_path.open("wb") as f:
                 [f.write(chunk) for chunk in
                  video_data.iter_content(chunk_size=chunk_size) if chunk]
         else:
             pbar = progressbar.ProgressBar(widgets=self.widgets, max_value=file_size)
             pbar.start()
-            with open(file_path, "wb") as f:
+            with file_path.open("wb") as f:
                 downloaded_size = 0
                 for chunk in video_data.iter_content(chunk_size=chunk_size):
                     if chunk:
                         downloaded_size += f.write(chunk)
-                        pbar.update(downloaded_size)
+                        pbar.update(min(downloaded_size, file_size))
             pbar.finish()
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
-    def make_file_name(self, video_id):
-        return Msg.nd_file_name.format(
-            video_id,
-            self.database[video_id][Key.FILE_NAME],
-            self.database[video_id][Key.MOVIE_TYPE])
 
-    def make_dir(self, directory):
-        """
-        保存場所に指定されたフォルダーがない場合につくる。
-
-        :param str directory: フォルダー名
-        """
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
-
-
-class GetThumbnails:
+class GetThumbnails(Canopy):
     def __init__(self, logger=None):
         """
         :param T <= logging.logger logger:
         """
-        self.database = None
-        self.save_dir = None
+        super().__init__()
         self.logger = logger
         if not logger or not hasattr(logger, "handlers"):
-            self.logger = NTLogger()
+            self.logger = utils.NTLogger()
 
     def start(self, database, save_dir):
         """
 
         :param dict[str, dict[str, int | str]] database:
-        :param str save_dir:
+        :param str | Path save_dir:
+        :rtype: bool
         """
+        utils.check_arg(locals())
         self.database = database
-        self.make_dir(save_dir)
-        self.save_dir = save_dir
+        self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_pict.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
@@ -305,18 +299,21 @@ class GetThumbnails:
                     index + 1, len(database), video_id,
                     self.database[video_id][Key.TITLE]))
             self.download(video_id)
+        return True
 
     def download(self, video_id):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :rtype: bool
         """
+        utils.check_arg(locals())
         image_data = self._download(video_id)
         if not image_data:
             return False
-        file_path = os.path.join(self.save_dir, self.make_file_name(video_id))
 
-        with open(file_path, 'wb') as f:
+        file_path = self.make_name(video_id, "jpg")
+
+        with file_path.open('wb') as f:
             f.write(image_data.content)
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
@@ -330,6 +327,7 @@ class GetThumbnails:
         :param int retry: 再試行回数
         :rtype: bool | requests.Response
         """
+        utils.check_arg(locals())
         with requests.Session() as session:
             # retry設定
             retries = Retry(total=retry,
@@ -354,21 +352,8 @@ class GetThumbnails:
                     video_id, self.database[video_id][Key.TITLE]))
                 return False
 
-    def make_file_name(self, video_id):
-        return Msg.nd_file_name.format(
-            video_id, self.database[video_id][Key.FILE_NAME], "jpg")
 
-    def make_dir(self, directory):
-        """
-        保存場所に指定されたフォルダーがない場合につくる。
-
-        :param str directory: フォルダー名
-        """
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
-
-
-class GetComments(LogIn):
+class GetComments(utils.LogIn, Canopy):
     def __init__(self, auth=(None, None), logger=None, session=None):
         """
         :param tuple[str | None, str | None] auth:
@@ -376,20 +361,17 @@ class GetComments(LogIn):
         :param requests.Session session:
         """
         super().__init__(auth=auth, logger=logger, session=session)
-        self.database = None
-        self.save_dir = None
-        self.so_video_id = None
 
     def start(self, database, save_dir, xml_mode=False):
         """
 
         :param dict[str, dict[str, int | str]] database:
-        :param str save_dir:
+        :param str | Path save_dir:
         :param bool xml_mode:
         """
+        utils.check_arg(locals())
         self.database = database
-        self.make_dir(save_dir)
-        self.save_dir = save_dir
+        self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
@@ -399,6 +381,7 @@ class GetComments(LogIn):
             self.download(video_id, xml_mode)
             if len(self.database) > 1:
                 time.sleep(1.5)
+        return True
 
     def download(self, video_id, xml_mode=False):
         """
@@ -406,12 +389,14 @@ class GetComments(LogIn):
         :param bool xml_mode:
         :rtype: bool
         """
+        utils.check_arg(locals())
+        db = self.database[video_id]
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
-            self.so_video_id = video_id
-            return self.download(redirected)
+            db[Key.V_OR_T_ID] = redirected
 
-        response = self.session.get(URL.URL_GetFlv + video_id + ("", "?as3=1")[video_id.startswith("nm")])
+        response = self.session.get(URL.URL_GetFlv + db[Key.V_OR_T_ID]
+                                    + ("", "?as3=1")[video_id.startswith("nm")])
 
         if "error=access_locked" in response.text:
             time.sleep(3)
@@ -419,56 +404,43 @@ class GetComments(LogIn):
             time.sleep(3)
             return self.download(video_id)
 
-        parameters = response.text.split("&")
-        thread_id = [p[10:] for p in parameters if p.startswith("thread_id=")][0]  # type: str
-        msg_server = [unquote(p[3:]) for p in parameters if p.startswith("ms=")][0]  # type:str
-        user_id = [p[8:] for p in parameters if p.startswith("user_id=")][0]  # type: str
-        user_key = [unquote(p[8:]) for p in parameters if p.startswith("userkey=")][0]  # type: str
+        parameters = parse_qs(response.text)
+        thread_id = parameters["thread_id"][0]  # type: str
+        msg_server = parameters["ms"][0]  # type:str
+        user_id = parameters["user_id"][0]  # type: str
+        user_key = parameters["userkey"][0]  # type: str
+
+        opt_thread_id = parameters["optional_thread_id"][0] if parameters.get("optional_thread_id") else None
+        needs_key = parameters["needs_key"][0] if parameters.get("needs_key") else None
 
         if xml_mode and video_id.startswith(("sm", "nm")):
-            comment_data = (self.session.post(url=msg_server, data=self.make_param_xml(thread_id, user_id))
+            comment_data = (self.session.post(
+                url=msg_server,
+                data=self.make_param_xml(thread_id, user_id))
                             .text.replace("><", ">\n<"))
+            extention = "xml"
         else:
             if video_id.startswith(("sm", "nm")):
-                parameters = self.make_param_json(False, user_id, user_key, thread_id)
+                req_param = self.make_param_json(
+                    False, user_id, user_key, thread_id)
             else:
-                opt_thread_id = [p[19:] for p in parameters if p.startswith("optional_thread_id=")][0]  # type: str
-                needs_key = [p[10:] for p in parameters if p.startswith("needs_key=")][0]  # type: str
-                thread_key, force_184 = self.get_thread_key(video_id, needs_key)
-                parameters = self.make_param_json(
-                    True, user_id, user_key, thread_id, opt_thread_id, thread_key, force_184)
+                thread_key, force_184 = self.get_thread_key(db[Key.V_OR_T_ID], needs_key)
+                req_param = self.make_param_json(
+                    True, user_id, user_key, thread_id,
+                    opt_thread_id, thread_key, force_184)
 
-            comment_data = (self.session.post(URL.URL_Message_New, json=parameters)
-                            .text.replace("}, ", "},\n"))
+            res_com = self.session.post(URL.URL_Message_New, json=req_param)
+            comment_data = res_com.text.encode(res_com.encoding).decode("utf-8").replace("}, ", "},\n")
+            extention = "xml"
 
-        file_path = os.path.join(self.save_dir, self.make_file_name(self.so_video_id or video_id, xml_mode))
-        self.so_video_id = None
-        with open(file_path, "w", encoding="utf-8") as f:
+        file_path = self.make_name(video_id, extention)
+
+        with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
-    def make_file_name(self, video_id, xml_mode=False):
-        """
-        ファイル名を構成する。
-
-        :param str video_id: 動画ID
-        :param bool xml_mode: 取りに行くコメントがXML形式かどうか。JSONならば False。
-        :return:
-        """
-        ext = "xml" if xml_mode else "json"
-        return Msg.nd_file_name.format(video_id, self.database[video_id][Key.FILE_NAME], ext)
-
-    def make_dir(self, directory):
-        """
-        保存場所に指定されたフォルダーがない場合につくる。
-
-        :param str directory: フォルダー名
-        """
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
-
-    def get_thread_key(self, video_id, needs_key="1"):
+    def get_thread_key(self, video_id, needs_key):
         """
         専用のAPIにアクセスして thread_key を取得する。
 
@@ -476,12 +448,14 @@ class GetComments(LogIn):
         :param str video_id:
         :rtype: tuple[str, str]
         """
+        utils.check_arg(locals())
         if needs_key != "1":
+            print("video id: {}, needs_key: {}".format(video_id, needs_key))
             return "", "0"
         response = self.session.get(URL.URL_GetThreadKey, params={"thread": video_id})
-        parameters = response.text.split("&")
-        threadkey = [p[10:] for p in parameters if p.startswith("threadkey=")][0]  # type: str
-        force_184 = [p[10:] for p in parameters if p.startswith("force_184=")][0]  # type: str
+        parameters = parse_qs(response.text)
+        threadkey = parameters["threadkey"][0]  # type: str
+        force_184 = parameters["force_184"][0]  # type: str
         return threadkey, force_184
 
     def make_param_xml(self, thread_id, user_id):
@@ -595,13 +569,13 @@ def main(args):
     :param args: ArgumentParser.parse_args() によって解釈された引数
     :rtype: None
     """
-    videoid = validator(args.VIDEO_ID)
+    videoid = utils.validator(args.VIDEO_ID)
 
     """ エラーの除外 """
     if not videoid:
         sys.exit(Err.invalid_videoid)
-    if not (args.thumbnail or args.comment or args.video):
-        sys.exit(Err.lack_arg.format("--thumbnail、 --comment、 --video のいずれか"))
+    if not (args.getthumbinfo or args.thumbnail or args.comment or args.video):
+        sys.exit(Err.not_specified.format("--thumbnail、 --comment、 --video のいずれか"))
 
     """ 本筋 """
     if args.getthumbinfo:
@@ -609,10 +583,9 @@ def main(args):
         print_info(videoid, file_name)
         sys.exit()
 
-    destination = args.dest[0] if isinstance(args.dest, list) else args.dest  # type: str
-    if not os.path.isdir(destination):
-        os.makedirs(args.dest)
-    logger = NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
+    destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
+    destination = utils.make_dir(destination)
+    logger = utils.NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
     database = get_infos(videoid, logger=logger)
 
     if args.thumbnail:
@@ -621,7 +594,7 @@ def main(args):
     # ログインしてそのセッションを使いまわす
     username = args.user[0] if args.user else None
     password = args.password[0] if args.password else None
-    session = LogIn((username, password), logger=logger).session
+    session = utils.LogIn((username, password), logger=logger).session
 
     if args.comment:
         GetComments(logger=logger, session=session).start(database, destination, args.xml)

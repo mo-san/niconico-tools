@@ -5,7 +5,8 @@ import re
 import requests
 from getpass import getpass
 from os.path import join, expanduser
-from sys import stdout, exit
+from pathlib import Path
+import sys
 
 
 def get_encoding():
@@ -14,7 +15,7 @@ def get_encoding():
 
     :rtype: str
     """
-    return stdout.encoding or "UTF-8"
+    return sys.stdout.encoding or "UTF-8"
 
 
 def validator(input_list):
@@ -44,6 +45,42 @@ def validator(input_list):
     return [item.strip()
                 .replace("http://www.nicovideo.jp/watch/", "")
                 .replace("watch/", "") for item in input_list]
+
+
+def make_dir(directory):
+    """
+    保存場所に指定されたフォルダーがない場合にはつくり、その絶対パスを返す。
+
+    :param str | Path directory: フォルダー名
+    :rtype: Path
+    """
+    if isinstance(directory, str):
+        directory = Path(directory)
+    try:
+        return directory.resolve()
+    except FileNotFoundError:
+        if not directory.is_dir():
+            if directory.suffix:
+                if directory.parent.is_dir():
+                    return directory.parent.resolve() / directory.name
+                else:
+                    directory.parent.mkdir(parents=True)
+            else:
+                directory.mkdir(parents=True)
+        return directory.resolve()
+    except OSError:
+        sys.exit(Err.invalid_dirname.format(directory))
+
+
+def check_arg(parameters):
+    """
+
+    :param dict[str, Object] parameters: パラメーターの名前と値の辞書
+    :rtype: None
+    """
+    for _name, _value in parameters.items():
+        if _value is None:
+            sys.exit(Err.not_specified.format(_name))
 
 
 class URL:
@@ -179,13 +216,14 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
-    connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
-    keyboard_interrupt = "操作を中断しました。"
-    lack_arg = "[エラー] 引数が足りません: {0}"
+    invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
     invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
                       "http://www.nicovideo.jp/watch/sm1234," \
                       " sm1234, nm1234, so1234, 123456, watch/123456"
+    connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
+    keyboard_interrupt = "操作を中断しました。"
+    not_specified = "[エラー] {0} を指定してください。"
     args_ambiguous = "引数が曖昧です。"
     list_names_are_same = "[エラー] 発信元と受信先の名前が同じです。"
     cant_move_to_deflist = "[エラー] とりあえずマイリストには移動もコピーもできません。"
@@ -249,7 +287,7 @@ class LogIn:
         """
         :param tuple[str | None, str | None] auth:
         :param None | T <= logging.logger logger:
-        :param requests.Session | None session: セッションオブジェクト
+        :param None | requests.Session session: セッションオブジェクト
         """
         self.logger = logger
         if not logger or not hasattr(logger, "handlers"):
@@ -266,6 +304,8 @@ class LogIn:
 
     def get_session(self, force_login=False):
         """
+        クッキーを読み込み、必要ならばログインし、そのセッションを返す。
+
         :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
         :rtype: requests.Session
         """
@@ -284,7 +324,7 @@ class LogIn:
                     print("Couldn't determine whether we could log in."
                           " This is the returned HTML:\n{0}".format(res.text))
                     continue
-            self.logger.debug(res.headers["x-niconico-id"])
+            # self.logger.debug(res.headers["x-niconico-id"])
         else:
             cook = self.load_cookies()
             if cook:
@@ -310,6 +350,7 @@ class LogIn:
 
     def get_credentials(self, mail=None, password=None):
         """
+        メールアドレスとパスワードをユーザーに求める。
 
         :param str mail: メールアドレス。
         :param str password: パスワード
@@ -338,16 +379,21 @@ class LogIn:
 
     def save_cookies(self, requests_cookiejar, file_name=Msg.COOKIE_FILE_NAME):
         """
+        クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
+
         :param requests.cookies.RequestsCookieJar requests_cookiejar:
         :param str file_name:
+        :rtype: None
         """
         with open(join(expanduser("~"), file_name), "wb") as fd:
             pickle.dump(requests_cookiejar, fd)
 
     def load_cookies(self, file_name=Msg.COOKIE_FILE_NAME):
         """
+        クッキーを読み込む。
+
         :param str file_name:
-        :rtype: requests.cookies.RequestsCookieJar
+        :rtype: requests.cookies.RequestsCookieJar | None
         """
         try:
             with open(join(expanduser("~"), file_name), "rb") as fd:
@@ -371,7 +417,7 @@ class NTLogger(logging.Logger):
         self.logger = logging.getLogger()
 
         # 標準出力用ハンドラー
-        log_stdout = logging.StreamHandler(stdout)
+        log_stdout = logging.StreamHandler(sys.stdout)
         log_stdout.setLevel(log_level)
         log_stdout.setFormatter(formatter)
         self.addHandler(log_stdout)
@@ -437,8 +483,10 @@ class Key:
     USER_ID         = "user_id"         # int
     USER_NAME       = "user_nickname"
     USER_ICON_URL   = "user_icon_url"
+    V_OR_T_ID       = "v_or_t_id"       # 普通は video_id と同一。so動画の時にのみ thread_id の値を入れる。
     VIDEO_ID        = "video_id"
     VIEW_COUNTER    = "view_counter"    # int
+    WATCH_URL       = "watch_url"
 
 
 class MKey:

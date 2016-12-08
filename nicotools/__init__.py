@@ -7,7 +7,13 @@ from . import nicodown, nicoml
 from .utils import Msg, Err
 
 
-def main(args=None):
+def main(arguments=None):
+    """
+    メイン。
+
+    :param arguments: 引数の文字列
+    :rtype: None
+    """
     parser = ArgumentParser(fromfile_prefix_chars="+")
     parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
     parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD", dest="password")
@@ -49,7 +55,7 @@ def main(args=None):
     group_two.add_argument("-s", "--show", action="count", help=Msg.ml_help_show)
     group_two.add_argument("-e", "--export", action="store_true", help=Msg.ml_help_export)
 
-    args = parser.parse_args(args)
+    args = parser.parse_args(arguments)
     if len(sys.argv) <= 2 and not os.getenv("PYTHON_DEBUG") == "1":
         parser.print_help()
         sys.exit()
