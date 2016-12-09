@@ -9,7 +9,7 @@ from xml.etree import ElementTree
 try:
     from prettytable import PrettyTable
 except ImportError:
-    PrettyTable = None
+    PrettyTable = False
 
 from . import utils
 from .utils import Msg, Err, URL, Key, MKey
@@ -265,7 +265,7 @@ class NicoMyList(utils.LogIn):
             # 0以外のは削除されているか非公開
             if not whole:
                 if not "0" == data["deleted"]:
-                    self.logger.info(Msg.ml_deleted_or_private.format(data))
+                    self.logger.debug(Msg.ml_deleted_or_private.format(data))
                     continue
 
             if whole or data["video_id"] in videoids:
@@ -642,20 +642,24 @@ class NicoMyList(utils.LogIn):
         """
         container = []
         if with_info:
-            for l_id in self.mylists.keys():
-                container.extend(self.fetch_one(l_id, False))
+            for _idx, l_id in enumerate(self.mylists.keys()):
+                if _idx == 0:
+                    container.extend(self.fetch_one(l_id))
+                else:
+                    container.extend(self.fetch_one(l_id, False))
         else:
             for l_id in self.mylists.keys():
                 container.extend([[item[0]] for item in self.fetch_one(l_id, False)])
         return container
 
-    def show(self, list_id, file_name=None, table=False):
+    def show(self, list_id, file_name=None, table=False, survey=False):
         """
         そのマイリストに登録された動画を一覧する。
 
         :param int | str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
         :param str | Path | None file_name: ファイル名。ここにリストを書き出す。
         :param bool table: Trueで表形式で出力する。
+        :param bool survey: Trueで全てのマイリストの情報をまとめて出力する。
         :rtype: bool
         """
         utils.check_arg({"list_id": list_id, "table": table})
@@ -663,11 +667,15 @@ class NicoMyList(utils.LogIn):
             file_name = utils.make_dir(file_name)
         if table:  # 表形式の場合
             if list_id == Msg.ALL_ITEM:
+                if survey:
+                    return self._writer(self._construct_table(self.fetch_all()), file_name)
                 return self._writer(self._construct_table(self.fetch_meta()), file_name)
             else:
                 return self._writer(self._construct_table(self.fetch_one(list_id)), file_name)
         else:  # タブ区切りテキストの場合
             if list_id == Msg.ALL_ITEM:
+                if survey:
+                    return self._writer(self._construct_tsv(self.fetch_all()), file_name)
                 return self._writer(self._construct_tsv(self.fetch_meta()), file_name)
             else:
                 return self._writer(self._construct_tsv(self.fetch_one(list_id)), file_name)
@@ -743,6 +751,8 @@ class NicoMyList(utils.LogIn):
         :param list[list[str]] container: 表示したい内容を含むリスト。
         :rtype: str
         """
+        if not PrettyTable:
+            raise NameError(Err.not_installed.format("PrettyTable"))
         if len(container) > 1: print(Msg.ml_items_counts, len(container) - 1)
 
         cols = container.pop(0)
@@ -814,9 +824,9 @@ def main(args):
         instnc.export(target, file_name)
     elif args.show:
         if args.show >= 2 and PrettyTable:  # Tableモード
-            instnc.show(target, file_name, table=True)
+            instnc.show(target, file_name, survey=args.everything, table=True)
         else:  # TSVモード
-            instnc.show(target, file_name)
+            instnc.show(target, file_name, survey=args.everything)
     elif args.create:
         instnc.create_mylist(target)
     elif args.purge:

@@ -431,7 +431,7 @@ class GetComments(utils.LogIn, Canopy):
 
             res_com = self.session.post(URL.URL_Message_New, json=req_param)
             comment_data = res_com.text.encode(res_com.encoding).decode("utf-8").replace("}, ", "},\n")
-            extention = "xml"
+            extention = "json"
 
         file_path = self.make_name(video_id, extention)
 
@@ -449,7 +449,7 @@ class GetComments(utils.LogIn, Canopy):
         :rtype: tuple[str, str]
         """
         utils.check_arg(locals())
-        if needs_key != "1":
+        if not needs_key == "1":
             print("video id: {}, needs_key: {}".format(video_id, needs_key))
             return "", "0"
         response = self.session.get(URL.URL_GetThreadKey, params={"thread": video_id})
@@ -601,7 +601,3 @@ def main(args):
 
     if args.video:
         GetVideos(logger=logger, session=session).start(database, destination)
-
-
-if __name__ == "__main__":
-    pass

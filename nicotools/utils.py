@@ -51,9 +51,11 @@ def make_dir(directory):
     """
     保存場所に指定されたフォルダーがない場合にはつくり、その絶対パスを返す。
 
-    :param str | Path directory: フォルダー名
+    :param str | Path | None directory: フォルダー名
     :rtype: Path
     """
+    if directory is None:
+        return None
     if isinstance(directory, str):
         directory = Path(directory)
     try:
@@ -151,6 +153,8 @@ class Msg:
     ml_help_src = "移動(コピー)元、 あるいは各種の操作対象の、マイリストの名前"
     ml_help_to = "移動(コピー)先のマイリストの名前"
     ml_help_id = "マイリストの指定に、 名前の代わりにそのIDを使います。"
+    ml_help_everything = "show や export と同時に指定すると、" \
+                         "全てのマイリストの情報をまとめて取得します。"
 
     '''動画ダウンロードコマンドのヘルプメッセージ'''
     nd_description = "ニコニコ動画のデータを ダウンロードします。"
@@ -216,6 +220,7 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    not_installed = "{0} がインストールされていないため実行できません。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
     invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
@@ -497,7 +502,3 @@ class MKey:
     SINCE = "since"
     DESCRIPTION = "description"
     ITEM_DATA = "item_data"
-
-
-if __name__ == "__main__":
-    pass
