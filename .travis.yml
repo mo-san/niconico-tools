@@ -1,11 +1,31 @@
 language: python
+
 python:
   - "3.3"
   - "3.4"
   - "3.5"
+
 # command to install dependencies
 install:
-  - pip install requests progressbar2 prettytable pytest pytest-catchlog
+  - pip install requests progressbar2 prettytable pytest pytest-catchlog coverage
   - pip install -e .
+
+env:
+ - PYTHON_TEST=1
+
 # command to run tests
-script: tests/test_nicodown.py
+script:
+ - pytest tests/test_nicodown.py -v
+ - pytest tests/test_nicoml.py -v
+
+
+after_success:
+  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicodown.py
+  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicoml.py
+  - coverage html -d "tests/coverage/"
+
+notifications:
+  email:
+    recipients:
+      - window100@gmail.com
+    on_success: always

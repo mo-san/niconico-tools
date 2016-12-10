@@ -59,7 +59,7 @@ def main(arguments=None):
     group_two.add_argument("--everything", action="store_true", help=Msg.ml_help_everything)
 
     args = parser.parse_args(arguments)
-    if len(sys.argv) <= 2 and not os.getenv("PYTHON_DEBUG") == "1":
+    if len(sys.argv) <= 2 and not int(os.getenv("PYTHON_TEST")) == 1:
         parser.print_help()
         sys.exit()
     if args.what:
