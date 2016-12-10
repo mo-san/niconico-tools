@@ -1,7 +1,6 @@
 language: python
 
 python:
-  - "3.3"
   - "3.4"
   - "3.5"
 
@@ -15,6 +14,11 @@ env:
 
 # command to run tests
 script:
+ - py.test tests/test_nicodown.py -v
+ - py.test tests/test_nicoml.py -v
+
+
+after_success:
   - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicodown.py
   - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicoml.py
   - coverage html -d "tests/coverage/"
