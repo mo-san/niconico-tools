@@ -10,6 +10,7 @@ from nicotools import nicoml
 SAVE_DIR = "/tests/Downloads/"
 TEST_LIST = "TEST_LIST" + str(datetime.now()).replace(" ", "_")
 TEST_LIST_TO = "TEST_LIST_TO" + str(datetime.now()).replace(" ", "_")
+insane_name = "🕒🕘🕒🕘"  # 時計の絵文字4つ
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 VIDEO_IDS = {
     "watch/sm8628149": "【東方】Bad Apple!!　ＰＶ【影絵】",
@@ -250,20 +251,21 @@ class TestErrors:
             nicotools.main(self.param(c))
 
     def test_list_not_exists(self):
-        c = "🕒🕘🕒🕘 --show"
+        c = "{0} --show".format(insane_name)
         assert nicotools.main(self.param(c)) is False
+
+    def test_create_special_characters_name(self):
+        assert it.create_mylist(insane_name)
+        insane_id = max(it.mylists)
+        c = "{0} --id --purge --yes".format(insane_id)
+        assert nicotools.main(self.param(c))
 
     def test_item_not_exists(self):
-        c = "🕒🕘🕒🕘 --create"
-        nicotools.main(self.param(c))
-        c = "🕒🕘🕒🕘 --delete {0}".format(VIDEO_IDS)
+        c = "とりあえずマイリスト --delete {}".format(VIDEO_IDS)
+        assert nicotools.main(self.param(c))
+        c = "とりあえずマイリスト --delete {}".format(VIDEO_IDS)
         assert nicotools.main(self.param(c)) is False
 
-    def nicoml_del_from_deflist(self):
-        c = "とりあえずマイリスト --delete {0}".format(VIDEO_IDS)
-        nicotools.main(self.param(c))
-
     def test_okatadsuke(self):
-        self.nicoml_del_from_deflist()
         it.purge_mylist(list_name, True)
         it.purge_mylist(list_name_to, True)

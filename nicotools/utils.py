@@ -60,14 +60,15 @@ def validator(input_list):
             if not matcher(item):
                 return []
 
-    return [matcher(item).group(1) for item in input_list if matcher(item)]
+    return [matcher(item).group(1) or "*" for item in input_list if matcher(item) or item == "*"]
 
 
-def make_dir(directory):
+def make_dir(directory, logger=None):
     """
     保存場所に指定されたフォルダーがない場合にはつくり、その絶対パスを返す。
 
     :param str | Path | None directory: フォルダー名
+    :param T <= logging.logger logger:
     :rtype: Path
     """
     if directory is None:
@@ -79,15 +80,18 @@ def make_dir(directory):
     except FileNotFoundError:
         if not directory.is_dir():
             if directory.suffix:
-                if directory.parent.is_dir():
-                    return directory.parent.resolve() / directory.name
-                else:
+                if not directory.parent.is_dir():
                     directory.parent.mkdir(parents=True)
+                return directory.parent.resolve() / directory.name
             else:
                 directory.mkdir(parents=True)
         return directory.resolve()
     except OSError:
-        sys.exit(Err.invalid_dirname.format(directory))
+        if logger:
+            logger.error(Err.invalid_dirname.format(directory))
+        else:
+            print(Err.invalid_dirname.format(directory))
+        return None
 
 
 def check_arg(parameters):
@@ -227,7 +231,7 @@ class Msg:
     ml_done_copy = "[完了:コピー] ({0}/{1}) 動画ID: {2}"
     ml_done_move = "[完了:移動] ({0}/{1}) 動画ID: {2}"
     ml_done_purge = "[完了:マイリスト削除] 名前: {0}"
-    ml_done_create = "[完了:マイリスト作成] 名前: {0} (公開: {1}), 説明文: {2}"
+    ml_done_create = "[完了:マイリスト作成] ID: {0}, 名前: {1} (公開: {2}), 説明文: {3}"
 
     ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
     ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
@@ -238,6 +242,8 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    name_replaced = "作成しようとした名前「{0}」は特殊文字を含むため、" \
+                    "「{1}」に置き換わっています。"
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
     not_installed = "{0} がインストールされていないため実行できません。"
@@ -316,7 +322,9 @@ class LogIn:
         """
         self.logger = self.get_logger(logger)
         self.is_login = False
-        if session and not mail and not password:
+        if not (session or mail or password):
+            self.session = self.get_session()
+        elif session and not (mail or password):
             self.session = session
         else:
             _auth = self.ask_credentials(mail=mail, password=password)
@@ -334,11 +342,11 @@ class LogIn:
         else:
             return logger
 
-    def get_session(self, auth, force_login=False):
+    def get_session(self, auth=None, force_login=False):
         """
         クッキーを読み込み、必要ならばログインし、そのセッションを返す。
 
-        :param dict[str, str] auth:
+        :param dict[str, str] | None auth:
         :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
         :rtype: requests.Session
         """
@@ -356,8 +364,8 @@ class LogIn:
                 return False
 
         session = requests.session()
-        res = session.post(URL.URL_LogIn, params=auth)
         if force_login:
+            res = session.post(URL.URL_LogIn, params=auth)
             if we_are_logged_in(res):
                 self.save_cookies(session.cookies)
                 self.is_login = True
@@ -443,6 +451,11 @@ class LogIn:
 
 class NTLogger(logging.Logger):
     def __init__(self, file_name=Msg.LOG_FILE_ND, name=__name__, log_level=logging.INFO):
+        """
+        :param str | Path | None file_name:
+        :param str name:
+        :param str | int log_level:
+        """
         if isinstance(log_level, (str, int)):
             log_level = logging.getLevelName(log_level)
         else:
@@ -461,11 +474,17 @@ class NTLogger(logging.Logger):
         log_stdout.setFormatter(formatter)
         self.addHandler(log_stdout)
 
-        # ファイル書き込み用ハンドラー
-        log_file = logging.FileHandler(filename=join(expanduser("~"), file_name), encoding="utf-8")
-        log_file.setLevel(log_level)
-        log_file.setFormatter(formatter)
-        self.addHandler(log_file)
+        if file_name is not None:
+            # ファイル書き込み用ハンドラー
+            if isinstance(file_name, Path):
+                log_file = logging.FileHandler(
+                    filename=str(file_name), encoding="utf-8")
+            else:
+                log_file = logging.FileHandler(encoding="utf-8",
+                    filename=join(expanduser("~"), file_name))
+            log_file.setLevel(log_level)
+            log_file.setFormatter(formatter)
+            self.addHandler(log_file)
 
     def forwarding(self, level, msg, *args, **kwargs):
         _msg = msg.encode(self.enco, Msg.BACKSLASH).decode(self.enco)

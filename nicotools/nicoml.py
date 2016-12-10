@@ -167,6 +167,23 @@ class NicoMyList(utils.LogIn):
         """
         とりあえずマイリスト以外の全てのマイリストのメタ情報を得る。
 
+        APIからの返事:
+            {"mylistgroup": [
+                {"id": ..., "name": ..., "description": ..., "public": ..., "create_time": ...},
+                {"id": ..., "name": ..., "description": ..., "public": ..., "create_time": ...},
+                {"id": ..., "name": ..., "description": ..., "public": ..., "create_time": ...},
+            ]}
+
+        返す辞書:
+            {
+            1: {"id": ..., "name": ..., "is_public": ..., "publicity": ...,
+                "since": ..., "description": ...},
+            2: {"id": ..., "name": ..., "is_public": ..., "publicity": ...,
+                "since": ..., "description": ...},
+            3: {"id": ..., "name": ..., "is_public": ..., "publicity": ...,
+                "since": ..., "description": ...},
+            }
+
         :rtype: dict[int, dict[str, int | str | bool]]
         """
         jsonliketext = self.session.get(URL.URL_ListAll).text
@@ -456,9 +473,12 @@ class NicoMyList(utils.LogIn):
                                 mylist_name=mylist_name, description=description)
         if res["status"] == "ok":
             self.mylists = self.get_mylist_ids()
-            item = self.mylists[res["id"]]
+            item = self.mylists[res[MKey.ID]]
             self.logger.info(Msg.ml_done_create.format(
-                item[MKey.NAME], item[MKey.IS_PUBLIC], item[MKey.DESCRIPTION]))
+                res[MKey.ID], item[MKey.NAME],
+                item[MKey.PUBLICITY], item[MKey.DESCRIPTION]))
+            if mylist_name != item[MKey.NAME]:
+                self.logger.info(Err.name_replaced.format(mylist_name, item[MKey.NAME]))
             return True
         else:
             self.logger.error(Err.failed_to_create.format(mylist_name, res))
@@ -783,7 +803,9 @@ class NicoMyList(utils.LogIn):
         """
         utils.check_arg({"list_id": list_id, "table": table, "survey": survey})
         if file_name:
-            file_name = utils.make_dir(file_name)
+            file_name = utils.make_dir(file_name, self.logger)
+        if file_name is None:
+            return False
         if table:  # 表形式の場合
             if list_id == Msg.ALL_ITEM:
                 if survey:
@@ -812,7 +834,9 @@ class NicoMyList(utils.LogIn):
         :rtype: bool
         """
         utils.check_arg({"list_id": list_id, "survey": survey})
-        file_name = utils.make_dir(file_name)
+        file_name = utils.make_dir(file_name, self.logger)
+        if file_name is None:
+            return False
         if list_id == Msg.ALL_ITEM:
             if survey:
                 cont = self._construct_id(self.fetch_all(False))
@@ -930,7 +954,9 @@ class NicoMyList(utils.LogIn):
         if text is None:
             return False
         if file_name:
-            file_name = utils.make_dir(file_name)
+            file_name = utils.make_dir(file_name, self.logger)
+            if file_name is None:
+                return False
             with file_name.open(mode="w", encoding="utf-8") as fd:
                 fd.write("{}\n".format(text))
             self.logger.info(Msg.ml_exported.format(file_name))

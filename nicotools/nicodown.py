@@ -41,15 +41,18 @@ def print_info(queue, file_name=None):
 
     :param list queue:
     :param str | Path | None file_name:
-    :return:
+    :return: bool
     """
     text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
     if file_name:
         file_name = utils.make_dir(file_name)
+        if file_name is None:
+            return False
         with file_name.open(encoding="utf-8", mode="w") as fd:
             fd.write(text + "\n")
     else:
         print(text.encode(utils.get_encoding(), Msg.BACKSLASH).decode(utils.get_encoding()))
+    return True
 
 
 def get_infos(queue, logger=None):
@@ -209,7 +212,9 @@ class GetVideos(utils.LogIn, Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
-        self.save_dir = utils.make_dir(save_dir)
+        self.save_dir = utils.make_dir(save_dir, self.logger)
+        if self.save_dir is None:
+            return False
         self.database = database
         self.logger.info(Msg.nd_start_dl_video.format(len(self.database)))
 
@@ -292,7 +297,9 @@ class GetThumbnails(Canopy):
         """
         utils.check_arg(locals())
         self.database = database
-        self.save_dir = utils.make_dir(save_dir)
+        self.save_dir = utils.make_dir(save_dir, self.logger)
+        if self.save_dir is None:
+            return False
         self.logger.info(Msg.nd_start_dl_pict.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
@@ -373,7 +380,9 @@ class GetComments(utils.LogIn, Canopy):
         """
         utils.check_arg(locals())
         self.database = database
-        self.save_dir = utils.make_dir(save_dir)
+        self.save_dir = utils.make_dir(save_dir, self.logger)
+        if self.save_dir is None:
+            return False
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
@@ -583,13 +592,12 @@ def main(args):
 
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
-        print_info(videoid, file_name)
-        sys.exit()
+        return print_info(videoid, file_name)
 
     """ 本筋 """
-    destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
-    destination = utils.make_dir(destination)
     logger = utils.NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
+    destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
+    destination = utils.make_dir(destination, logger)
     database = get_infos(videoid, logger=logger)
 
     if args.thumbnail and not (args.comment or args.video):
