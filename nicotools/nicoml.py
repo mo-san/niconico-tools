@@ -25,7 +25,7 @@ class NicoMyList(utils.LogIn):
         "8": "非公開",
     }
 
-    def __init__(self, auth, logger=None, session=None):
+    def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         使い方:
 
@@ -54,10 +54,14 @@ class NicoMyList(utils.LogIn):
                 mylist MYLIST --export
             全てのマイリストの名前を一覧にする:
                 mylist * --show
-            全てのマイリストの中身を一覧にする:
+            全てのマイリストの中身を一覧にする(タブ区切り):
                 mylist * --show --everything --out D:/Downloads/all.txt
+            全てのマイリストの中身を一覧にする(表形式):
+                mylist * --show --show --everything --out D:/Downloads/all.txt
             全てのマイリストの中身を一覧にする:
                 mylist * --export --everything --out D:/Downloads/all.txt
+            マイリスト全体のメタデータを一覧にする:
+                mylist * --export --out D:/Downloads/all.txt
             指定したマイリストに登録されたIDをファイルに出力する:
                 mylist MYLIST --export --out C:/Users/Me/Desktop/file.txt
             指定した名前で新しいマイリストを作る:
@@ -81,12 +85,13 @@ class NicoMyList(utils.LogIn):
                 * 「"マイ'リ'スト"」 を指定するには 「"\"マイ'リ'スト\""」
                 * 「'マイ"リ"スト'」 を指定するには 「"'マイ\"リ\"スト'"」
 
-        :param tuple[str | None, str | None] auth: メールアドレスとパスワードの組
+        :param str | None mail: メールアドレス
+        :param str | None password: パスワードの組
         :param T <= logging.Logger logger:
         :param requests.Session | None session: requests モジュールのセッション
         :rtype: None
         """
-        super().__init__(auth, logger, session)
+        super().__init__(mail=mail, password=password, logger=logger, session=session)
         self.mylists = self.get_mylist_ids()
 
     @classmethod
@@ -160,7 +165,7 @@ class NicoMyList(utils.LogIn):
 
     def get_mylist_ids(self):
         """
-        全てのマイリストのメタ情報を得る。
+        とりあえずマイリスト以外の全てのマイリストのメタ情報を得る。
 
         :rtype: dict[int, dict[str, int | str | bool]]
         """
@@ -185,80 +190,96 @@ class NicoMyList(utils.LogIn):
                 MKey.SINCE: self.get_jst_from_utime(item["create_time"]),  # type: str
                 MKey.DESCRIPTION: description,
             }
-        self.mylists = candidate
         return candidate
 
     @classmethod
     def get_jst_from_utime(cls, timestamp):
         """
-        UNIXTIMEを日本標準時に変換する。末尾の'+09:00'は取り除く。
+        UNIXTIME を日本標準時に変換する。末尾の'+09:00'は取り除く。
 
         1471084020 -> '2016-08-13 19:27:00'
 
         :param int timestamp: UNIXTIMEの数字
         :rtype: str
         """
-        utils.check_arg(locals())
         return str(datetime.fromtimestamp(timestamp, timezone(timedelta(hours=+9))))[:-6]
 
-    def _get_id(self, search_for):
+    @classmethod
+    def get_utime(cls):
+        """
+        現在の UNIXTIME を返す。
+
+        '2016-08-13 19:27:00' -> 1471084020
+
+        :rtype: int
+        """
+        return datetime.now().timestamp()
+
+    def _get_list_id(self, search_for):
         """
         指定されたIDまたは名前を持つマイリストのIDを得る。
 
         :param int | str search_for: マイリスト名またはマイリストID
-        :rtype: tuple[int, str | dict]
+        :rtype: dict[str, int | str | dict]
         """
-        if self.mylists is None: self.mylists = self.get_mylist_ids()  # 保険のため
+        def composer(_err=False, _id=None, _name=None, _msg=None, _dic=None):
+            return {"error": _err, "list_id": _id, "list_name": _name,
+                    "err_msg": _msg, "err_obj": _dic}
 
-        if search_for == Msg.ml_default_name:
-            return Msg.ml_default_id, Msg.ml_default_name
+        if search_for == Msg.ml_default_name or search_for == Msg.ml_default_id:
+            return composer(_id=Msg.ml_default_id, _name=Msg.ml_default_name)
 
-        if isinstance(search_for, int):
-            value = self.mylists.get(search_for, None)
+        elif isinstance(search_for, int):
+            value = self.mylists.get(search_for)
             if value is None:
-                return -1, Err.mylist_id_not_exist.format(search_for)
-            return search_for, value["name"]
+                # 存在しなかったとき
+                return composer(_err=True,
+                                _msg=Err.mylist_id_not_exist.format(search_for))
+            else:
+                return composer(_id=search_for, _name=value["name"])
 
         elif isinstance(search_for, str):
             value = {l_id: info for l_id, info in self.mylists.items()
                      if info["name"] == search_for}
-            if len(value) == 0:
-                return -1, Err.mylist_not_exist.format(search_for)
-            elif len(value) > 1:
-                # 同じ名前のマイリストが複数あったとき
-                return 1, value
+            if len(value) == 1:
+                return composer(_id=list(value)[0], _name=search_for)
+            elif len(value) == 0:
+                # 存在しなかったとき
+                return composer(_err=True,
+                                _msg=Err.mylist_not_exist.format(search_for))
             else:
-                return list(value)[0], search_for
+                # 同じ名前のマイリストが複数あったとき
+                return composer(_err=True, _dic=value,
+                                _msg=Err.name_ambiguous.format(len(value)))
         else:
-            return -1, Err.invalid_spec.format(search_for)
+            return composer(_err=True, _msg=Err.invalid_spec.format(search_for))
 
     def get_list_id(self, search_for):
         """
         指定されたIDまたは名前を持つマイリストのIDを得る。
 
         :param int | str search_for: マイリスト名またはマイリストID
-        :rtype: (int, str)
+        :rtype: tuple[int | None, str | None]
         """
         utils.check_arg(locals())
-        cand = self._get_id(search_for)
-        if 1 == cand[0]:
-            # 同じ名前のマイリストが複数あったとき
-            self.logger.error(Err.name_ambiguous.format(len(cand)))
-            for single in cand:
-                self.logger.error(Err.name_ambiguous_detail.format(single[1]))
-            return None, None
-        elif -1 == cand[0]:
-            self.logger.error(cand[1])
+        result = self._get_list_id(search_for)
+        if result.get("error") is True:
+            self.logger.error(result.get("err_msg"))
+            if result.get("err_obj"):
+                # 同じ名前のマイリストが複数あったとき
+                for single in result.get("err_obj").values():
+                    self.logger.error(Err.name_ambiguous_detail.format(**single))
             return None, None
         else:
-            return cand
+            return result["list_id"], result["list_name"]
 
     def get_item_ids(self, list_id, *videoids):
         """
         そのマイリストに含まれている item_id の一覧を返す。
 
         全て、あるいは指定した(中での生存している)動画の Item IDを返す。
-        item_id は sm1234 などの動画IDとは異なるもので、 マイリスト間の移動や複製に必要となる。
+        item_id は sm1234 などの動画IDとは異なるもので、
+        マイリスト間の移動や複製に必要となる。
 
         :param int | str list_id: マイリストの名前またはID
         :param list[str] | tuple[str] videoids:
@@ -271,7 +292,10 @@ class NicoMyList(utils.LogIn):
         # *videoids が要素数1のタプル ("*") or
         # *videoids が要素数0のタプル(即ち未指定) -> 全体モード
         # 何かしら指定されているなら -> 個別モード
-        whole = True if len(videoids) == 0 or (len(videoids) == 1 and Msg.ALL_ITEM in videoids) else False
+        if len(videoids) == 0 or (len(videoids) == 1 and Msg.ALL_ITEM in videoids):
+            whole = True
+        else:
+            whole = False
 
         # self.logger.debug("動画IDに対応するItemIDを探しています...")
         if list_id == Msg.ml_default_id:
@@ -313,97 +337,131 @@ class NicoMyList(utils.LogIn):
         else:
             return html.unescape(document[0].find("title").text)
 
-    def get_response(self, mode, is_def, list_id_to, video_or_item_id=None, list_id_from=None):
+    def get_response(self, mode, **kwargs):
         """
         マイリストAPIにアクセスして結果を受け取る。
 
-        :param str mode: "add", "copy", "move", "delete", "purge" のいずれか
-        :param bool is_def: 「とりあえずマイリスト」が対象であれば True
-        :param int list_id_to: マイリストのID
-        :param str | None video_or_item_id: 動画IDまたは動画の item ID
-        :param int | None list_id_from: マイリストのID
+        * bool is_def:
+            (add, copy, move, delete) 「とりあえずマイリスト」が対象であれば True
+        * bool is_public:
+            (add) 公開マイリストであれば True
+        * int  list_id:
+            (purge) マイリストのID
+        * int  list_id_to:
+            (add, copy, move) マイリストのID
+        * int  list_id_from:
+            (copy, move, delete) マイリストのID
+        * str  video_id:
+            (add, copy, move, delete) 動画ID
+        * str  item_id:
+            (add, copy, move, delete) 動画の item ID
+        * str  mylist_name:
+            (create) マイリストの名前
+        * str  description:
+            (add, create) 動画またはマイリストの説明文
+        * int default_sort:
+            (create) 並び順
+        * int icon_id:
+            (create) マイリストのアイコンを表す数字
+
+        :param str mode: "add", "copy", "move", "delete", "purge", "create" のいずれか
         :rtype: dict
         """
-        utils.check_arg({"mode": mode, "is_def": is_def, "list_id_to": list_id_to})
+        is_def = kwargs.get("is_def")  # type: bool
+        is_public = kwargs.get("is_public")  # type: bool
+        list_id = kwargs.get("list_id")  # type: int
+        list_id_to = kwargs.get("list_id_to")  # type: int
+        list_id_from = kwargs.get("list_id_from")  # type: int
+        video_id = kwargs.get("video_id")  # type: str
+        item_id = kwargs.get("item_id")  # type: str
+        mylist_name = kwargs.get("mylist_name")  # type: str
+        description = kwargs.get("description", "")  # type: str
+        default_sort = kwargs.get("default_sort", 0)  # type: int
+        icon_id = kwargs.get("icon_id", 0)  # type: int
+
         if mode == "add":
             payload = {
                 "item_type"      : 0,
-                "item_id"        : video_or_item_id,
-                "description"    : "",
+                "item_id"        : video_id,
+                "description"    : description,
                 "token"          : self.token
             }
             if is_def:
-                res = self.session.get(URL.URL_AddDef, params=payload).text
+                url = URL.URL_AddDef
             else:
                 payload.update({"group_id": str(list_id_to)})
-                res = self.session.get(URL.URL_AddItem, params=payload).text
-        elif mode == "copy" or mode == "move":
+                url = URL.URL_AddItem
+        elif mode == "copy":
             payload = {
                 "target_group_id": str(list_id_to),
-                "id_list[0][]"   : video_or_item_id,
+                "id_list[0][]"   : item_id,
                 "token"          : self.token
             }
             if is_def:
-                if mode == "copy":
-                    res = self.session.get(URL.URL_CopyDef, params=payload).text
-                else:
-                    res = self.session.get(URL.URL_MoveDef, params=payload).text
+                url = URL.URL_CopyDef
             else:
                 payload.update({"group_id": str(list_id_from)})
-                if mode == "copy":
-                    res = self.session.get(URL.URL_CopyItem, params=payload).text
-                else:
-                    res = self.session.get(URL.URL_MoveItem, params=payload).text
-        elif mode == "delete":
+                url = URL.URL_CopyItem
+        elif mode == "move":
             payload = {
-                "id_list[0][]"   : video_or_item_id,
+                "target_group_id": str(list_id_to),
+                "id_list[0][]"   : item_id,
                 "token"          : self.token
             }
             if is_def:
-                res = self.session.get(URL.URL_DeleteDef, params=payload).text
+                url = URL.URL_MoveDef
             else:
-                payload.update({"group_id": str(list_id_to)})
-                res = self.session.get(URL.URL_DeleteItem, params=payload).text
-        elif mode == "purge":
+                payload.update({"group_id": str(list_id_from)})
+                url = URL.URL_MoveItem
+        elif mode == "delete":
             payload = {
-                "group_id"       : str(list_id_to),
+                "id_list[0][]"   : item_id,
                 "token"          : self.token
             }
-            res = self.session.get(URL.URL_PurgeList, params=payload).text
+            if is_def:
+                url = URL.URL_DeleteDef
+            else:
+                payload.update({"group_id": str(list_id_from)})
+                url = URL.URL_DeleteItem
+        elif mode == "purge":
+            payload = {
+                "group_id"       : str(list_id),
+                "token"          : self.token
+            }
+            url = URL.URL_PurgeList
         else:
-            res = None  # ただの穴埋め
+            payload = {
+                "name"           : mylist_name,
+                "description"    : description,
+                "public"         : int(is_public),
+                "default_sort"   : default_sort,
+                "icon_id"        : icon_id,
+                "token"          : self.token
+            }
+            url = URL.URL_AddMyList
+        res = self.session.get(url, params=payload).text
         return json.loads(res)
 
-    def create_mylist(self, mylist_name, is_public=False, desc=None):
+    def create_mylist(self, mylist_name, is_public=False, description=""):
         """
         mylist_name を名前に持つマイリストを作る。
 
         :param str mylist_name: マイリストの名前
         :param bool is_public: True なら公開マイリストになる
-        :param str | None desc: マイリストの説明文
+        :param str | None description: マイリストの説明文
         :rtype: bool
         """
         utils.check_arg({"mylist_name": mylist_name, "is_public": is_public})
-        payload = {
-            "name": mylist_name.encode("utf8"),
-            "description": desc or "",
-            "public": int(is_public),
-            "default_sort": 0,
-            "icon_id": 0,
-            "token": self.token
-        }
-        res = self.session.get(URL.URL_AddMyList, params=payload).text
-        try:
-            result = json.loads(res)["status"]
-            if result == "ok":
-                self.logger.info(Msg.ml_done_create.format(mylist_name, is_public, desc))
-                self.get_mylist_ids()
-                return True
-            else:
-                self.logger.error(Err.failed_to_create.format(mylist_name, result))
-                return False
-        except KeyError:
-            self.logger.error(Err.unknown_error_list.format(res))
+        res = self.get_response("create", is_public=is_public,
+                                mylist_name=mylist_name, description=description)
+        if res["status"] == "ok":
+            self.mylists = self.get_mylist_ids()
+            item = self.mylists[res["id"]]
+            self.logger.info(Msg.ml_done_create.format(
+                item[MKey.NAME], item[MKey.IS_PUBLIC], item[MKey.DESCRIPTION]))
+            return True
+        else:
+            self.logger.error(Err.failed_to_create.format(mylist_name, res))
             return False
 
     def purge_mylist(self, list_id, confident=False):
@@ -423,18 +481,17 @@ class NicoMyList(utils.LogIn):
             print(Msg.ml_answer_no)
             return False
 
-        res = self.get_response("purge", False, list_id, None)
-        try:
-            if res["status"] == "ok":
+        res = self.get_response("purge", list_id=list_id)
+        if not res:
+            return False
+        else:
+            if res.get("status") == "ok":
                 self.logger.info(Msg.ml_done_purge.format(list_name))
-                self.get_mylist_ids()
+                del self.mylists[list_id]
                 return True
             else:
                 self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
                 return False
-        except KeyError:
-            self.logger.error(Err.unknown_error_list.format(res))
-            return False
 
     def add(self, list_id, *videoids):
         """
@@ -448,14 +505,18 @@ class NicoMyList(utils.LogIn):
         list_id, list_name = self.get_list_id(list_id)
         if list_id is None:
             return False
+        is_def = (list_id == Msg.ml_default_id)
         self.logger.info(Msg.ml_will_add.format(list_name, list(videoids)))
 
         _done = []
         for _counter, vd_id in enumerate(videoids):
             _counter += 1
-            res = self.get_response("add", list_id == Msg.ml_default_id, list_id, vd_id)
+            res = self.get_response("add", is_def=is_def, list_id_to=list_id, video_id=vd_id)
+            if not res:
+                return False
 
-            if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name, _counter, len(videoids)):
+            if res["status"] != "ok" and not self._should_continue(
+                    res, vd_id, list_name, _counter, len(videoids)):
                 # エラーが起きた場合
                 self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
@@ -474,10 +535,6 @@ class NicoMyList(utils.LogIn):
         :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
-        utils.check_arg(locals())
-        if list_id_from == list_id_to:
-            self.logger.error(Err.list_names_are_same)
-            return False
         return self._copy_or_move(True, list_id_from, list_id_to, *videoids)
 
     def move(self, list_id_from, list_id_to, *videoids):
@@ -489,13 +546,6 @@ class NicoMyList(utils.LogIn):
         :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
-        utils.check_arg(locals())
-        if list_id_from == list_id_to:
-            self.logger.error(Err.list_names_are_same)
-            return False
-        if list_id_to == Msg.ml_default_name:
-            self.logger.error(Err.cant_move_to_deflist)
-            return False
         return self._copy_or_move(False, list_id_from, list_id_to, *videoids)
 
     def _copy_or_move(self, is_copy, list_id_from, list_id_to, *videoids):
@@ -508,13 +558,15 @@ class NicoMyList(utils.LogIn):
         :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
+        utils.check_arg(locals())
         list_id_from, list_name_from = self.get_list_id(list_id_from)
         list_id_to, list_name_to = self.get_list_id(list_id_to)
-        if list_id_from is None or list_id_to is None:
+        if not (list_id_from and list_id_to):
             return False
+        is_def = (list_id_from == Msg.ml_default_id)
 
         item_ids = self.get_item_ids(list_id_from, *videoids)
-        if not item_ids:
+        if item_ids is False:
             return False
         if Msg.ALL_ITEM not in videoids:
             item_ids = {vd_id: item_ids[vd_id] for vd_id in videoids if vd_id in item_ids}
@@ -531,13 +583,16 @@ class NicoMyList(utils.LogIn):
         for _counter, vd_id in enumerate(item_ids):
             _counter += 1
             if is_copy:
-                res = self.get_response("copy", list_id_from == Msg.ml_default_id,
-                                        list_id_to, item_ids[vd_id], list_id_from)
+                res = self.get_response("copy", is_def=is_def, item_id=item_ids[vd_id],
+                                        list_id_to=list_id_to, list_id_from=list_id_from)
             else:
-                res = self.get_response("move", list_id_from == Msg.ml_default_id,
-                                        list_id_to, item_ids[vd_id], list_id_from)
+                res = self.get_response("move", is_def=is_def, item_id=item_ids[vd_id],
+                                        list_id_to=list_id_to, list_id_from=list_id_from)
+            if not res:
+                return False
 
-            if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name_to, _counter, len(item_ids)):
+            if res["status"] != "ok" and not self._should_continue(
+                    res, vd_id, list_name_to, _counter, len(item_ids)):
                 # エラーが起きた場合
                 self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
@@ -561,14 +616,16 @@ class NicoMyList(utils.LogIn):
         list_id, list_name = self.get_list_id(list_id)
         if list_id is None:
             return False
+        is_def = (list_id == Msg.ml_default_id)
 
         item_ids = self.get_item_ids(list_id, *videoids)
-        if not item_ids:
+        if item_ids is False:
             return False
 
         if len(videoids) == 1 and Msg.ALL_ITEM in videoids:
             # 全体モード
-            if not confident and not self._confirmation("delete", list_name, sorted(item_ids.keys())):
+            if not confident and not self._confirmation(
+                    "delete", list_name, sorted(item_ids.keys())):
                 print(Msg.ml_answer_no)
                 return False
             self.logger.info(Msg.ml_will_delete.format(list_name, sorted(item_ids.keys())))
@@ -585,9 +642,14 @@ class NicoMyList(utils.LogIn):
         _done = []
         for _counter, vd_id in enumerate(item_ids):
             _counter += 1
-            res = self.get_response("delete", list_id == Msg.ml_default_id, list_id, item_ids[vd_id])
+            is_def = list_id == Msg.ml_default_id
+            res = self.get_response("delete", is_def=is_def,
+                                    list_id_from=list_id, item_id=item_ids[vd_id])
+            if not res:
+                return False
 
-            if res["status"] != "ok" and not self._should_continue(res, vd_id, list_name, _counter, len(item_ids)):
+            if res["status"] != "ok" and not self._should_continue(
+                    res, vd_id, list_name, _counter, len(item_ids)):
                 # エラーが起きた場合
                 self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
@@ -603,7 +665,7 @@ class NicoMyList(utils.LogIn):
         :param bool with_header:
         :rtype: list[list[str]]
         """
-        if self.logger: self.logger.info(Msg.ml_loading_mylists)
+        self.logger.info(Msg.ml_loading_mylists)
 
         counts = len(json.loads(self.session.get(URL.URL_ListDef).text)["mylistitem"])
         if with_header:
@@ -636,14 +698,14 @@ class NicoMyList(utils.LogIn):
 
         :param int | str list_id: マイリストの名前またはID。
         :param bool with_header:
-        :rtype: list[list[str]] | bool
+        :rtype: list[list[str]] | None
         """
         utils.check_arg(locals())
         list_id, list_name = self.get_list_id(list_id)
         if list_id is None:
-            return False
+            return None
 
-        if self.logger: self.logger.info(Msg.ml_showing_mylist.format(list_name))
+        self.logger.info(Msg.ml_showing_mylist.format(list_name))
         if list_id == Msg.ml_default_id:
             jtext = json.loads(self.session.get(URL.URL_ListDef).text)
         else:
@@ -686,20 +748,27 @@ class NicoMyList(utils.LogIn):
         全てのマイリストに登録された動画情報を文字列にする。
 
         :param bool with_info:
-        :rtype: list[list[str]] | bool
+        :rtype: list[list[str]] | None
         """
         container = []
         if with_info:
+            result_def = self.fetch_one(Msg.ml_default_id)
+            container.extend(result_def)
             for _idx, l_id in enumerate(self.mylists.keys()):
-                if _idx == 0:
-                    container.extend(self.fetch_one(l_id))
+                result = self.fetch_one(l_id, False)
+                if isinstance(result, list):
+                    container.extend(result)
                 else:
-                    container.extend(self.fetch_one(l_id, False))
+                    return None
         else:
+            result_def = self.fetch_one(Msg.ml_default_id, False)
+            container.extend(result_def)
             for l_id in self.mylists.keys():
                 result = self.fetch_one(l_id, False)
                 if isinstance(result, list):
                     container.extend([[item[0]] for item in result])
+                else:
+                    return None
         return container
 
     def show(self, list_id, file_name=None, table=False, survey=False):
@@ -712,23 +781,26 @@ class NicoMyList(utils.LogIn):
         :param bool survey: Trueで全てのマイリストの情報をまとめて出力する。
         :rtype: bool
         """
-        utils.check_arg({"list_id": list_id, "table": table})
+        utils.check_arg({"list_id": list_id, "table": table, "survey": survey})
         if file_name:
             file_name = utils.make_dir(file_name)
         if table:  # 表形式の場合
             if list_id == Msg.ALL_ITEM:
                 if survey:
-                    return self._writer(self._construct_table(self.fetch_all()), file_name)
-                return self._writer(self._construct_table(self.fetch_meta()), file_name)
+                    cont = self._construct_table(self.fetch_all())
+                else:
+                    cont = self._construct_table(self.fetch_meta())
             else:
-                return self._writer(self._construct_table(self.fetch_one(list_id)), file_name)
+                cont = self._construct_table(self.fetch_one(list_id))
         else:  # タブ区切りテキストの場合
             if list_id == Msg.ALL_ITEM:
                 if survey:
-                    return self._writer(self._construct_tsv(self.fetch_all()), file_name)
-                return self._writer(self._construct_tsv(self.fetch_meta()), file_name)
+                    cont = self._construct_tsv(self.fetch_all())
+                else:
+                    cont = self._construct_tsv(self.fetch_meta())
             else:
-                return self._writer(self._construct_tsv(self.fetch_one(list_id)), file_name)
+                cont = self._construct_tsv(self.fetch_one(list_id))
+        return self._writer(cont, file_name)
 
     def export(self, list_id, file_name=None, survey=False):
         """
@@ -739,62 +811,68 @@ class NicoMyList(utils.LogIn):
         :param bool survey: Trueで全てのマイリストの情報をまとめて出力する。
         :rtype: bool
         """
-        utils.check_arg({"list_id": list_id})
+        utils.check_arg({"list_id": list_id, "survey": survey})
         file_name = utils.make_dir(file_name)
         if list_id == Msg.ALL_ITEM:
             if survey:
-                return self._writer(self._construct_id(self.fetch_all(False)), file_name)
-            return self._writer(self._construct_id_name(self.fetch_meta(False)), file_name)
+                cont = self._construct_id(self.fetch_all(False))
+            else:
+                cont = self._construct_id_name(self.fetch_meta(False))
         else:
-            return self._writer(self._construct_id(self.fetch_one(list_id, False)), file_name)
+            cont = self._construct_id(self.fetch_one(list_id, False))
+        return self._writer(cont, file_name)
 
     @classmethod
     def _construct_id(cls, container):
         """
         IDだけを出力する。
 
-        :param list[list[str]] container: 表示したい動画IDのリスト。
+        :param list[list[str]] | None container: 表示したい動画IDのリスト。
         :rtype: str | bool
         """
-        if not container:
-            return False
-        return "\n".join(
-            [str(item[0]) for item in container
-             if item is not None and len(item) > 0]
-        )
+        if container is None:
+            return None
+        elif len(container) == 0:
+            return ""
+        else:
+            return "\n".join(
+                [str(item[0]) for item in container
+                 if item is not None and len(item) > 0])
 
     @classmethod
     def _construct_id_name(cls, container):
         """
         動画IDやマイリストIDとその名前だけを出力する。
 
-        :param list[list[str]] container: 表示したいIDの入ったリスト。
+        :param list[list[str]] | None container: 表示したいIDの入ったリスト。
         :rtype: str | bool
         """
-        if not container:
-            return False
-        return "\n".join(
-            ["{}\t{}".format(item[0], item[1]) for item in container
-             if item is not None and len(item) > 0]
-        )
+        if container is None:
+            return None
+        elif len(container) == 0:
+            return ""
+        else:
+            return "\n".join(
+                ["{}\t{}".format(item[0], item[1]) for item in container
+                 if item is not None and len(item) > 0])
 
     @classmethod
     def _construct_tsv(cls, container):
         """
         TSV形式で出力する。
 
-        :param list[list[str]] container: 表示したい内容を含むリスト。
+        :param list[list[str]] | None container: 表示したい内容を含むリスト。
         :rtype: str | bool
         """
-        if not container:
-            return False
-        if len(container) > 1: print(Msg.ml_items_counts, len(container) - 1)
-
-        rows = [container.pop(0)]
-        for row in container:
-            rows.append([str(item) for item in row])
-
-        return "\n".join(["\t".join(row) for row in rows])
+        if container is None:
+            return None
+        elif len(container) == 0:
+            return ""
+        else:
+            first = container.pop(0)
+            rows = [[str(item) for item in row] for row in container]
+            rows.insert(0, first)
+            return "\n".join(["\t".join(row) for row in rows])
 
     @classmethod
     def _construct_table(cls, container):
@@ -823,33 +901,33 @@ class NicoMyList(utils.LogIn):
 
         と表示される。
 
-        :param list[list[str]] container: 表示したい内容を含むリスト。
+        :param list[list[str]] | None container: 表示したい内容を含むリスト。
         :rtype: str | bool
         """
-        if not container:
-            return False
-        if not PrettyTable:
-            raise NameError(Err.not_installed.format("PrettyTable"))
-        if len(container) > 1: print(Msg.ml_items_counts, len(container) - 1)
-
-        cols = container.pop(0)
-        table = PrettyTable(cols)
-        for column in cols:
-            table.align[column] = "l"
-        for row in container:
-            table.add_row(row)
-
-        return table.get_string()
+        if container is None:
+            return None
+        elif len(container) == 0:
+            return ""
+        elif not PrettyTable:
+            raise ImportError(Err.not_installed.format("PrettyTable"))
+        else:
+            column_names = container.pop(0)
+            table = PrettyTable(column_names)
+            for column in column_names:
+                table.align[column] = "l"
+            for row in container:
+                table.add_row(row)
+            return table.get_string()
 
     def _writer(self, text, file_name=None):
         """
         ファイルまたは標準出力に書き出す。
 
-        :param str text: 内容。
+        :param str | None text: 内容。
         :param str | Path | None file_name: ファイル名またはそのパス
         :rtype: bool
         """
-        if not text:
+        if text is None:
             return False
         if file_name:
             file_name = utils.make_dir(file_name)
@@ -867,29 +945,39 @@ def main(args):
     メイン。
 
     :param args: ArgumentParser.parse_args() によって解釈された引数。
-    :rtype: None
+    :rtype: bool
     """
     logger = utils.NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
 
-    username = args.user[0] if args.user else None
+    mailadrs = args.mail[0] if args.mail else None
     password = args.password[0] if args.password else None
-    instnc = NicoMyList((username, password), logger=logger)
+    instnc = NicoMyList(mail=mailadrs, password=password, logger=logger)
 
-    target = args.src[0]
-    if args.id and target.isdecimal(): target = int(target)
+    source = args.src[0]
+    if args.id and source.isdecimal(): source = int(source)
 
     dest = args.to[0] if isinstance(args.to, list) else None
     file_name = args.out[0] if isinstance(args.out, list) else None
 
     """ エラーの除外 """
-    if (args.add or args.create or args.purge) and Msg.ALL_ITEM == target:
+    if (((args.add or args.create or args.purge) and Msg.ALL_ITEM == source) or
+        args.add and Msg.ALL_ITEM in args.add):
         sys.exit(Err.cant_perform_all)
-    if (args.copy or args.move) and dest is None:
-        sys.exit(Err.not_specified.format("--to"))
+    if (args.create or args.purge) and Msg.ml_default_name == source:
+        sys.exit(Err.deflist_to_create_or_purge)
+    if args.create and "" == source:
+        sys.exit(Err.cant_create)
+    if args.move and dest == Msg.ml_default_name:
+        sys.exit(Err.cant_move_to_deflist)
+    if args.copy or args.move:
+        if dest is None:
+            sys.exit(Err.not_specified.format("--to"))
+        if source == dest:
+            sys.exit(Err.list_names_are_same)
     if (args.delete and (len(args.delete) > 1 and Msg.ALL_ITEM in args.delete) or
             (args.copy and len(args.copy) > 1 and Msg.ALL_ITEM in args.copy) or
             (args.move and len(args.move) > 1 and Msg.ALL_ITEM in args.move)):
-        sys.exit(Err.args_ambiguous)
+        sys.exit(Err.videoid_contains_all)
     operand = []
     if args.add or args.copy or args.move or args.delete:
         if args.add:    operand = utils.validator(args.add)
@@ -897,29 +985,30 @@ def main(args):
         elif args.move: operand = utils.validator(args.move)
         else:           operand = utils.validator(args.delete)
         if not operand: sys.exit(Err.invalid_videoid)
+    if not (args.export or args.show or args.create or args.purge
+            or args.add or args.copy or args.move or args.delete):
+        sys.exit(Err.no_commands)
 
     """ 本筋 """
     if args.export:
-        instnc.export(target, file_name, survey=args.everything)
+        return instnc.export(source, file_name, survey=args.everything)
     elif args.show:
         if args.show >= 2 and PrettyTable:  # Tableモード
-            instnc.show(target, file_name, survey=args.everything, table=True)
+            return instnc.show(source, file_name, survey=args.everything, table=True)
         else:  # TSVモード
-            instnc.show(target, file_name, survey=args.everything)
+            return instnc.show(source, file_name, survey=args.everything)
     elif args.create:
-        instnc.create_mylist(target)
+        return instnc.create_mylist(source)
     elif args.purge:
-        instnc.purge_mylist(target, confident=args.yes)
+        return instnc.purge_mylist(source, confident=args.yes)
     elif args.add:
-        instnc.add(target, *operand)
+        return instnc.add(source, *operand)
     elif args.copy:
-        instnc.copy(target, dest, *operand)
+        return instnc.copy(source, dest, *operand)
     elif args.move:
-        instnc.move(target, dest, *operand)
-    elif args.delete:
-        instnc.delete(target, *operand, confident=args.yes)
+        return instnc.move(source, dest, *operand)
     else:
-        print(Err.no_commands)
+        return instnc.delete(source, *operand, confident=args.yes)
 
 
 if __name__ == "__main__":

@@ -11,10 +11,10 @@ def main(arguments=None):
     メイン。
 
     :param arguments: 引数の文字列
-    :rtype: None
+    :rtype: bool
     """
     parser = InheritedParser(fromfile_prefix_chars="+")
-    parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
+    parser.add_argument("-u", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD", dest="password")
     parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
     parser.add_argument("--loglevel", type=str.upper, default="INFO",
@@ -26,7 +26,7 @@ def main(arguments=None):
     parser_nd.set_defaults(func=nicodown.main)
     parser_nd.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
     parser_nd.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser_nd.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
+    parser_nd.add_argument("-u", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser_nd.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="WORD", dest="password")
     parser_nd.add_argument("-d", "--dest", nargs=1, type=str, default=os.getcwd(), help=Msg.nd_help_destination)
     parser_nd.add_argument("-c", "--comment", action="store_true", help=Msg.nd_help_comment)
@@ -40,7 +40,7 @@ def main(arguments=None):
     parser_ml.set_defaults(func=nicoml.main)
     parser_ml.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
     parser_ml.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser_ml.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
+    parser_ml.add_argument("-u", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser_ml.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="WORD", dest="password")
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
     parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="FILE")
@@ -67,7 +67,7 @@ def main(arguments=None):
         sys.exit()
 
     try:
-        args.func(args)
+        return args.func(args)
     except KeyboardInterrupt:
         sys.exit(Err.keyboard_interrupt)
 

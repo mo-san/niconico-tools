@@ -180,15 +180,16 @@ class Canopy:
 
 
 class GetVideos(utils.LogIn, Canopy):
-    def __init__(self, auth=(None, None), logger=None, session=None):
+    def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         動画をダウンロードする。
 
-        :param tuple[str | None, str | None] auth:
+        :param str | None mail:
+        :param str | None password:
         :param T <= logging.logger logger:
         :param requests.Session session:
         """
-        super().__init__(auth=auth, logger=logger, session=session)
+        super().__init__(mail=mail, password=password, logger=logger, session=session)
 
         if progressbar is None:
             self.widgets = None
@@ -354,13 +355,14 @@ class GetThumbnails(Canopy):
 
 
 class GetComments(utils.LogIn, Canopy):
-    def __init__(self, auth=(None, None), logger=None, session=None):
+    def __init__(self, mail=None, password=None, logger=None, session=None):
         """
-        :param tuple[str | None, str | None] auth:
+        :param str | None mail:
+        :param str | None password:
         :param T <= logging.logger logger:
         :param requests.Session session:
         """
-        super().__init__(auth=auth, logger=logger, session=session)
+        super().__init__(mail=mail, password=password, logger=logger, session=session)
 
     def start(self, database, save_dir, xml_mode=False):
         """
@@ -567,37 +569,40 @@ def main(args):
     メイン。
 
     :param args: ArgumentParser.parse_args() によって解釈された引数
-    :rtype: None
+    :rtype: bool
     """
-    videoid = utils.validator(args.VIDEO_ID)
+    mailadrs = args.mail[0] if args.mail else None
+    password = args.password[0] if args.password else None
 
     """ エラーの除外 """
+    videoid = utils.validator(args.VIDEO_ID)
     if not videoid:
         sys.exit(Err.invalid_videoid)
     if not (args.getthumbinfo or args.thumbnail or args.comment or args.video):
         sys.exit(Err.not_specified.format("--thumbnail、 --comment、 --video のいずれか"))
 
-    """ 本筋 """
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
         print_info(videoid, file_name)
         sys.exit()
 
+    """ 本筋 """
     destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
     destination = utils.make_dir(destination)
     logger = utils.NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
     database = get_infos(videoid, logger=logger)
 
-    if args.thumbnail:
-        GetThumbnails(logger=logger).start(database, destination)
+    if args.thumbnail and not (args.comment or args.video):
+        return GetThumbnails(logger=logger).start(database, destination)
 
-    # ログインしてそのセッションを使いまわす
-    username = args.user[0] if args.user else None
-    password = args.password[0] if args.password else None
-    session = utils.LogIn((username, password), logger=logger).session
+    session = utils.LogIn(mail=mailadrs, password=password, logger=logger).session
 
+    res_c = False
     if args.comment:
-        GetComments(logger=logger, session=session).start(database, destination, args.xml)
+        res_c = GetComments(logger=logger, session=session).start(database, destination, args.xml)
 
+    res_v = False
     if args.video:
-        GetVideos(logger=logger, session=session).start(database, destination)
+        res_v = GetVideos(logger=logger, session=session).start(database, destination)
+
+    return res_c | res_v

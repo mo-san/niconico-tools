@@ -38,25 +38,22 @@ class TestUtils:
 # @pytest.mark.skip
 class TestLogin:
     def test_login_1(self, caplog):
-        # noinspection PyUnusedLocal
-        sess = LogIn(AUTH_P).session
+        _ = LogIn(*AUTH_P).session
         sess = LogIn().session
         caplog.set_level(logging.INFO)
-        assert LogIn(AUTH_N, session=sess).token.startswith("25844085-")
+        assert LogIn(AUTH_N[0], AUTH_N[1], session=sess).is_login is True
 
     def test_login_2(self, caplog):
-        sess = LogIn(AUTH_P).session
+        sess = LogIn(*AUTH_P).session
         caplog.set_level(logging.INFO)
-        assert LogIn((None, None), session=sess).token.startswith("1608038-")
+        assert "-" in LogIn(None, None, session=sess).token
 
     def test_login_3(self, caplog):
-        _ml_ = os.getenv("addr_n")
-        _pw_ = os.getenv("pass_n")
         caplog.set_level(logging.INFO)
-        assert LogIn((_ml_, _pw_)).token.startswith("25844085-")
-        # assert LogIn((None, _pw_)).token.startswith("25844085-")
-        # assert LogIn((_ml_, None)).token.startswith("25844085-")
-        # assert LogIn((None, None)).token.startswith("25844085-")
+        assert "-" in LogIn(AUTH_N[0], AUTH_N[1]).token
+        # assert LogIn((None, _pw_)).token
+        # assert LogIn((_ml_, None)).token
+        # assert LogIn((None, None)).token
         # for record in caplog.records:
         #     assert record.levelname == 'DEBUG'
         # assert 'wally' not in caplog.text
@@ -159,12 +156,12 @@ class TestComment:
         logger = NTLogger()
         videoid = "so14436608 nm11028783 sm12169079 watch/1341499584"
         database = get_infos(videoid.split(" "), logger)
-        assert GetComments(AUTH_N, logger).start(database, SAVE_DIR)
+        assert GetComments(AUTH_N[0], AUTH_N[1], logger).start(database, SAVE_DIR)
 
     def test_comment_2(self):
         logger = NTLogger()
         database = get_infos(["nm11028783"], logger)
-        assert GetComments(AUTH_N, logger).start(database, SAVE_DIR)
+        assert GetComments(AUTH_N[0], AUTH_N[1], logger).start(database, SAVE_DIR)
 
     def test_comment_3(self):
         logger = NTLogger()
@@ -194,13 +191,13 @@ class TestVideo:
         logger = NTLogger()
         videoid = "sm7174241"
         database = get_infos(videoid.split(" "), logger)
-        assert GetVideos(AUTH_N, logger).start(database, SAVE_DIR)
+        assert GetVideos(AUTH_N[0], AUTH_N[1], logger).start(database, SAVE_DIR)
 
     def test_video_premium(self):
         logger = NTLogger()
         videoid = "sm1978440 so8999636"
         database = get_infos(videoid.split(" "), logger)
-        assert GetVideos(AUTH_P, logger).start(database, SAVE_DIR)
+        assert GetVideos(AUTH_P[0], AUTH_P[1], logger).start(database, SAVE_DIR)
 
 
 # test_video()

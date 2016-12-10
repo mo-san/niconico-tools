@@ -180,7 +180,7 @@ class Msg:
                        "テキストファイルも指定できます。 その場合はファイル名の " \
                        "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
     nd_help_password = "パスワード"
-    nd_help_username = "メールアドレス"
+    nd_help_mail = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
     nd_help_outfile = "--getthumbinfo の結果をそのファイル名で テキストファイルに出力します。"
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
@@ -238,6 +238,8 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    cant_create = "この名前のマイリストは作成できません。"
+    deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
     not_installed = "{0} がインストールされていないため実行できません。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
@@ -247,7 +249,7 @@ class Err:
     connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"
-    args_ambiguous = "引数が曖昧です。"
+    videoid_contains_all = "通常の動画IDと * を混ぜないでください。"
     list_names_are_same = "[エラー] 発信元と受信先の名前が同じです。"
     cant_move_to_deflist = "[エラー] とりあえずマイリストには移動もコピーもできません。"
     cant_perform_all = "[エラー] このコマンドに * は指定できません。"
@@ -256,8 +258,8 @@ class Err:
     item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
     name_ambiguous = "同名のマイリストが {0}件あります。名前の代わりに" \
                      "IDで(--id を使って)指定し直してください。"
-    name_ambiguous_detail = "ID: {0[id]}, 名前: {0[name]}, {0[publicity]}," \
-                            " 作成日: {0[since]}, 説明文: {0[description]}"
+    name_ambiguous_detail = "ID: {id}, 名前: {name}, {publicity}," \
+                            " 作成日: {since}, 説明文: {description}"
     mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
     mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
     over_load = "[エラー] {0} にはこれ以上追加できません。"
@@ -266,7 +268,6 @@ class Err:
     known_error = "[エラー] 動画: {0} サーバーからの返事: {1}"
     unknown_error_itemid = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
-    unknown_error_list = "[エラー] サーバーからの返事: {0}"
     failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
     invalid_spec = "[エラー] {0} は不正です。マイリストの名前またはIDは" \
@@ -306,72 +307,85 @@ class Err:
 
 
 class LogIn:
-    def __init__(self, auth=(None, None), logger=None, session=None):
+    def __init__(self, mail=None, password=None, logger=None, session=None):
         """
-        :param tuple[str | None, str | None] auth:
-        :param None | T <= logging.logger logger:
-        :param None | requests.Session session: セッションオブジェクト
+        :param str | None mail: メールアドレス
+        :param str | None password: パスワード
+        :param T <= logging.logger | None logger:
+        :param requests.Session | None session: セッションオブジェクト
         """
-        self.logger = logger
-        if not logger or not hasattr(logger, "handlers"):
-            self.logger = NTLogger()
-        self.auth = None
-        if auth == (None, None) and session:
+        self.logger = self.get_logger(logger)
+        self.is_login = False
+        if session and not mail and not password:
             self.session = session
-        elif auth == (None, None) and session is None:
-            self.session = self.get_session()
         else:
-            self.auth = self.get_credentials(mail=auth[0], password=auth[1])
-            self.session = self.get_session(force_login=True)
-        self.token = self.get_token()
+            _auth = self.ask_credentials(mail=mail, password=password)
+            self.session = self.get_session(_auth, force_login=True)
+        self.token = self.get_token(self.session)
 
-    def get_session(self, force_login=False):
+    def get_logger(self, logger):
+        """
+
+        :param T <= logging.logger logger:
+        :rtype: T <= logging.logger
+        """
+        if not (logger and hasattr(logger, "handlers")):
+            return NTLogger()
+        else:
+            return logger
+
+    def get_session(self, auth, force_login=False):
         """
         クッキーを読み込み、必要ならばログインし、そのセッションを返す。
 
+        :param dict[str, str] auth:
         :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
         :rtype: requests.Session
         """
-        self.session = requests.session()
+
+        def we_are_logged_in(_res):
+            if "<title>niconico</title>" in _res.text:
+                return True
+            elif "ログイン - niconico</title>" in _res.text:
+                print(Err.invalid_auth)
+                return False
+            else:
+                print("Couldn't determine whether we could log in."
+                      " This is the returned HTML:\n{0}".format(_res.text))
+                # self.logger.debug(res.headers["x-niconico-id"])
+                return False
+
+        session = requests.session()
+        res = session.post(URL.URL_LogIn, params=auth)
         if force_login:
-            while True:
-                res = self.session.post(URL.URL_LogIn, params=self.auth)
-                if "<title>niconico</title>" in res.text:
-                    self.save_cookies(self.session.cookies)
-                    break
-                if "ログイン - niconico</title>" in res.text:
-                    print(Err.invalid_auth)
-                    self.auth = self.get_credentials()
-                    continue
-                else:
-                    print("Couldn't determine whether we could log in."
-                          " This is the returned HTML:\n{0}".format(res.text))
-                    continue
-            # self.logger.debug(res.headers["x-niconico-id"])
+            if we_are_logged_in(res):
+                self.save_cookies(session.cookies)
+                self.is_login = True
+            else:
+                return self.get_session(self.ask_credentials(), force_login=True)
         else:
             cook = self.load_cookies()
             if cook:
-                self.session.cookies = cook
-        return self.session
+                session.cookies = cook
+        return session
 
-    def get_token(self):
+    def get_token(self, session):
         """
         マイリストの操作に必要な"NicoAPI.token"を取ってくる。
 
+        :param requests.Session session:
         :rtype: str
         """
-        if self.session is None: self.get_session()
-
-        text = self.session.get(URL.URL_MyListTop).text
+        htmltext = session.get(URL.URL_MyListTop).text
         try:
-            fragment = text.split("NicoAPI.token = \"")[1]
-            self.token = fragment[:fragment.find("\"")]
-            return self.token
+            fragment = htmltext.split("NicoAPI.token = \"")[1]
+            return fragment[:fragment.find("\"")]
         except IndexError:
-            self.get_session(force_login=True)
-            return self.get_token()
+            session = self.get_session(self.ask_credentials(), force_login=True)
+            return self.get_token(session)
 
-    def get_credentials(self, mail=None, password=None):
+    @classmethod
+    def ask_credentials(cls, mail=None, password=None):
         """
         メールアドレスとパスワードをユーザーに求める。
 
@@ -400,7 +414,8 @@ class LogIn:
             "password": pw
         }
 
-    def save_cookies(self, requests_cookiejar, file_name=Msg.COOKIE_FILE_NAME):
+    @classmethod
+    def save_cookies(cls, requests_cookiejar, file_name=Msg.COOKIE_FILE_NAME):
         """
         クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
 
@@ -411,7 +426,8 @@ class LogIn:
         with open(join(expanduser("~"), file_name), "wb") as fd:
             pickle.dump(requests_cookiejar, fd)
 
-    def load_cookies(self, file_name=Msg.COOKIE_FILE_NAME):
+    @classmethod
+    def load_cookies(cls, file_name=Msg.COOKIE_FILE_NAME):
         """
         クッキーを読み込む。
 
@@ -426,7 +442,7 @@ class LogIn:
 
 
 class NTLogger(logging.Logger):
-    def __init__(self, file_name=Msg.LOG_FILE_ND, name="root", log_level=logging.INFO):
+    def __init__(self, file_name=Msg.LOG_FILE_ND, name=__name__, log_level=logging.INFO):
         if isinstance(log_level, (str, int)):
             log_level = logging.getLevelName(log_level)
         else:
@@ -437,7 +453,7 @@ class NTLogger(logging.Logger):
         formatter = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
 
         logging.Logger.__init__(self, name, log_level)
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger(name=name)
 
         # 標準出力用ハンドラー
         log_stdout = logging.StreamHandler(sys.stdout)
