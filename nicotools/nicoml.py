@@ -13,6 +13,7 @@ except ImportError:
 
 from . import utils
 from .utils import Msg, Err, URL, Key, MKey
+# TODO: purifyコマンド
 
 
 class NicoMyList(utils.LogIn):
@@ -29,51 +30,52 @@ class NicoMyList(utils.LogIn):
         使い方:
 
             MYLISTに動画を追加する:
-                nicoml MYLIST --add sm1 sm2 sm3
+                mylist MYLIST --add sm1 sm2 sm3
             IDを一行ごとに書いたファイルからMYLISTに動画を追加する:
-                nicoml MYLIST --add +C:/Users/Me/Desktop/ids.txt
+                mylist MYLIST --add +C:/Users/Me/Desktop/ids.txt
             MYLISTをそのIDで指定する:
-                nicoml 12345678 --id --add sm1 sm2 sm3
+                mylist 12345678 --id --add sm1 sm2 sm3
             MYLISTから動画を削除する:
-                nicoml MYLIST --delete sm1 sm2 sm3
+                mylist MYLIST --delete sm1 sm2 sm3
             MYLIST の中のもの全てを削除する:
-                nicoml MYLIST --delete *
+                mylist MYLIST --delete *
+            MYLIST の中のもの全てを削除する(確認なし):
+                mylist MYLIST --delete * --yes
             MYLIST の中の動画を --to に移す:
-                nicoml MYLIST --to なんとかかんとか --move sm1 sm2 sm3
+                mylist MYLIST --to なんとかかんとか --move sm1 sm2 sm3
             MYLIST の中のもの全てを --to に移す:
-                nicoml MYLIST --to なんとかかんとか --move *
+                mylist MYLIST --to なんとかかんとか --move *
             MYLIST の中の動画を --to に写す:
-                nicoml MYLIST --to なんとかかんとか --copy sm1 sm2 sm3
+                mylist MYLIST --to なんとかかんとか --copy sm1 sm2 sm3
             MYLIST の中のもの全てを --to に写す:
-                nicoml MYLIST --to なんとかかんとか --copy *
+                mylist MYLIST --to なんとかかんとか --copy *
 
             特定のマイリストの中身を一覧にする:
-                nicoml MYLIST --export
+                mylist MYLIST --export
             全てのマイリストの名前を一覧にする:
-                nicoml * --show
-            指定した名前で新しいマイリストを作る:
-                nicoml MYLIST --create
-            指定した名前のマイリストを削除する:
-                nicoml MYLIST --purge
-            指定したマイリストに登録されたIDを標準出力に出力する:
-                nicoml MYLIST --export
-            指定したマイリストに登録されたIDをタブ区切りで標準出力に出力する:
-                nicomlrt MYLIST --export -expo
-            指定したマイリストに登録されたIDを表形式で標準出力に出力する
-            (PrettyTableがインストールされていれば):
-                nicomlrt MYLIST --export -expo
+                mylist * --show
+            全てのマイリストの中身を一覧にする:
+                mylist * --show --everything --out D:/Downloads/all.txt
+            全てのマイリストの中身を一覧にする:
+                mylist * --export --everything --out D:/Downloads/all.txt
             指定したマイリストに登録されたIDをファイルに出力する:
-                nicoml MYLIST --export --out C:/Users/Me/Desktop/file.txt
+                mylist MYLIST --export --out C:/Users/Me/Desktop/file.txt
+            指定した名前で新しいマイリストを作る:
+                mylist MYLIST --create
+            指定した名前のマイリストを削除する:
+                mylist MYLIST --purge
+            指定した名前のマイリストを削除する(確認なし):
+                mylist MYLIST --purge --yes
 
         他のコマンド:
             それぞれにはログインに必要な情報を与えられる:
-                nicoml MYLIST --add sm9 --user <メールアドレス> --pass <パスワード>
+                mylist MYLIST --add sm9 --user <メールアドレス> --pass <パスワード>
 
             引数がどの様に解釈されるかを確認したいとき (確認するだけで、プログラムは実行しません):
-                nicoml.py --export --id 12345678 --out ../file.txt --what
+                mylist --export --id 12345678 --out ../file.txt --what
 
             ログ出力の詳細さを変える:
-                nicoml --loglevel WARNING  # エラー以外表示しない
+                mylist --loglevel WARNING  # エラー以外表示しない
 
             引用符を含むマイリスト名の指定方法:
                 * 「"マイ'リ'スト"」 を指定するには 「"\"マイ'リ'スト\""」
@@ -97,13 +99,13 @@ class NicoMyList(utils.LogIn):
         :param list[str] | None contents_to_be_deleted:
         :rtype: bool
         """
+        if mode.lower() not in ("purge", "delete"):
+            return False
         if mode == "purge":
             print(Msg.ml_will_purge.format(list_name))
-        elif mode == "delete":
+        else:
             print(Msg.ml_ask_delete_all.format(list_name))
             print("{}".format(contents_to_be_deleted))
-        else:
-            sys.exit(mode)
 
         print(Msg.ml_confirmation)
         while True:
@@ -160,7 +162,7 @@ class NicoMyList(utils.LogIn):
         """
         全てのマイリストのメタ情報を得る。
 
-        :rtype: dict[int, dict]
+        :rtype: dict[int, dict[str, int | str | bool]]
         """
         jsonliketext = self.session.get(URL.URL_ListAll).text
         jtext = json.loads(jsonliketext)
@@ -199,15 +201,14 @@ class NicoMyList(utils.LogIn):
         utils.check_arg(locals())
         return str(datetime.fromtimestamp(timestamp, timezone(timedelta(hours=+9))))[:-6]
 
-    def get_id(self, search_for):
+    def _get_id(self, search_for):
         """
         指定されたIDまたは名前を持つマイリストのIDを得る。
 
         :param int | str search_for: マイリスト名またはマイリストID
-        :rtype: (int, str)
+        :rtype: tuple[int, str | dict]
         """
-        utils.check_arg(locals())
-        if self.mylists is None: self.get_mylist_ids()  # 保険のため
+        if self.mylists is None: self.mylists = self.get_mylist_ids()  # 保険のため
 
         if search_for == Msg.ml_default_name:
             return Msg.ml_default_id, Msg.ml_default_name
@@ -215,24 +216,42 @@ class NicoMyList(utils.LogIn):
         if isinstance(search_for, int):
             value = self.mylists.get(search_for, None)
             if value is None:
-                sys.exit(Err.mylist_id_not_exist.format(search_for))
+                return -1, Err.mylist_id_not_exist.format(search_for)
             return search_for, value["name"]
 
         elif isinstance(search_for, str):
-            value = [(l_id, info) for l_id, info in self.mylists.items()
-                     if info["name"] == search_for]
+            value = {l_id: info for l_id, info in self.mylists.items()
+                     if info["name"] == search_for}
             if len(value) == 0:
-                sys.exit(Err.mylist_not_exist.format(search_for))
-            if len(value) == 1:
-                return value[0][0], search_for
-            else:
+                return -1, Err.mylist_not_exist.format(search_for)
+            elif len(value) > 1:
                 # 同じ名前のマイリストが複数あったとき
-                self.logger.error(Err.name_ambiguous.format(len(value)))
-                for single in value:
-                    self.logger.error(Err.name_ambiguous_detail.format(single[1]))
-                sys.exit()
+                return 1, value
+            else:
+                return list(value)[0], search_for
         else:
-            sys.exit(Err.invalid_spec.format(search_for))
+            return -1, Err.invalid_spec.format(search_for)
+
+    def get_list_id(self, search_for):
+        """
+        指定されたIDまたは名前を持つマイリストのIDを得る。
+
+        :param int | str search_for: マイリスト名またはマイリストID
+        :rtype: (int, str)
+        """
+        utils.check_arg(locals())
+        cand = self._get_id(search_for)
+        if 1 == cand[0]:
+            # 同じ名前のマイリストが複数あったとき
+            self.logger.error(Err.name_ambiguous.format(len(cand)))
+            for single in cand:
+                self.logger.error(Err.name_ambiguous_detail.format(single[1]))
+            return None, None
+        elif -1 == cand[0]:
+            self.logger.error(cand[1])
+            return None, None
+        else:
+            return cand
 
     def get_item_ids(self, list_id, *videoids):
         """
@@ -243,10 +262,12 @@ class NicoMyList(utils.LogIn):
 
         :param int | str list_id: マイリストの名前またはID
         :param list[str] | tuple[str] videoids:
-        :rtype: dict[str, str]
+        :rtype: dict[str, str] | bool
         """
         utils.check_arg(locals())
-        list_id, list_name = self.get_id(list_id)
+        list_id, list_name = self.get_list_id(list_id)
+        if list_id is None:
+            return False
         # *videoids が要素数1のタプル ("*") or
         # *videoids が要素数0のタプル(即ち未指定) -> 全体モード
         # 何かしら指定されているなら -> 個別モード
@@ -271,7 +292,9 @@ class NicoMyList(utils.LogIn):
             if whole or data["video_id"] in videoids:
                 results.update({data["video_id"]: item["item_id"]})
 
-        if len(results) == 0: sys.exit(Err.no_items)
+        if len(results) == 0:
+            self.logger.error(Err.no_items)
+            return False
         return results
 
     def get_title(self, video_id):
@@ -374,6 +397,7 @@ class NicoMyList(utils.LogIn):
             result = json.loads(res)["status"]
             if result == "ok":
                 self.logger.info(Msg.ml_done_create.format(mylist_name, is_public, desc))
+                self.get_mylist_ids()
                 return True
             else:
                 self.logger.error(Err.failed_to_create.format(mylist_name, result))
@@ -382,23 +406,28 @@ class NicoMyList(utils.LogIn):
             self.logger.error(Err.unknown_error_list.format(res))
             return False
 
-    def purge_mylist(self, list_id):
+    def purge_mylist(self, list_id, confident=False):
         """
         指定したマイリストを削除する。
 
         :param int | str list_id: マイリストの名前またはID
+        :param bool confident:
         :rtype: bool
         """
         utils.check_arg(locals())
-        list_id, list_name = self.get_id(list_id)
+        list_id, list_name = self.get_list_id(list_id)
+        if list_id is None:
+            return False
 
-        if not self._confirmation("purge", list_name):
-            sys.exit(Msg.ml_answer_no)
+        if not confident and not self._confirmation("purge", list_name):
+            print(Msg.ml_answer_no)
+            return False
 
         res = self.get_response("purge", False, list_id, None)
         try:
             if res["status"] == "ok":
                 self.logger.info(Msg.ml_done_purge.format(list_name))
+                self.get_mylist_ids()
                 return True
             else:
                 self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
@@ -416,7 +445,9 @@ class NicoMyList(utils.LogIn):
         :rtype: bool
         """
         utils.check_arg(locals())
-        list_id, list_name = self.get_id(list_id)
+        list_id, list_name = self.get_list_id(list_id)
+        if list_id is None:
+            return False
         self.logger.info(Msg.ml_will_add.format(list_name, list(videoids)))
 
         _done = []
@@ -445,7 +476,8 @@ class NicoMyList(utils.LogIn):
         """
         utils.check_arg(locals())
         if list_id_from == list_id_to:
-            sys.exit(Err.list_names_are_same)
+            self.logger.error(Err.list_names_are_same)
+            return False
         return self._copy_or_move(True, list_id_from, list_id_to, *videoids)
 
     def move(self, list_id_from, list_id_to, *videoids):
@@ -459,9 +491,11 @@ class NicoMyList(utils.LogIn):
         """
         utils.check_arg(locals())
         if list_id_from == list_id_to:
-            sys.exit(Err.list_names_are_same)
+            self.logger.error(Err.list_names_are_same)
+            return False
         if list_id_to == Msg.ml_default_name:
-            sys.exit(Err.cant_move_to_deflist)
+            self.logger.error(Err.cant_move_to_deflist)
+            return False
         return self._copy_or_move(False, list_id_from, list_id_to, *videoids)
 
     def _copy_or_move(self, is_copy, list_id_from, list_id_to, *videoids):
@@ -474,10 +508,14 @@ class NicoMyList(utils.LogIn):
         :param list[str] | tuple[str] videoids: 動画ID
         :rtype: bool
         """
-        list_id_from, list_name_from = self.get_id(list_id_from)
-        list_id_to, list_name_to = self.get_id(list_id_to)
+        list_id_from, list_name_from = self.get_list_id(list_id_from)
+        list_id_to, list_name_to = self.get_list_id(list_id_to)
+        if list_id_from is None or list_id_to is None:
+            return False
 
         item_ids = self.get_item_ids(list_id_from, *videoids)
+        if not item_ids:
+            return False
         if Msg.ALL_ITEM not in videoids:
             item_ids = {vd_id: item_ids[vd_id] for vd_id in videoids if vd_id in item_ids}
 
@@ -510,23 +548,29 @@ class NicoMyList(utils.LogIn):
             _done.append(vd_id)
         return True
 
-    def delete(self, list_id, *videoids):
+    def delete(self, list_id, *videoids, confident=False):
         """
         そのマイリストから、指定した動画を削除する。
 
         :param int | str list_id: 移動元のIDまたは名前
         :param list[str] | tuple[str] videoids: 動画ID
+        :param bool confident:
         :rtype: bool
         """
         utils.check_arg(locals())
-        list_id, list_name = self.get_id(list_id)
+        list_id, list_name = self.get_list_id(list_id)
+        if list_id is None:
+            return False
 
         item_ids = self.get_item_ids(list_id, *videoids)
+        if not item_ids:
+            return False
 
         if len(videoids) == 1 and Msg.ALL_ITEM in videoids:
             # 全体モード
-            if not self._confirmation("delete", list_name, sorted(item_ids.keys())):
-                print(Msg.ml_answer_no) or sys.exit()
+            if not confident and not self._confirmation("delete", list_name, sorted(item_ids.keys())):
+                print(Msg.ml_answer_no)
+                return False
             self.logger.info(Msg.ml_will_delete.format(list_name, sorted(item_ids.keys())))
         else:
             # 個別モード
@@ -552,20 +596,22 @@ class NicoMyList(utils.LogIn):
             _done.append(vd_id)
         return True
 
-    def fetch_meta(self):
+    def fetch_meta(self, with_header=True):
         """
         マイリストのメタ情報を表示する。
 
+        :param bool with_header:
         :rtype: list[list[str]]
         """
         if self.logger: self.logger.info(Msg.ml_loading_mylists)
 
         counts = len(json.loads(self.session.get(URL.URL_ListDef).text)["mylistitem"])
-        container = [
-            ["ID", "名前", "項目数", "状態", "作成日", "説明文"],
-            # とりあえずマイリストのデータ
-            [Msg.ml_default_id, Msg.ml_default_name, counts, "非公開", "--", ""]
-        ]
+        if with_header:
+            container = [["ID", "名前", "項目数", "状態", "作成日", "説明文"]]
+        else:
+            container = []
+        # とりあえずマイリストのデータ
+        container.append([Msg.ml_default_id, Msg.ml_default_name, counts, "非公開", "--", ""])
 
         # その他のマイリストのデータ
         for item in sorted(self.mylists.values(), key=lambda this: this["since"]):
@@ -590,10 +636,12 @@ class NicoMyList(utils.LogIn):
 
         :param int | str list_id: マイリストの名前またはID。
         :param bool with_header:
-        :rtype: list[list[str]]
+        :rtype: list[list[str]] | bool
         """
         utils.check_arg(locals())
-        list_id, list_name = self.get_id(list_id)
+        list_id, list_name = self.get_list_id(list_id)
+        if list_id is None:
+            return False
 
         if self.logger: self.logger.info(Msg.ml_showing_mylist.format(list_name))
         if list_id == Msg.ml_default_id:
@@ -638,7 +686,7 @@ class NicoMyList(utils.LogIn):
         全てのマイリストに登録された動画情報を文字列にする。
 
         :param bool with_info:
-        :rtype: list[list[str]]
+        :rtype: list[list[str]] | bool
         """
         container = []
         if with_info:
@@ -649,7 +697,9 @@ class NicoMyList(utils.LogIn):
                     container.extend(self.fetch_one(l_id, False))
         else:
             for l_id in self.mylists.keys():
-                container.extend([[item[0]] for item in self.fetch_one(l_id, False)])
+                result = self.fetch_one(l_id, False)
+                if isinstance(result, list):
+                    container.extend([[item[0]] for item in result])
         return container
 
     def show(self, list_id, file_name=None, table=False, survey=False):
@@ -680,30 +730,53 @@ class NicoMyList(utils.LogIn):
             else:
                 return self._writer(self._construct_tsv(self.fetch_one(list_id)), file_name)
 
-    def export(self, list_id, file_name=None):
+    def export(self, list_id, file_name=None, survey=False):
         """
         そのマイリストに登録された動画のIDを一覧する。
 
         :param int | str list_id: マイリストの名前またはID。0で「とりあえずマイリスト」。
         :param str | Path | None file_name: ファイル名。ここにリストを書き出す。
+        :param bool survey: Trueで全てのマイリストの情報をまとめて出力する。
         :rtype: bool
         """
         utils.check_arg({"list_id": list_id})
         file_name = utils.make_dir(file_name)
         if list_id == Msg.ALL_ITEM:
-            return self._writer(self._construct_id(self.fetch_all(False)), file_name)
+            if survey:
+                return self._writer(self._construct_id(self.fetch_all(False)), file_name)
+            return self._writer(self._construct_id_name(self.fetch_meta(False)), file_name)
         else:
             return self._writer(self._construct_id(self.fetch_one(list_id, False)), file_name)
 
     @classmethod
     def _construct_id(cls, container):
         """
-        動画IDだけを出力する。
+        IDだけを出力する。
 
         :param list[list[str]] container: 表示したい動画IDのリスト。
-        :rtype: str
+        :rtype: str | bool
         """
-        return "\n".join([item[0] for item in container if item is not None and len(item) > 0])
+        if not container:
+            return False
+        return "\n".join(
+            [str(item[0]) for item in container
+             if item is not None and len(item) > 0]
+        )
+
+    @classmethod
+    def _construct_id_name(cls, container):
+        """
+        動画IDやマイリストIDとその名前だけを出力する。
+
+        :param list[list[str]] container: 表示したいIDの入ったリスト。
+        :rtype: str | bool
+        """
+        if not container:
+            return False
+        return "\n".join(
+            ["{}\t{}".format(item[0], item[1]) for item in container
+             if item is not None and len(item) > 0]
+        )
 
     @classmethod
     def _construct_tsv(cls, container):
@@ -711,8 +784,10 @@ class NicoMyList(utils.LogIn):
         TSV形式で出力する。
 
         :param list[list[str]] container: 表示したい内容を含むリスト。
-        :rtype: str
+        :rtype: str | bool
         """
+        if not container:
+            return False
         if len(container) > 1: print(Msg.ml_items_counts, len(container) - 1)
 
         rows = [container.pop(0)]
@@ -749,8 +824,10 @@ class NicoMyList(utils.LogIn):
         と表示される。
 
         :param list[list[str]] container: 表示したい内容を含むリスト。
-        :rtype: str
+        :rtype: str | bool
         """
+        if not container:
+            return False
         if not PrettyTable:
             raise NameError(Err.not_installed.format("PrettyTable"))
         if len(container) > 1: print(Msg.ml_items_counts, len(container) - 1)
@@ -772,6 +849,8 @@ class NicoMyList(utils.LogIn):
         :param str | Path | None file_name: ファイル名またはそのパス
         :rtype: bool
         """
+        if not text:
+            return False
         if file_name:
             file_name = utils.make_dir(file_name)
             with file_name.open(mode="w", encoding="utf-8") as fd:
@@ -821,7 +900,7 @@ def main(args):
 
     """ 本筋 """
     if args.export:
-        instnc.export(target, file_name)
+        instnc.export(target, file_name, survey=args.everything)
     elif args.show:
         if args.show >= 2 and PrettyTable:  # Tableモード
             instnc.show(target, file_name, survey=args.everything, table=True)
@@ -830,7 +909,7 @@ def main(args):
     elif args.create:
         instnc.create_mylist(target)
     elif args.purge:
-        instnc.purge_mylist(target)
+        instnc.purge_mylist(target, confident=args.yes)
     elif args.add:
         instnc.add(target, *operand)
     elif args.copy:
@@ -838,7 +917,7 @@ def main(args):
     elif args.move:
         instnc.move(target, dest, *operand)
     elif args.delete:
-        instnc.delete(target, *operand)
+        instnc.delete(target, *operand, confident=args.yes)
     else:
         print(Err.no_commands)
 

@@ -1,10 +1,9 @@
 # coding: utf-8
 import os
 import sys
-from argparse import ArgumentParser
 
 from . import nicodown, nicoml
-from .utils import Msg, Err
+from .utils import Msg, Err, InheritedParser
 
 
 def main(arguments=None):
@@ -14,7 +13,7 @@ def main(arguments=None):
     :param arguments: 引数の文字列
     :rtype: None
     """
-    parser = ArgumentParser(fromfile_prefix_chars="+")
+    parser = InheritedParser(fromfile_prefix_chars="+")
     parser.add_argument("-u", "--user", nargs=1, help=Msg.nd_help_username, metavar="MAIL")
     parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD", dest="password")
     parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
@@ -45,7 +44,7 @@ def main(arguments=None):
     parser_ml.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="WORD", dest="password")
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
     parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="FILE")
-    parser_ml.add_argument("--everything", action="store_true", help=Msg.ml_help_everything)
+    parser_ml.add_argument("--yes", action="store_true", help=Msg.ml_help_yes)
     group_one = parser_ml.add_argument_group(Msg.ml_help_group_a)
     group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
     group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
@@ -57,6 +56,7 @@ def main(arguments=None):
     group_two.add_argument("--purge", action="store_true", help=Msg.ml_help_purge)
     group_two.add_argument("-s", "--show", action="count", help=Msg.ml_help_show)
     group_two.add_argument("-e", "--export", action="count", help=Msg.ml_help_export)
+    group_two.add_argument("--everything", action="store_true", help=Msg.ml_help_everything)
 
     args = parser.parse_args(arguments)
     if len(sys.argv) <= 2 and not os.getenv("PYTHON_DEBUG") == "1":

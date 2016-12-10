@@ -3,6 +3,7 @@ import logging
 import pickle
 import re
 import requests
+from argparse import ArgumentParser, HelpFormatter
 from getpass import getpass
 from os.path import join, expanduser
 from pathlib import Path
@@ -37,14 +38,29 @@ def validator(input_list):
     :param list[str] input_list:
     :rtype: list[str]
     """
-    matcher = re.compile("\s*(?:\*|(?:(?:http://www\.nicovideo\.jp/)?watch/)?(?:sm|nm|so)?\d{1,9})\s*", re.I).match
-    for item in input_list:
-        if not matcher(item):
-            return []
+    matcher = re.compile(
+        """\s*(?:
+        \*|  # 「全て」を指定するときの記号
+        (?:
+            (?:(?:h?t?tp://)?www\.nicovideo\.jp/)?watch/  # 通常URL
+           |(?:h?t?tp://)?nico\.ms/  # 短縮URL
+        )?
+            ((?:sm|nm|so)?[0-9]{1,9})  # ID本体
+        )\s?""", re.I + re.X).match
 
-    return [item.strip()
-                .replace("http://www.nicovideo.jp/watch/", "")
-                .replace("watch/", "") for item in input_list]
+    if "\t" in input_list[0]:
+        for line in input_list[1:]:
+            if "\t" not in line:
+                return []
+        input_list = [item.split("\t")[0] for item in input_list]
+    else:
+        if input_list == ["*"]:
+            return input_list
+        for item in input_list:
+            if not matcher(item):
+                return []
+
+    return [matcher(item).group(1) for item in input_list if matcher(item)]
 
 
 def make_dir(directory):
@@ -155,6 +171,8 @@ class Msg:
     ml_help_id = "マイリストの指定に、 名前の代わりにそのIDを使います。"
     ml_help_everything = "show や export と同時に指定すると、" \
                          "全てのマイリストの情報をまとめて取得します。"
+    ml_help_yes = "これを指定すると、マイリスト自体の削除や" \
+                  "マイリスト内の全項目の削除の時に確認しません。"
 
     '''動画ダウンロードコマンドのヘルプメッセージ'''
     nd_description = "ニコニコ動画のデータを ダウンロードします。"
@@ -238,7 +256,7 @@ class Err:
     item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
     name_ambiguous = "同名のマイリストが {0}件あります。名前の代わりに" \
                      "IDで(--id を使って)指定し直してください。"
-    name_ambiguous_detail = "名前: {0[name]}, ID: {0[id]}, {0[publicity]}," \
+    name_ambiguous_detail = "ID: {0[id]}, 名前: {0[name]}, {0[publicity]}," \
                             " 作成日: {0[since]}, 説明文: {0[description]}"
     mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
     mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
@@ -502,3 +520,41 @@ class MKey:
     SINCE = "since"
     DESCRIPTION = "description"
     ITEM_DATA = "item_data"
+
+
+class InheritedParser(ArgumentParser):
+    def _read_args_from_files(self, arg_strings):
+        # expand arguments referencing files
+        new_arg_strings = []
+        for arg_string in arg_strings:
+
+            # for regular arguments, just add them back into the list
+            if not arg_string or arg_string[0] not in self.fromfile_prefix_chars:
+                new_arg_strings.append(arg_string)
+
+            # replace arguments referencing files with the file content
+            else:
+                try:
+                    with open(arg_string[1:], encoding="utf-8") as args_file:
+                        arg_strings = []
+                        for arg_line in args_file.read().splitlines():
+                            for arg in self.convert_arg_line_to_args(arg_line):
+                                arg_strings.append(arg)
+                        arg_strings = self._read_args_from_files(arg_strings)
+                        new_arg_strings.extend(arg_strings)
+                except OSError:
+                    err = sys.exc_info()[1]
+                    self.error(str(err))
+
+        # return the modified argument list
+        return new_arg_strings
+
+    def __init__(self, prog=None, usage=None, description=None,
+                 epilog=None, parents=None, formatter_class=HelpFormatter,
+                 prefix_chars='-', fromfile_prefix_chars=None,
+                 argument_default=None, conflict_handler='error',
+                 add_help=True, allow_abbrev=True):
+        if parents is None:
+            parents = []
+        super().__init__(prog, usage, description, epilog, parents, formatter_class, prefix_chars,
+                         fromfile_prefix_chars, argument_default, conflict_handler, add_help, allow_abbrev)

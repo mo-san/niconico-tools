@@ -7,29 +7,32 @@ from nicotools.nicodown import GetVideos, GetComments, GetThumbnails, get_infos
 from nicotools.utils import get_encoding, validator, LogIn, NTLogger
 import nicotools
 
-SAVE_DIR = "D:/Projects/PycharmProjects/niconico-tools/test/Downloads/"
+SAVE_DIR = "/tests/Downloads/"
 
-AUTH_N = (os.getenv("addr1"), os.getenv("pass1"))
-AUTH_P = (os.getenv("addr2"), os.getenv("pass2"))
-
-
-# @pytest.mark.skip
-def test_get_encoding():
-    assert get_encoding()
+AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
+AUTH_P = (os.getenv("addr_p"), os.getenv("pass_p"))
 
 
 # @pytest.mark.skip
-def test_validator():
-    assert (validator(
-        ["*", " http://www.nicovideo.jp/watch/sm123456",
-         " sm1234 ", "watch/sm123456",
-         " nm1234 ", "watch/nm123456",
-         " so1234 ", "watch/so123456",
-         " 123456 ", "watch/123456"]) ==
-        ["*", "sm123456",
-         "sm1234", "sm123456", "nm1234", "nm123456",
-         "so1234", "so123456", "123456", "123456"])
-    assert validator(["*", "sm9", "-d"]) == []
+class TestUtils:
+    def test_get_encoding(self):
+        assert get_encoding()
+
+    def test_validator(self):
+        assert (validator(
+            ["*", " http://www.nicovideo.jp/watch/sm123456",
+             " sm1234 ", "watch/sm123456",
+             " nm1234 ", "watch/nm123456",
+             " so1234 ", "watch/so123456",
+             " 123456 ", "watch/123456"]) ==
+            ["*", "sm123456",
+             "sm1234", "sm123456", "nm1234", "nm123456",
+             "so1234", "so123456", "123456", "123456"])
+        assert validator(["*", "sm9", "-d"]) == []
+
+    def test_logger(self):
+        with pytest.raises(ValueError):
+            NTLogger(log_level=-1)
 
 
 # @pytest.mark.skip
@@ -38,18 +41,18 @@ class TestLogin:
         # noinspection PyUnusedLocal
         sess = LogIn(AUTH_P).session
         sess = LogIn().session
-        caplog.set_level(logging.DEBUG)
+        caplog.set_level(logging.INFO)
         assert LogIn(AUTH_N, session=sess).token.startswith("25844085-")
 
     def test_login_2(self, caplog):
         sess = LogIn(AUTH_P).session
-        caplog.set_level(logging.DEBUG)
+        caplog.set_level(logging.INFO)
         assert LogIn((None, None), session=sess).token.startswith("1608038-")
 
     def test_login_3(self, caplog):
-        _ml_ = os.getenv("addr1")
-        _pw_ = os.getenv("pass1")
-        caplog.set_level(logging.DEBUG)
+        _ml_ = os.getenv("addr_n")
+        _pw_ = os.getenv("pass_n")
+        caplog.set_level(logging.INFO)
         assert LogIn((_ml_, _pw_)).token.startswith("25844085-")
         # assert LogIn((None, _pw_)).token.startswith("25844085-")
         # assert LogIn((_ml_, None)).token.startswith("25844085-")
@@ -69,7 +72,7 @@ class TestNicodown:
 
     def test_nicodown_1(self):
         with pytest.raises(SystemExit):
-            c = "d -u {_mail} -p {_pass} -d {save_dir} -i -o test/Downloads/info.xml {videoid}"
+            c = "d -u {_mail} -p {_pass} -d {save_dir} -i -o tests/Downloads/info.xml {videoid}"
             nicotools.main(self.param(c))
 
     def test_nicodown_2(self):
@@ -83,43 +86,49 @@ class TestNicodown:
             nicotools.main(self.param(c))
 
     def test_nicodown_4(self, caplog):
+        caplog.set_level(logging.INFO)
         c = "download -u {_mail} -p {_pass} -d {save_dir} -ct {videoid}"
         nicotools.main(self.param(c))
         for record in caplog.records:
             assert record.levelname in ("INFO", "DEBUG")
 
     def test_nicodown_5(self, caplog):
-        c = "download -u {_mail} -p {_pass} -d {save_dir} -ct +test/ids.txt"
+        caplog.set_level(logging.INFO)
+        c = "download -u {_mail} -p {_pass} -d {save_dir} -ct +tests/ids.txt"
         nicotools.main(self.param(c))
         for record in caplog.records:
-            assert record.levelname in ("INFO", "DEBUG")
+            assert record.levelname == "INFO"
 
     def test_nicodown_6(self, caplog):
+        caplog.set_level(logging.INFO)
         c = "download -u {_mail} -p {_pass} -d {save_dir} -cx {videoid}"
         nicotools.main(self.param(c))
         for record in caplog.records:
-            assert record.levelname in ("INFO", "DEBUG")
+            assert record.levelname == "INFO"
 
     def test_nicodown_7(self, caplog):
+        caplog.set_level(logging.INFO)
         c = "download -u {_mail} -p {_pass} -d {save_dir} -v {videoid}"
         a = c.format(_mail=AUTH_N[0], _pass=AUTH_N[1], save_dir=SAVE_DIR, videoid="sm7174241").split(" ")
         nicotools.main(a)
         for record in caplog.records:
-            assert record.levelname in ("INFO", "DEBUG")
+            assert record.levelname == "INFO"
 
     def test_nicodown_8(self, caplog):
+        caplog.set_level(logging.INFO)
         c = "download -u {_mail} -p {_pass} -d {save_dir} -c {videoid}"
-        a = c.format(_mail=AUTH_N[0], _pass=AUTH_N[1], save_dir="test/aaaaa", videoid="1278053154").split(" ")
+        a = c.format(_mail=AUTH_N[0], _pass=AUTH_N[1], save_dir="tests/aaaaa", videoid="1278053154").split(" ")
         nicotools.main(a)
         for record in caplog.records:
-            assert record.levelname in ("INFO", "DEBUG")
+            assert record.levelname == "INFO"
 
     def test_nicodown_9(self, caplog):
+        caplog.set_level(logging.INFO)
         c = "download -u {_mail} -p {_pass} -d {save_dir} -c {videoid}"
         a = c.format(_mail=AUTH_N[0], _pass=AUTH_N[1], save_dir="hello/world", videoid="1278053154").split(" ")
         nicotools.main(a)
         for record in caplog.records:
-            assert record.levelname in ("INFO", "DEBUG")
+            assert record.levelname == "INFO"
 
     def test_nicodown_10(self):
         c = "download -u {_mail} -p {_pass} -d {save_dir} -c {videoid}"
@@ -142,11 +151,6 @@ class TestNicodown:
     def test_nicodown_14(self):
         with pytest.raises(SystemExit):
             nicotools.main(["download", "-c", "sm9", "hello"])
-
-
-def test_logger():
-    with pytest.raises(ValueError):
-        NTLogger(log_level=-1)
 
 
 # @pytest.mark.skip
