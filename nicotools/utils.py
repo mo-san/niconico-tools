@@ -5,7 +5,7 @@ import pickle
 import re
 import requests
 import sys
-from argparse import ArgumentParser, HelpFormatter
+from argparse import ArgumentParser
 from getpass import getpass
 from os.path import join, expanduser
 from pathlib import Path
@@ -613,13 +613,3 @@ class InheritedParser(ArgumentParser):
 
         # return the modified argument list
         return new_arg_strings
-
-    def __init__(self, prog=None, usage=None, description=None,
-                 epilog=None, parents=None, formatter_class=HelpFormatter,
-                 prefix_chars='-', fromfile_prefix_chars=None,
-                 argument_default=None, conflict_handler='error',
-                 add_help=True, allow_abbrev=True):
-        if parents is None:
-            parents = []
-        super().__init__(prog, usage, description, epilog, parents, formatter_class, prefix_chars,
-                         fromfile_prefix_chars, argument_default, conflict_handler, add_help, allow_abbrev)
