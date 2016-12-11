@@ -41,6 +41,7 @@ matrix:
 # command to install dependencies
 install:
   - pip install requests progressbar2 prettytable pytest pytest-catchlog coverage codecov pytest-cov
+  - chmod +x tests/travis.sh
   - tests/travis.sh
   - pip install -e .
 
