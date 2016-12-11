@@ -14,10 +14,11 @@ ALL_ITEM = "*"
 LOG_FILE_ND = "nicotools_download.log"
 LOG_FILE_ML = "nicotools_mylist.log"
 if os.getenv("PYTHON_TEST"):
-    travis_os = os.getenv("TRAVIS_OS_NAME", "")
+    os_name = os.getenv("TRAVIS_OS_NAME", os.name)
     version = (os.getenv("TRAVIS_PYTHON_VERSION") or
+               os.getenv("PYTHON_VERSION") or
                "_" .join(map(str, sys.version_info[0:3])))
-    COOKIE_FILE_NAME = "nicotools_cokkie_{0}_{1}".format(travis_os, version)
+    COOKIE_FILE_NAME = "nicotools_cokkie_{0}_{1}".format(os_name, version)
 else:
     COOKIE_FILE_NAME = "nicotools_cookie.pickle"
 

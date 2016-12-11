@@ -1,13 +1,47 @@
 language: python
 
-python:
-  - "3.3"
-  - "3.4"
-  - "3.5"
+matrix:
+  include:
+    - os: linux
+      dist: trusty
+      python: "3.4"
+
+    - os: linux
+      dist: trusty
+      python: "3.5"
+
+    - os: linux
+      dist: trusty
+      python: "3.6-dev"
+
+    - os: osx
+      language: generic
+      python: "3.4"
+      env:
+        - PYTHON_VERSION=3.4.4
+
+    - os: osx
+      language: generic
+      python: "3.5"
+      env:
+        - PYTHON_VERSION=3.5.2
+
+  allow_failures:
+    - os: osx
+
+#python:
+#  - "3.4"
+#  - "3.5"
+#  - "3.6"
+#
+#os:
+#  - linux
+#  - osx
 
 # command to install dependencies
 install:
-  - pip install requests progressbar2 prettytable pytest pytest-catchlog coverage
+  - pip install requests progressbar2 prettytable pytest pytest-catchlog coverage codecov pytest-cov
+  - tests/travis.sh
   - pip install -e .
 
 env:
@@ -15,17 +49,25 @@ env:
 
 # command to run tests
 script:
- - pytest tests/test_nicodown.py -v
- - pytest tests/test_nicoml.py -v
+  - py.test --cov=./
+# - py.test tests/test_nicodown.py -v
+# - py.test tests/test_nicoml.py -v
 
 
 after_success:
-  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicodown.py
-  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicoml.py
-  - coverage html -d "tests/coverage/"
+  - codecov
+  - bash <(curl -s https://codecov.io/bash)
+#  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicodown.py
+#  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicoml.py
+#  - coverage html -d "tests/coverage/"
 
 notifications:
   email:
     recipients:
       - window100@gmail.com
     on_success: always
+
+branches:
+  only:
+  - master
+  - develop
