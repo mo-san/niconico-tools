@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ConnectTimeout
-from requests.packages.urllib3.util.retry import Retry
 from requests.packages.urllib3.exceptions import MaxRetryError
+from requests.packages.urllib3.util.retry import Retry
 from urllib.parse import parse_qs
 from xml.etree import ElementTree
 
@@ -17,7 +17,8 @@ except ImportError:
     progressbar = None
 
 from . import utils
-from .utils import Msg, Err, URL, Key
+from .utils import Msg, Err, URL, Key, KeyGetFlv
+
 """
 使い方:
 
@@ -46,12 +47,10 @@ def print_info(queue, file_name=None):
     text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
     if file_name:
         file_name = utils.make_dir(file_name)
-        if file_name is None:
-            return False
         with file_name.open(encoding="utf-8", mode="w") as fd:
             fd.write(text + "\n")
     else:
-        print(text.encode(utils.get_encoding(), Msg.BACKSLASH).decode(utils.get_encoding()))
+        print(text.encode(utils.get_encoding(), utils.BACKSLASH).decode(utils.get_encoding()))
     return True
 
 
@@ -81,6 +80,7 @@ def get_infos(queue, logger=None):
     * user_icon_url     str
     * video_id          str
     * view_counter      int
+    * v_or_t_id         str
     * watch_url         str
 
     :param list[str] queue: 動画IDのリスト
@@ -170,16 +170,65 @@ class Canopy:
         self.database = None
         self.save_dir = None  # type: Path
 
-    def make_name(self, vid, ext):
+    def make_name(self, video_id, ext):
         """
         ファイル名を返す。
 
-        :param str vid:
+        :param str video_id:
         :param str ext:
         :rtype: Path
         """
-        file_name =  Msg.nd_file_name.format(vid, self.database[vid][Key.FILE_NAME], ext)
+        file_name =  Msg.nd_file_name.format(
+            video_id, self.database[video_id][Key.FILE_NAME], ext)
         return Path(self.save_dir).resolve() / file_name
+
+    def get_from_getflv(self, video_id, session):
+        """
+        GetFlv APIから情報を得る。
+
+        * GetFlvのサンプル:
+
+        thread_id=1406370428
+        &l=314
+        &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
+        &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
+        &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
+        &user_id=<ユーザーIDの数字>
+        &is_premium=1
+        &nickname=<URLエンコードされたユーザー名の文字列>
+        &time=1475176067845
+        &done=true
+        &ng_rv=220
+        &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
+
+        * 但しアクセス制限がかかったときには:
+
+        error=access_locked&done=true
+
+        :param str video_id:
+        :param requests.Session session:
+        :rtype: dict[str, str] | None
+        """
+        suffix = {"as3": 1} if video_id.startswith("nm") else None
+        response = session.get(URL.URL_GetFlv + video_id, params=suffix)
+        parameters = parse_qs(response.text)
+        if parameters.get("error") is not None:
+            return None
+        return {
+            KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
+            KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
+            KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
+            KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
+            KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
+            KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
+            KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
+            KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
+            KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
+
+            # 以下は公式動画にだけあるもの。通常の動画ではNone
+            KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
+            KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
+        }
 
 
 class GetVideos(utils.LogIn, Canopy):
@@ -213,8 +262,6 @@ class GetVideos(utils.LogIn, Canopy):
         """
         utils.check_arg(locals())
         self.save_dir = utils.make_dir(save_dir, self.logger)
-        if self.save_dir is None:
-            return False
         self.database = database
         self.logger.info(Msg.nd_start_dl_video.format(len(self.database)))
 
@@ -231,7 +278,7 @@ class GetVideos(utils.LogIn, Canopy):
     def download(self, video_id, chunk_size=1024 * 50):
         """
         :param str video_id: 動画ID (e.g. sm1234)
-        :param int chunk_size:
+        :param int chunk_size: 一度にサーバーに要求するファイルサイズ
         :rtype: bool
         """
         utils.check_arg(locals())
@@ -240,26 +287,33 @@ class GetVideos(utils.LogIn, Canopy):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             db[Key.V_OR_T_ID] = redirected
 
-        response = self.session.get(URL.URL_GetFlv + db[Key.V_OR_T_ID]
-                                    + ("", "?as3=1")[video_id.startswith("nm")])
+        response = self.get_from_getflv(db[Key.V_OR_T_ID], self.session)
 
-        parameters = parse_qs(response.text)
-        vid_url = parameters["url"][0]
-        is_premium = parameters["is_premium"][0]
-        # self.logger.debug(Msg.nd_video_url_is.format(video_id, vid_url))
-
-        file_path = self.make_name(video_id, db[Key.MOVIE_TYPE])
-
-        if is_premium == "1":
+        vid_url = response[KeyGetFlv.VIDEO_URL]
+        is_premium = response[KeyGetFlv.IS_PREMIUM]
+        if int(is_premium) == 1:
             file_size = db[Key.SIZE_HIGH]
         else:
             file_size = db[Key.SIZE_LOW]
 
         # 動画視聴ページに行ってCookieをもらってくる
         self.session.get(URL.URL_Watch + video_id)
-        # connect timeoutを10秒, read timeoutを30秒に設定
         video_data = self.session.get(url=vid_url, stream=True, timeout=(10.0, 30.0))
 
+        return self._saver(video_id, video_data, file_size, chunk_size)
+
+    def _saver(self, video_id, video_data, file_size, chunk_size):
+        """
+
+        :param str video_id:
+        :param requests.Response video_data: 動画ファイルのURL
+        :param int file_size: ファイルサイズ
+        :param int chunk_size: 一度にサーバーに要求するファイルサイズ
+        :rtype: bool
+        """
+        file_path = self.make_name(video_id, self.database[video_id][Key.MOVIE_TYPE])
+
+        # connect timeoutを10秒, read timeoutを30秒に設定
         if progressbar is None:
             with file_path.open("wb") as f:
                 [f.write(chunk) for chunk in
@@ -298,8 +352,6 @@ class GetThumbnails(Canopy):
         utils.check_arg(locals())
         self.database = database
         self.save_dir = utils.make_dir(save_dir, self.logger)
-        if self.save_dir is None:
-            return False
         self.logger.info(Msg.nd_start_dl_pict.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
@@ -315,18 +367,12 @@ class GetThumbnails(Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
-        image_data = self._download(video_id)
+        image_data = self._worker(video_id)
         if not image_data:
             return False
+        return self._saver(video_id, image_data)
 
-        file_path = self.make_name(video_id, "jpg")
-
-        with file_path.open('wb') as f:
-            f.write(image_data.content)
-        self.logger.info(Msg.nd_download_done.format(file_path))
-        return True
-
-    def _download(self, video_id, is_large=True, retry=1):
+    def _worker(self, video_id, is_large=True, retry=1):
         """
         サムネイル画像をダウンロードしにいく。
 
@@ -347,18 +393,26 @@ class GetThumbnails(Canopy):
             try:
                 # connect timeoutを10秒, read timeoutを30秒に設定
                 response = session.get(url=url, timeout=(5.0, 10.0))
-
-                # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
-                if response.status_code == 404 and is_large:
-                    return self._download(video_id, is_large=False)
-                elif response.ok:
-                    return response
-                else:
-                    return False
             except (ConnectTimeout, MaxRetryError):
                 self.logger.error(Err.connection_timeout.format(
                     video_id, self.database[video_id][Key.TITLE]))
                 return False
+            else:
+                # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
+                if response.status_code == 404 and is_large:
+                    return self._worker(video_id, is_large=False)
+                elif response.ok:
+                    return response
+                else:
+                    return False
+
+    def _saver(self, video_id, image_data):
+        file_path = self.make_name(video_id, "jpg")
+
+        with file_path.open('wb') as f:
+            f.write(image_data.content)
+        self.logger.info(Msg.nd_download_done.format(file_path))
+        return True
 
 
 class GetComments(utils.LogIn, Canopy):
@@ -371,33 +425,31 @@ class GetComments(utils.LogIn, Canopy):
         """
         super().__init__(mail=mail, password=password, logger=logger, session=session)
 
-    def start(self, database, save_dir, xml_mode=False):
+    def start(self, database, save_dir, xml=False):
         """
 
         :param dict[str, dict[str, int | str]] database:
         :param str | Path save_dir:
-        :param bool xml_mode:
+        :param bool xml:
         """
         utils.check_arg(locals())
         self.database = database
         self.save_dir = utils.make_dir(save_dir, self.logger)
-        if self.save_dir is None:
-            return False
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
                 Msg.nd_download_comment.format(
                     index + 1, len(database), video_id,
                     self.database[video_id][Key.TITLE]))
-            self.download(video_id, xml_mode)
+            self.download(video_id, xml)
             if len(self.database) > 1:
                 time.sleep(1.5)
         return True
 
-    def download(self, video_id, xml_mode=False):
+    def download(self, video_id, xml=False):
         """
         :param str video_id: 動画ID (e.g. sm1234)
-        :param bool xml_mode:
+        :param bool xml:
         :rtype: bool
         """
         utils.check_arg(locals())
@@ -406,46 +458,60 @@ class GetComments(utils.LogIn, Canopy):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             db[Key.V_OR_T_ID] = redirected
 
-        response = self.session.get(URL.URL_GetFlv + db[Key.V_OR_T_ID]
-                                    + ("", "?as3=1")[video_id.startswith("nm")])
+        response = self.get_from_getflv(db[Key.V_OR_T_ID], self.session)
 
-        if "error=access_locked" in response.text:
-            time.sleep(3)
-            print("アクセス制限が解除されるのを待っています…")
-            time.sleep(3)
-            return self.download(video_id)
+        if response is None:
+            time.sleep(4)
+            print(Err.waiting_for_permission)
+            time.sleep(4)
+            return self.download(video_id, xml)
 
-        parameters = parse_qs(response.text)
-        thread_id = parameters["thread_id"][0]  # type: str
-        msg_server = parameters["ms"][0]  # type:str
-        user_id = parameters["user_id"][0]  # type: str
-        user_key = parameters["userkey"][0]  # type: str
+        thread_id = response[KeyGetFlv.THREAD_ID]
+        msg_server = response[KeyGetFlv.MSG_SERVER]
+        user_id = response[KeyGetFlv.USER_ID]
+        user_key = response[KeyGetFlv.USER_KEY]
 
-        opt_thread_id = parameters["optional_thread_id"][0] if parameters.get("optional_thread_id") else None
-        needs_key = parameters["needs_key"][0] if parameters.get("needs_key") else None
+        opt_thread_id = response[KeyGetFlv.OPT_THREAD_ID]
+        needs_key = response[KeyGetFlv.NEEDS_KEY]
 
-        if xml_mode and video_id.startswith(("sm", "nm")):
-            comment_data = (self.session.post(
+        if xml and video_id.startswith(("sm", "nm")):
+            res_com = self.session.post(
                 url=msg_server,
                 data=self.make_param_xml(thread_id, user_id))
-                            .text.replace("><", ">\n<"))
-            extention = "xml"
+            comment_data = res_com.text.replace("><", ">\n<")
         else:
             if video_id.startswith(("sm", "nm")):
                 req_param = self.make_param_json(
                     False, user_id, user_key, thread_id)
             else:
-                thread_key, force_184 = self.get_thread_key(db[Key.V_OR_T_ID], needs_key)
+                thread_key, force_184 = self.get_thread_key(db[Key.V_OR_T_ID],
+                                                            needs_key)
                 req_param = self.make_param_json(
                     True, user_id, user_key, thread_id,
                     opt_thread_id, thread_key, force_184)
 
-            res_com = self.session.post(URL.URL_Message_New, json=req_param)
-            comment_data = res_com.text.encode(res_com.encoding).decode("utf-8").replace("}, ", "},\n")
+            res_com = self.session.post(
+                url=URL.URL_Message_New,
+                json=req_param)
+            comment_data = res_com.text.replace("}, ", "},\n")
+
+        comment_data = comment_data.encode(res_com.encoding).decode("utf-8")
+        return self._saver(video_id, comment_data, xml)
+
+    def _saver(self, video_id, comment_data, xml):
+        """
+
+        :param str video_id:
+        :param str comment_data:
+        :param bool xml:
+        :return:
+        """
+        if xml and video_id.startswith(("sm", "nm")):
+            extention = "xml"
+        else:
             extention = "json"
 
         file_path = self.make_name(video_id, extention)
-
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
         self.logger.info(Msg.nd_download_done.format(file_path))
@@ -595,13 +661,18 @@ def main(args):
         return print_info(videoid, file_name)
 
     """ 本筋 """
-    logger = utils.NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ND)
+    logger = utils.NTLogger(log_level=args.loglevel, file_name=utils.LOG_FILE_ND)
     destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
-    destination = utils.make_dir(destination, logger)
+    if destination:
+        destination = utils.make_dir(destination, logger)
     database = get_infos(videoid, logger=logger)
 
-    if args.thumbnail and not (args.comment or args.video):
-        return GetThumbnails(logger=logger).start(database, destination)
+    res_t = False
+    if args.thumbnail:
+        res_t = GetThumbnails(logger=logger).start(database, destination)
+        if not (args.comment or args.video):
+            # サムネイルのダウンロードだけならここで終える。
+            return res_t
 
     session = utils.LogIn(mail=mailadrs, password=password, logger=logger).session
 
@@ -613,4 +684,4 @@ def main(args):
     if args.video:
         res_v = GetVideos(logger=logger, session=session).start(database, destination)
 
-    return res_c | res_v
+    return res_c | res_v | res_t

@@ -309,7 +309,7 @@ class NicoMyList(utils.LogIn):
         # *videoids が要素数1のタプル ("*") or
         # *videoids が要素数0のタプル(即ち未指定) -> 全体モード
         # 何かしら指定されているなら -> 個別モード
-        if len(videoids) == 0 or (len(videoids) == 1 and Msg.ALL_ITEM in videoids):
+        if len(videoids) == 0 or (len(videoids) == 1 and utils.ALL_ITEM in videoids):
             whole = True
         else:
             whole = False
@@ -588,7 +588,7 @@ class NicoMyList(utils.LogIn):
         item_ids = self.get_item_ids(list_id_from, *videoids)
         if item_ids is False:
             return False
-        if Msg.ALL_ITEM not in videoids:
+        if utils.ALL_ITEM not in videoids:
             item_ids = {vd_id: item_ids[vd_id] for vd_id in videoids if vd_id in item_ids}
 
             # 指定したものが含まれているかの確認
@@ -642,7 +642,7 @@ class NicoMyList(utils.LogIn):
         if item_ids is False:
             return False
 
-        if len(videoids) == 1 and Msg.ALL_ITEM in videoids:
+        if len(videoids) == 1 and utils.ALL_ITEM in videoids:
             # 全体モード
             if not confident and not self._confirmation(
                     "delete", list_name, sorted(item_ids.keys())):
@@ -804,10 +804,8 @@ class NicoMyList(utils.LogIn):
         utils.check_arg({"list_id": list_id, "table": table, "survey": survey})
         if file_name:
             file_name = utils.make_dir(file_name, self.logger)
-        if file_name is None:
-            return False
         if table:  # 表形式の場合
-            if list_id == Msg.ALL_ITEM:
+            if list_id == utils.ALL_ITEM:
                 if survey:
                     cont = self._construct_table(self.fetch_all())
                 else:
@@ -815,7 +813,7 @@ class NicoMyList(utils.LogIn):
             else:
                 cont = self._construct_table(self.fetch_one(list_id))
         else:  # タブ区切りテキストの場合
-            if list_id == Msg.ALL_ITEM:
+            if list_id == utils.ALL_ITEM:
                 if survey:
                     cont = self._construct_tsv(self.fetch_all())
                 else:
@@ -834,10 +832,9 @@ class NicoMyList(utils.LogIn):
         :rtype: bool
         """
         utils.check_arg({"list_id": list_id, "survey": survey})
-        file_name = utils.make_dir(file_name, self.logger)
-        if file_name is None:
-            return False
-        if list_id == Msg.ALL_ITEM:
+        if file_name:
+            file_name = utils.make_dir(file_name, self.logger)
+        if list_id == utils.ALL_ITEM:
             if survey:
                 cont = self._construct_id(self.fetch_all(False))
             else:
@@ -955,14 +952,12 @@ class NicoMyList(utils.LogIn):
             return False
         if file_name:
             file_name = utils.make_dir(file_name, self.logger)
-            if file_name is None:
-                return False
             with file_name.open(mode="w", encoding="utf-8") as fd:
                 fd.write("{}\n".format(text))
             self.logger.info(Msg.ml_exported.format(file_name))
         else:
             enco = utils.get_encoding()
-            print(text.encode(enco, Msg.BACKSLASH).decode(enco))
+            print(text.encode(enco, utils.BACKSLASH).decode(enco))
         return True
 
 
@@ -973,7 +968,7 @@ def main(args):
     :param args: ArgumentParser.parse_args() によって解釈された引数。
     :rtype: bool
     """
-    logger = utils.NTLogger(log_level=args.loglevel, file_name=Msg.LOG_FILE_ML)
+    logger = utils.NTLogger(log_level=args.loglevel, file_name=utils.LOG_FILE_ML)
 
     mailadrs = args.mail[0] if args.mail else None
     password = args.password[0] if args.password else None
@@ -986,8 +981,8 @@ def main(args):
     file_name = args.out[0] if isinstance(args.out, list) else None
 
     """ エラーの除外 """
-    if (((args.add or args.create or args.purge) and Msg.ALL_ITEM == source) or
-        args.add and Msg.ALL_ITEM in args.add):
+    if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
+        args.add and utils.ALL_ITEM in args.add):
         sys.exit(Err.cant_perform_all)
     if (args.create or args.purge) and Msg.ml_default_name == source:
         sys.exit(Err.deflist_to_create_or_purge)
@@ -1000,9 +995,9 @@ def main(args):
             sys.exit(Err.not_specified.format("--to"))
         if source == dest:
             sys.exit(Err.list_names_are_same)
-    if (args.delete and (len(args.delete) > 1 and Msg.ALL_ITEM in args.delete) or
-            (args.copy and len(args.copy) > 1 and Msg.ALL_ITEM in args.copy) or
-            (args.move and len(args.move) > 1 and Msg.ALL_ITEM in args.move)):
+    if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
+            (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
+            (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
         sys.exit(Err.videoid_contains_all)
     operand = []
     if args.add or args.copy or args.move or args.delete:

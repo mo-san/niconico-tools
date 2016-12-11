@@ -1,7 +1,7 @@
 # coding: utf-8
+import logging
 import os
 import pytest
-import logging
 from datetime import datetime
 
 import nicotools
@@ -10,9 +10,8 @@ from nicotools import nicoml
 SAVE_DIR = "/tests/Downloads/"
 TEST_LIST = "TEST_LIST" + str(datetime.now()).replace(" ", "_")
 TEST_LIST_TO = "TEST_LIST_TO" + str(datetime.now()).replace(" ", "_")
-insane_name = "🕒🕘🕒🕘"  # 時計の絵文字4つ
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
-VIDEO_IDS = {
+VIDEO_IDS = " ".join(sorted({
     "watch/sm8628149": "【東方】Bad Apple!!　ＰＶ【影絵】",
     "watch/sm9": "新・豪血寺一族 -煩悩解放 - レッツゴー！陰陽師",
     "watch/sm2057168": "M.C.ドナルドはダンスに夢中なのか？最終鬼畜道化師ドナルド・Ｍ",
@@ -25,12 +24,12 @@ VIDEO_IDS = {
     "watch/sm6188097": "【マリオ64実況】　奴が来る　伍【幕末志士】",
     "watch/sm2049295": "【 Silver Forest × U.N.オーエンは彼女なのか？ 】 −sweet little sister−",
     "watch/sm500873": "組曲『ニコニコ動画』 "
-}
-VIDEO_IDS = " ".join(list(VIDEO_IDS.keys()))
+}))
 list_id = 0
 list_name = ""
 list_id_to = 0
 list_name_to = ""
+insane_name = "🕒🕘🕒🕘"  # 時計の絵文字4つ
 it = None  # type: nicoml.NicoMyList
 
 
