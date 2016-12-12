@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
 
-if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-  brew update
-  brew outdated pyenv || brew upgrade pyenv
-  eval "$(pyenv init -)"
-  pyenv install $PYTHON_VERSION
-  pyenv local $PYTHON_VERSION
-fi
+curl -X PUT -H "Authorization: Bearer $DROPBOX_TOKEN" -T  ~/nicotools_download.log https://content.dropboxapi.com/1/files_put/auto/Travis/
+curl -X PUT -H "Authorization: Bearer $DROPBOX_TOKEN" -T  ~/nicotools_mylist.log https://content.dropboxapi.com/1/files_put/auto/Travis/

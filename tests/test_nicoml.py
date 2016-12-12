@@ -25,33 +25,33 @@ VIDEO_IDS = " ".join(sorted({
     "watch/sm2049295": "【 Silver Forest × U.N.オーエンは彼女なのか？ 】 −sweet little sister−",
     "watch/sm500873": "組曲『ニコニコ動画』 "
 }))
-list_id = 0
-list_name = ""
-list_id_to = 0
-list_name_to = ""
-insane_name = "🕒🕘🕒🕘"  # 時計の絵文字4つ
-it = None  # type: nicoml.NicoMyList
+LIST_ID = 0
+LIST_NAME = ""
+LIST_ID_TO = 0
+LIST_NAME_TO = ""
+INSANE_NAME = "🕒🕘🕒🕘"  # 時計の絵文字4つ
+INSTANCE = None  # type: nicoml.NicoMyList
 
 
 class TestMla:
     def initialize(self):
-        global it, list_id, list_name, list_id_to, list_name_to
-        it = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1])
-        list_id, list_name = self.get_id_name(TEST_LIST)
-        list_id_to, list_name_to = self.get_id_name(TEST_LIST_TO)
+        global INSTANCE, LIST_ID, LIST_NAME, LIST_ID_TO, LIST_NAME_TO
+        INSTANCE = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1])
+        LIST_ID, LIST_NAME = self.get_id_name(TEST_LIST)
+        LIST_ID_TO, LIST_NAME_TO = self.get_id_name(TEST_LIST_TO)
 
     def get_id_name(self, name):
-        result = it._get_list_id(name)
+        result = INSTANCE._get_list_id(name)
         if result.get("error"):
             self.create(name)
             return self.get_id_name(name)
         return result["list_id"], result["list_name"]
 
     def create(self, name):
-        it.create_mylist(name)
+        INSTANCE.create_mylist(name)
 
     def purge(self, name):
-        it.purge_mylist(name, True)
+        INSTANCE.purge_mylist(name, True)
 
     def param(self, cond):
         cond = "mylist -u {_mail} -p {_pass} " + cond
@@ -59,47 +59,47 @@ class TestMla:
 
     def nicoml_add_1(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --add {1}".format(list_name, VIDEO_IDS)
+        c = "{0} --add {1}".format(LIST_NAME, VIDEO_IDS)
         assert nicotools.main(self.param(c))
 
     def nicoml_add_2(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --id --add {1}".format(list_id, VIDEO_IDS)
+        c = "{0} --id --add {1}".format(LIST_ID, VIDEO_IDS)
         assert nicotools.main(self.param(c))
 
     def nicoml_add_3(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --add +ids.txt".format(list_name)
+        c = "{0} --add +ids.txt".format(LIST_NAME)
         assert nicotools.main(self.param(c))
 
     def nicoml_del_1(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --delete {1}".format(list_name, VIDEO_IDS)
+        c = "{0} --delete {1}".format(LIST_NAME, VIDEO_IDS)
         assert nicotools.main(self.param(c))
 
     def nicoml_del_2(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --delete * --yes".format(list_name)
+        c = "{0} --delete * --yes".format(LIST_NAME)
         assert nicotools.main(self.param(c))
 
     def nicoml_move_1(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --to {1} --move {2}".format(list_name, list_name_to, VIDEO_IDS)
+        c = "{0} --to {1} --move {2}".format(LIST_NAME, LIST_NAME_TO, VIDEO_IDS)
         assert nicotools.main(self.param(c))
 
     def nicoml_move_2(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --to {1} --move *".format(list_name, list_name_to)
+        c = "{0} --to {1} --move *".format(LIST_NAME, LIST_NAME_TO)
         assert nicotools.main(self.param(c))
 
     def nicoml_copy_1(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --to {1} --copy {2}".format(list_name_to, list_name, VIDEO_IDS)
+        c = "{0} --to {1} --copy {2}".format(LIST_NAME_TO, LIST_NAME, VIDEO_IDS)
         assert nicotools.main(self.param(c))
 
     def nicoml_copy_2(self, caplog):
         caplog.set_level(logging.INFO)
-        c = "{0} --to {1} --copy *".format(list_name_to, list_name)
+        c = "{0} --to {1} --copy *".format(LIST_NAME_TO, LIST_NAME)
         assert nicotools.main(self.param(c))
 
     def test_amcdpr_1(self, caplog):
@@ -121,15 +121,15 @@ class TestMla:
         self.test_okatadsuke()
 
     def test_okatadsuke(self):
-        self.purge(list_name)
-        self.purge(list_name_to)
+        self.purge(LIST_NAME)
+        self.purge(LIST_NAME_TO)
 
 
 class TestMlb:
     def get_id_name(self, name):
-        result = it._get_list_id(name)
+        result = INSTANCE._get_list_id(name)
         if result.get("error"):
-            it.create_mylist(name)
+            INSTANCE.create_mylist(name)
             return self.get_id_name(name)
         return result["list_id"], result["list_name"]
 
@@ -138,19 +138,19 @@ class TestMlb:
         return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
 
     def test_initialize(self):
-        global it, list_id, list_name, list_id_to, list_name_to
-        it = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1])
-        list_id, list_name = self.get_id_name(TEST_LIST)
-        list_id_to, list_name_to = self.get_id_name(TEST_LIST_TO)
+        global INSTANCE, LIST_ID, LIST_NAME, LIST_ID_TO, LIST_NAME_TO
+        INSTANCE = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1])
+        LIST_ID, LIST_NAME = self.get_id_name(TEST_LIST)
+        LIST_ID_TO, LIST_NAME_TO = self.get_id_name(TEST_LIST_TO)
 
     def test_create_purge(self):
-        c = "{0} --create".format(list_name)
+        c = "{0} --create".format(LIST_NAME)
         assert nicotools.main(self.param(c))
-        c = "{0} --id --export".format(list_id)
+        c = "{0} --id --export".format(LIST_ID)
         assert nicotools.main(self.param(c))
-        c = "{0} --id --show".format(list_id)
+        c = "{0} --id --show".format(LIST_ID)
         assert nicotools.main(self.param(c))
-        c = "{0} --id --purge --yes".format(list_id)
+        c = "{0} --id --purge --yes".format(LIST_ID)
         assert nicotools.main(self.param(c))
 
     def test_export_everything(self):
@@ -174,21 +174,21 @@ class TestMlb:
         assert nicotools.main(self.param(c))
 
     def test_okatadsuke(self):
-        it.purge_mylist(list_name, True)
-        it.purge_mylist(list_name_to, True)
+        INSTANCE.purge_mylist(LIST_NAME, True)
+        INSTANCE.purge_mylist(LIST_NAME_TO, True)
 
 
 class TestErrors:
     def initialize(self):
-        global it, list_id, list_name, list_id_to, list_name_to
-        it = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1])
-        list_id, list_name = self.get_id_name(TEST_LIST)
-        list_id_to, list_name_to = self.get_id_name(TEST_LIST_TO)
+        global INSTANCE, LIST_ID, LIST_NAME, LIST_ID_TO, LIST_NAME_TO
+        INSTANCE = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1])
+        LIST_ID, LIST_NAME = self.get_id_name(TEST_LIST)
+        LIST_ID_TO, LIST_NAME_TO = self.get_id_name(TEST_LIST_TO)
 
     def get_id_name(self, name):
-        result = it._get_list_id(name)
+        result = INSTANCE._get_list_id(name)
         if result.get("error"):
-            it.create_mylist(name)
+            INSTANCE.create_mylist(name)
             return self.get_id_name(name)
         return result["list_id"], result["list_name"]
 
@@ -221,12 +221,12 @@ class TestErrors:
 
     def test_move_to_deflist(self):
         with pytest.raises(SystemExit):
-            c = "{0} --move * --to とりあえずマイリスト".format(list_name)
+            c = "{0} --move * --to とりあえずマイリスト".format(LIST_NAME)
             nicotools.main(self.param(c))
 
     def test_copy_to_same(self):
         with pytest.raises(SystemExit):
-            c = "{0} --copy * --to {0}".format(list_name)
+            c = "{0} --copy * --to {0}".format(LIST_NAME)
             nicotools.main(self.param(c))
 
     def test_move_without_to(self):
@@ -250,12 +250,12 @@ class TestErrors:
             nicotools.main(self.param(c))
 
     def test_list_not_exists(self):
-        c = "{0} --show".format(insane_name)
+        c = "{0} --show".format(INSANE_NAME)
         assert nicotools.main(self.param(c)) is False
 
     def test_create_special_characters_name(self):
-        assert it.create_mylist(insane_name)
-        insane_id = max(it.mylists)
+        assert INSTANCE.create_mylist(INSANE_NAME)
+        insane_id = max(INSTANCE.mylists)
         c = "{0} --id --purge --yes".format(insane_id)
         assert nicotools.main(self.param(c))
 
@@ -266,5 +266,5 @@ class TestErrors:
         assert nicotools.main(self.param(c)) is False
 
     def test_okatadsuke(self):
-        it.purge_mylist(list_name, True)
-        it.purge_mylist(list_name_to, True)
+        INSTANCE.purge_mylist(LIST_NAME, True)
+        INSTANCE.purge_mylist(LIST_NAME_TO, True)

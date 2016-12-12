@@ -221,16 +221,16 @@ class NicoMyList(utils.LogIn):
         """
         return str(datetime.fromtimestamp(timestamp, timezone(timedelta(hours=+9))))[:-6]
 
-    @classmethod
-    def get_utime(cls):
-        """
-        現在の UNIXTIME を返す。
-
-        '2016-08-13 19:27:00' -> 1471084020
-
-        :rtype: int
-        """
-        return datetime.now().timestamp()
+    # @classmethod
+    # def get_utime(cls):
+    #     """
+    #     現在の UNIXTIME を返す。
+    #
+    #     '2016-08-13 19:27:00' -> 1471084020
+    #
+    #     :rtype: int
+    #     """
+    #     return datetime.now().timestamp()
 
     def _get_list_id(self, search_for):
         """
@@ -471,7 +471,10 @@ class NicoMyList(utils.LogIn):
         utils.check_arg({"mylist_name": mylist_name, "is_public": is_public})
         res = self.get_response("create", is_public=is_public,
                                 mylist_name=mylist_name, description=description)
-        if res["status"] == "ok":
+        if res["status"] != "ok":
+            self.logger.error(Err.failed_to_create.format(mylist_name, res))
+            return False
+        else:
             self.mylists = self.get_mylist_ids()
             item = self.mylists[res[MKey.ID]]
             self.logger.info(Msg.ml_done_create.format(
@@ -480,9 +483,6 @@ class NicoMyList(utils.LogIn):
             if mylist_name != item[MKey.NAME]:
                 self.logger.info(Err.name_replaced.format(mylist_name, item[MKey.NAME]))
             return True
-        else:
-            self.logger.error(Err.failed_to_create.format(mylist_name, res))
-            return False
 
     def purge_mylist(self, list_id, confident=False):
         """
@@ -502,16 +502,13 @@ class NicoMyList(utils.LogIn):
             return False
 
         res = self.get_response("purge", list_id=list_id)
-        if not res:
+        if res["status"] != "ok":
+            self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
             return False
         else:
-            if res.get("status") == "ok":
-                self.logger.info(Msg.ml_done_purge.format(list_name))
-                del self.mylists[list_id]
-                return True
-            else:
-                self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
-                return False
+            self.logger.info(Msg.ml_done_purge.format(list_name))
+            del self.mylists[list_id]
+            return True
 
     def add(self, list_id, *videoids):
         """
@@ -581,7 +578,7 @@ class NicoMyList(utils.LogIn):
         utils.check_arg(locals())
         list_id_from, list_name_from = self.get_list_id(list_id_from)
         list_id_to, list_name_to = self.get_list_id(list_id_to)
-        if not (list_id_from and list_id_to):
+        if list_id_from is None or list_id_to is None:
             return False
         is_def = (list_id_from == Msg.ml_default_id)
 

@@ -72,8 +72,8 @@ class TestNicodown:
         params.update(kwargs)
         return cond.format(**params).split(" ")
 
-    def test_getthumbinfo_to_file(self):
-        c = "-i -o " + OUTPUT + " {video_id}"
+    def test_getthumbinfo_to_file_with_nonexist_id(self):
+        c = "-i -o " + OUTPUT + " sm1 {video_id}"
         assert nicotools.main(self.param(c))
 
     def test_getthumbinfo_on_screen(self):
@@ -110,6 +110,10 @@ class TestNicodown:
     def test_video(self):
         c = "-v {video_id}"
         nicotools.main(self.param(c, video_id=VIDEO_ID.split(" ")[0]))
+
+    def test_thumbnail(self):
+        c = "-t {video_id}"
+        nicotools.main(self.param(c))
 
     def test_other_directory(self):
         c = "-c {video_id}"
