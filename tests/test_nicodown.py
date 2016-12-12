@@ -9,10 +9,12 @@ import nicotools
 from nicotools.nicodown import GetVideos, GetComments, GetThumbnails, get_infos
 from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir
 
-SAVE_DIR_1 = "./tests/downloads/"
-SAVE_DIR_2 = "./tests/aaaaa"
+SAVE_DIR_1 = "tests/downloads/"
+SAVE_DIR_2 = "tests/aaaaa"
 OUTPUT = "tests/downloads/info.xml"
 INPUT = "tests/ids.txt"
+
+# "N" は一般会員の認証情報、 "P" はプレミアム会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 AUTH_P = (os.getenv("addr_p"), os.getenv("pass_p"))
 
@@ -73,6 +75,9 @@ class TestUtilsError:
             for name in save_dir:
                 with pytest.raises(NameError):
                     make_dir(name)
+        else:
+            with pytest.raises(NameError):
+                make_dir("/{}/downloads".format(__name__))
 
 
 class TestLogin:

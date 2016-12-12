@@ -8,10 +8,13 @@ import nicotools
 from nicotools import nicoml
 from nicotools import utils
 
-SAVE_DIR = "/tests/Downloads/"
+SAVE_DIR = "tests/Downloads/"
 TEST_LIST = "TEST_LIST" + str(datetime.now()).replace(" ", "_").replace(":", "")
 TEST_LIST_TO = "TEST_LIST_TO" + str(datetime.now()).replace(" ", "_").replace(":", "")
+
+# テスト用の一般会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
+
 VIDEO_IDS = " ".join(sorted({
     "watch/sm8628149": "【東方】Bad Apple!!　ＰＶ【影絵】",
     "watch/sm9": "新・豪血寺一族 -煩悩解放 - レッツゴー！陰陽師",
