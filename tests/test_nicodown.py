@@ -1,8 +1,9 @@
 # coding: utf-8
-import os
-import pytest
-
 import logging
+import os
+import shutil
+
+import pytest
 
 import nicotools
 from nicotools.nicodown import GetVideos, GetComments, GetThumbnails, get_infos
@@ -34,6 +35,7 @@ class TestUtils:
         assert get_encoding()
 
     def test_validator(self):
+        assert validator(["*", "sm9", "-d"]) == []
         assert (validator(
             ["*", " http://www.nicovideo.jp/watch/1341499584",
              " sm1234 ", "watch/sm123456",
@@ -45,11 +47,32 @@ class TestUtils:
              "nm1234", "nm123456",
              "so1234", "so123456",
              "123456", "1278053154"])
-        assert validator(["*", "sm9", "-d"]) == []
 
+    def test_make_dir(self):
+        save_dir = ["test", "foo", "foo/bar", "some/thing/text.txt"]
+        paths = [make_dir(name) for name in save_dir]
+        try:
+            for participant, result in zip(save_dir, paths):
+                assert str(result).replace("\\", "/").replace("//", "/").endswith(participant)
+        finally:
+            try:
+                for _parh in {item.split("/")[0] for item in save_dir}:
+                    shutil.rmtree(_parh)
+            except FileNotFoundError:
+                pass
+
+
+class TestUtilsError:
     def test_logger(self):
         with pytest.raises(ValueError):
             NTLogger(log_level=-1)
+
+    def test_make_dir(self):
+        if os.name == "nt":
+            save_dir = ["con", ":"]
+            for name in save_dir:
+                with pytest.raises(NameError):
+                    make_dir(name)
 
 
 class TestLogin:
@@ -82,33 +105,6 @@ class TestNicodown:
         c = "-i {video_id}"
         assert nicotools.main(self.param(c))
 
-    def test_without_commands(self):
-        with pytest.raises(SystemExit):
-            c = "{video_id}"
-            nicotools.main(self.param(c))
-
-    def test_invalid_directory_on_windows(self):
-        if os.name == "nt":
-            c = "-c {video_id}"
-            with pytest.raises(OSError):
-                nicotools.main(self.param(c, save_dir="nul"))
-
-    def test_no_args(self):
-        with pytest.raises(SystemExit):
-            nicotools.main()
-
-    def test_one_arg(self):
-        with pytest.raises(SystemExit):
-            nicotools.main(["download"])
-
-    def test_what_command(self):
-        with pytest.raises(SystemExit):
-            nicotools.main(["download", "-c", "sm9", "-w"])
-
-    def test_invalid_videoid(self):
-        with pytest.raises(SystemExit):
-            nicotools.main(["download", "-c", "sm9", "hello"])
-
     def test_video(self):
         c = "-v {video_id}"
         nicotools.main(self.param(c, video_id=VIDEO_ID.split(" ")[0]))
@@ -132,6 +128,42 @@ class TestNicodown:
     def test_comment_in_xml(self):
         c = "-cx {video_id}"
         nicotools.main(self.param(c))
+
+
+class TestNicodownError:
+    def param(self, cond, **kwargs):
+        cond = "download -u {_mail} -p {_pass} -d {save_dir} " + cond
+        params = {"_mail"   : AUTH_N[0], "_pass": AUTH_N[1],
+                  "save_dir": SAVE_DIR_1, "video_id": VIDEO_ID}
+        params.update(kwargs)
+        return cond.format(**params).split(" ")
+
+    def test_without_commands(self):
+        with pytest.raises(SystemExit):
+            c = "{video_id}"
+            nicotools.main(self.param(c))
+
+    def test_invalid_directory_on_windows(self):
+        if os.name == "nt":
+            c = "-c {video_id}"
+            with pytest.raises(NameError):
+                nicotools.main(self.param(c, save_dir="nul"))
+
+    def test_no_args(self):
+        with pytest.raises(SystemExit):
+            nicotools.main()
+
+    def test_one_arg(self):
+        with pytest.raises(SystemExit):
+            nicotools.main(["download"])
+
+    def test_what_command(self):
+        with pytest.raises(SystemExit):
+            nicotools.main(["download", "-c", "sm9", "-w"])
+
+    def test_invalid_videoid(self):
+        with pytest.raises(SystemExit):
+            nicotools.main(["download", "-c", "sm9", "hello"])
 
 
 class TestComment:
@@ -175,7 +207,6 @@ class TestVideo:
 
 
 def test_okatadsuke():
-    import shutil
     for _parh in (SAVE_DIR_1, SAVE_DIR_2):
         shutil.rmtree(str(make_dir(_parh)))
 

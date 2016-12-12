@@ -1,15 +1,15 @@
 # coding: utf-8
 import html
-import requests
+import socket
 import sys
 import time
 from pathlib import Path
-from requests.adapters import HTTPAdapter
-from requests.exceptions import ConnectTimeout
-from requests.packages.urllib3.exceptions import MaxRetryError
-from requests.packages.urllib3.util.retry import Retry
 from urllib.parse import parse_qs
 from xml.etree import ElementTree
+
+import requests
+from requests.exceptions import Timeout
+from requests.packages.urllib3.exceptions import TimeoutError, RequestError
 
 try:
     import progressbar
@@ -261,7 +261,7 @@ class GetVideos(utils.LogIn, Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
-        self.save_dir = utils.make_dir(save_dir, self.logger)
+        self.save_dir = utils.make_dir(save_dir)
         self.database = database
         self.logger.info(Msg.nd_start_dl_video.format(len(self.database)))
 
@@ -342,68 +342,68 @@ class GetThumbnails(Canopy):
         if not logger or not hasattr(logger, "handlers"):
             self.logger = utils.NTLogger()
 
-    def start(self, database, save_dir):
+    def start(self, database, save_dir, is_large=True):
         """
 
         :param dict[str, dict[str, int | str]] database:
         :param str | Path save_dir:
+        :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool
         """
         utils.check_arg(locals())
         self.database = database
-        self.save_dir = utils.make_dir(save_dir, self.logger)
+        self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_pict.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
                 Msg.nd_download_pict.format(
                     index + 1, len(database), video_id,
                     self.database[video_id][Key.TITLE]))
-            self.download(video_id)
+            self.download(video_id, is_large)
         return True
 
-    def download(self, video_id):
+    def download(self, video_id, is_large=True):
         """
         :param str video_id: 動画ID (e.g. sm1234)
+        :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool
         """
         utils.check_arg(locals())
-        image_data = self._worker(video_id)
+        image_data = self._worker(video_id, is_large)
         if not image_data:
             return False
         return self._saver(video_id, image_data)
 
-    def _worker(self, video_id, is_large=True, retry=1):
+    def _worker(self, video_id, is_large=True):
         """
         サムネイル画像をダウンロードしにいく。
 
         :param str video_id: 動画ID (e.g. sm1234)
-        :param bool is_large: 大きいサイズのサムネイルを取りに行くかどうか
-        :param int retry: 再試行回数
+        :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool | requests.Response
         """
         utils.check_arg(locals())
         with requests.Session() as session:
-            # retry設定
-            retries = Retry(total=retry,
-                            backoff_factor=1,
-                            status_forcelist=[500, 502, 503, 504])
-            session.mount("http://", HTTPAdapter(max_retries=retries))
-
             url = self.database[video_id][Key.THUMBNAIL_URL] + ("", ".L")[is_large]
             try:
-                # connect timeoutを10秒, read timeoutを30秒に設定
+                # connect timeoutを5秒, read timeoutを10秒に設定
                 response = session.get(url=url, timeout=(5.0, 10.0))
-            except (ConnectTimeout, MaxRetryError):
-                self.logger.error(Err.connection_timeout.format(
-                    video_id, self.database[video_id][Key.TITLE]))
-                return False
-            else:
-                # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
-                if response.status_code == 404 and is_large:
-                    return self._worker(video_id, is_large=False)
-                elif response.ok:
+                if response.ok:
                     return response
+                # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
+                if response.status_code == 404:
+                    if is_large:
+                        return self._worker(video_id, is_large=False)
+                    else:
+                        self.logger.error(Err.connection_404.format(
+                            video_id, self.database[video_id][Key.TITLE]))
+                        return False
+            except (TypeError, ConnectionError, socket.timeout, Timeout, TimeoutError, RequestError):
+                if is_large:
+                    return self._worker(video_id, is_large=False)
                 else:
+                    self.logger.error(Err.connection_timeout.format(
+                        video_id, self.database[video_id][Key.TITLE]))
                     return False
 
     def _saver(self, video_id, image_data):
@@ -434,7 +434,7 @@ class GetComments(utils.LogIn, Canopy):
         """
         utils.check_arg(locals())
         self.database = database
-        self.save_dir = utils.make_dir(save_dir, self.logger)
+        self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.database)))
         for index, video_id in enumerate(self.database.keys()):
             self.logger.info(
@@ -664,7 +664,7 @@ def main(args):
     logger = utils.NTLogger(log_level=args.loglevel, file_name=utils.LOG_FILE_ND)
     destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
     if destination:
-        destination = utils.make_dir(destination, logger)
+        destination = utils.make_dir(destination)
     database = get_infos(videoid, logger=logger)
 
     res_t = False

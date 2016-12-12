@@ -83,33 +83,23 @@ def validator(input_list):
             for item in input_list if matcher(item) or ALL_ITEM in item]
 
 
-def make_dir(directory, logger=None):
+def make_dir(directory):
     """
     保存場所に指定されたフォルダーがない場合にはつくり、その絶対パスを返す。
 
-    :param str | Path | None directory: フォルダー名
-    :param T <= logging.logger | None logger:
+    :param str | Path directory: フォルダー名
     :rtype: Path
     """
     if isinstance(directory, str):
         directory = Path(directory)
+    if directory.suffix:
+        return make_dir(directory.parent) / directory.name
     try:
-        return directory.resolve()
-    except FileNotFoundError:
         if not directory.is_dir():
-            if directory.suffix:
-                if not directory.parent.is_dir():
-                    directory.parent.mkdir(parents=True)
-                return directory.parent.resolve() / directory.name
-            else:
-                directory.mkdir(parents=True)
+            directory.mkdir(parents=True)
         return directory.resolve()
-    except OSError:
-        if logger:
-            logger.error(Err.invalid_dirname.format(directory))
-        else:
-            print(Err.invalid_dirname.format(directory))
-        raise
+    except (OSError, FileNotFoundError, NotADirectoryError, PermissionError):
+        raise NameError(Err.invalid_dirname.format(directory))
 
 
 def check_arg(parameters):
@@ -261,6 +251,7 @@ class Err:
     invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
                       "http://www.nicovideo.jp/watch/sm1234," \
                       " sm1234, nm1234, so1234, 123456, watch/123456"
+    connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
     connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"

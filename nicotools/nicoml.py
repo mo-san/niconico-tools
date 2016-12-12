@@ -799,7 +799,7 @@ class NicoMyList(utils.LogIn):
         """
         utils.check_arg({"list_id": list_id, "table": table, "survey": survey})
         if file_name:
-            file_name = utils.make_dir(file_name, self.logger)
+            file_name = utils.make_dir(file_name)
         if table:  # 表形式の場合
             if list_id == utils.ALL_ITEM:
                 if survey:
@@ -829,7 +829,7 @@ class NicoMyList(utils.LogIn):
         """
         utils.check_arg({"list_id": list_id, "survey": survey})
         if file_name:
-            file_name = utils.make_dir(file_name, self.logger)
+            file_name = utils.make_dir(file_name)
         if list_id == utils.ALL_ITEM:
             if survey:
                 cont = self._construct_id(self.fetch_all(False))
@@ -947,7 +947,7 @@ class NicoMyList(utils.LogIn):
         if text is None:
             return False
         if file_name:
-            file_name = utils.make_dir(file_name, self.logger)
+            file_name = utils.make_dir(file_name)
             with file_name.open(mode="w", encoding="utf-8") as fd:
                 fd.write("{}\n".format(text))
             self.logger.info(Msg.ml_exported.format(file_name))
