@@ -138,30 +138,29 @@ class NicoMyList(utils.LogIn):
         :rtype: bool
         """
         try:
-            reason = res["error"]
-            if (reason["code"] == Err.INTERNAL or
-                        reason["code"] == Err.MAINTENANCE):
-                self.logger.error(Err.known_error.format(video_id, reason["description"]))
-                return False
-            elif reason["code"] == Err.MAXERROR:
-                self.logger.error(Err.over_load.format(list_name))
-                return False
-            elif reason["code"] == Err.EXIST:
-                title = self.get_title(video_id)
-                self.logger.error(Err.already_exist.format(video_id, title))
-                return True
-            elif reason["code"] == Err.NONEXIST:
-                self.logger.error(Err.item_not_contained.format(list_name, video_id))
-                return True
-            elif hasattr(Err, reason["code"]):
-                self.logger.error(Err.known_error.format(video_id, reason["description"]))
-                return True
-            else:
-                return False
+            code = res["error"]["code"]
+            description = res["error"]["description"]
         except KeyError:
             self.logger.error(Err.unknown_error_itemid.format(
                 count_now, count_whole, video_id, res))
             return False
+        else:
+            if code == Err.INTERNAL or code == Err.MAINTENANCE:
+                self.logger.error(Err.known_error.format(video_id, code, description))
+                return False
+            elif code == Err.MAXERROR:
+                self.logger.error(Err.over_load.format(list_name))
+                return False
+            elif code == Err.EXIST:
+                title = self.get_title(video_id)
+                self.logger.error(Err.already_exist.format(video_id, title))
+                return True
+            elif code == Err.NONEXIST:
+                self.logger.error(Err.item_not_contained.format(list_name, video_id))
+                return True
+            else:
+                self.logger.error(Err.known_error.format(video_id, code, description))
+                return True
 
     def get_mylist_ids(self):
         """

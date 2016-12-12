@@ -2,6 +2,8 @@
 import os
 import pytest
 
+import logging
+
 import nicotools
 from nicotools.nicodown import GetVideos, GetComments, GetThumbnails, get_infos
 from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir
@@ -24,7 +26,7 @@ VIDEO_ID = " ".join({
     "watch/1278053154": "「カラフル×メロディ」　オリジナル曲　vo.初音ミク＆鏡音リン【Project DIVA 2nd】",
     "http://www.nicovideo.jp/watch/1341499584": "【sasakure.UK×DECO*27】39【Music Video】",
 })
-LOGGER = NTLogger()
+LOGGER = NTLogger(log_level=logging.DEBUG)
 
 
 class TestUtils:
