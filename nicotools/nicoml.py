@@ -1,6 +1,7 @@
 # coding: UTF-8
 import html
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
@@ -14,6 +15,7 @@ except ImportError:
 from . import utils
 from .utils import Msg, Err, URL, Key, MKey
 # TODO: purifyコマンド
+IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
 class NicoMyList(utils.LogIn):

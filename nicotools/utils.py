@@ -1,5 +1,6 @@
 # coding: utf-8
 import logging
+import os
 import pickle
 import re
 import requests
@@ -8,6 +9,9 @@ from getpass import getpass
 from os.path import join, expanduser
 from pathlib import Path
 import sys
+
+
+IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
 def get_encoding():

@@ -1,5 +1,7 @@
 # coding: utf-8
 import html
+import os
+
 import requests
 import sys
 import time
@@ -33,6 +35,8 @@ from .utils import Msg, Err, URL, Key
     ログ出力の詳細さを変える:
         nicodown --loglevel WARNING  # エラー以外表示しない
 """
+
+IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
 def print_info(queue, file_name=None):
