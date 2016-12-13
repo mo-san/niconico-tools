@@ -4,11 +4,30 @@ import os
 import pickle
 import re
 import requests
-from argparse import ArgumentParser, HelpFormatter
+import sys
+from argparse import ArgumentParser
 from getpass import getpass
 from os.path import join, expanduser
 from pathlib import Path
-import sys
+
+ALL_ITEM = "*"
+LOG_FILE_ND = "nicotools_download.log"
+LOG_FILE_ML = "nicotools_mylist.log"
+IS_DEBUG = int(os.getenv("PYTHON_TEST"))
+if IS_DEBUG:
+    import inspect
+    os_name = os.getenv("TRAVIS_OS_NAME", os.name)
+    version = (os.getenv("TRAVIS_PYTHON_VERSION") or
+               os.getenv("PYTHON_VERSION") or
+               "_" .join(map(str, sys.version_info[0:3])))
+    COOKIE_FILE_NAME = "nicotools_cokkie_{0}_{1}".format(os_name, version)
+else:
+    COOKIE_FILE_NAME = "nicotools_cookie.pickle"
+
+# 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか
+BACKSLASH = "backslashreplace"
+CHARREF = "xmlcharrefreplace"
+REPLACE = "replace"
 
 
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
@@ -30,6 +49,7 @@ def validator(input_list):
     受け入れるのは以下の形式:
         * "*"
         * http://www.nicovideo.jp/watch/sm123456
+        * http://nico.ms/sm123456
         * sm1234
         * watch/sm123456
         * nm1234
@@ -44,13 +64,13 @@ def validator(input_list):
     """
     matcher = re.compile(
         """\s*(?:
-        \*|  # 「全て」を指定するときの記号
+        {0}|  # 「全て」を指定するときの記号
         (?:
             (?:(?:h?t?tp://)?www\.nicovideo\.jp/)?watch/  # 通常URL
            |(?:h?t?tp://)?nico\.ms/  # 短縮URL
         )?
-            ((?:sm|nm|so)?[0-9]{1,9})  # ID本体
-        )\s?""", re.I + re.X).match
+            ((?:sm|nm|so)?[0-9]+)  # ID本体
+        )\s?""".format(re.escape(ALL_ITEM)), re.I + re.X).match
 
     if "\t" in input_list[0]:
         for line in input_list[1:]:
@@ -58,44 +78,33 @@ def validator(input_list):
                 return []
         input_list = [item.split("\t")[0] for item in input_list]
     else:
-        if input_list == ["*"]:
+        if input_list == [ALL_ITEM]:
             return input_list
         for item in input_list:
             if not matcher(item):
                 return []
 
-    return [matcher(item).group(1) or "*" for item in input_list if matcher(item) or item == "*"]
+    return [matcher(item).group(1) or item.strip()
+            for item in input_list if matcher(item) or ALL_ITEM in item]
 
 
-def make_dir(directory, logger=None):
+def make_dir(directory):
     """
     保存場所に指定されたフォルダーがない場合にはつくり、その絶対パスを返す。
 
-    :param str | Path | None directory: フォルダー名
-    :param T <= logging.logger logger:
+    :param str | Path directory: フォルダー名
     :rtype: Path
     """
-    if directory is None:
-        return None
     if isinstance(directory, str):
         directory = Path(directory)
+    if directory.suffix:
+        return make_dir(directory.parent) / directory.name
     try:
-        return directory.resolve()
-    except FileNotFoundError:
         if not directory.is_dir():
-            if directory.suffix:
-                if not directory.parent.is_dir():
-                    directory.parent.mkdir(parents=True)
-                return directory.parent.resolve() / directory.name
-            else:
-                directory.mkdir(parents=True)
+            directory.mkdir(parents=True)
         return directory.resolve()
-    except OSError:
-        if logger:
-            logger.error(Err.invalid_dirname.format(directory))
-        else:
-            print(Err.invalid_dirname.format(directory))
-        return None
+    except (OSError, FileNotFoundError, NotADirectoryError, PermissionError):
+        raise NameError(Err.invalid_dirname.format(directory))
 
 
 def check_arg(parameters):
@@ -106,7 +115,15 @@ def check_arg(parameters):
     """
     for _name, _value in parameters.items():
         if _value is None:
-            sys.exit(Err.not_specified.format(_name))
+            raise ValueError(Err.not_specified.format(_name))
+
+
+class MylistError(Exception):
+    pass
+
+
+class MylistNotFoundError(MylistError):
+    pass
 
 
 class URL:
@@ -142,16 +159,6 @@ class URL:
 class Msg:
     """メッセージ集"""
 
-    LOG_FILE_ND = "nicotools_download.log"
-    LOG_FILE_ML = "nicotools_mylist.log"
-    COOKIE_FILE_NAME = "nicotools_cookie.pickle"
-    ALL_ITEM = "*"
-
-    ''' 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか '''
-    BACKSLASH = "backslashreplace"
-    CHARREF = "xmlcharrefreplace"
-    REPLACE = "replace"
-
     ''' マイリスト編集コマンドのヘルプメッセージ '''
     ml_default_name = "とりあえずマイリスト"
     ml_default_id = 0
@@ -182,7 +189,7 @@ class Msg:
     ml_help_yes = "これを指定すると、マイリスト自体の削除や" \
                   "マイリスト内の全項目の削除の時に確認しません。"
 
-    '''動画ダウンロードコマンドのヘルプメッセージ'''
+    ''' 動画ダウンロードコマンドのヘルプメッセージ '''
     nd_description = "ニコニコ動画のデータを ダウンロードします。"
     nd_help_video_id = "ダウンロードしたい動画ID。 例: sm12345678 " \
                        "テキストファイルも指定できます。 その場合はファイル名の " \
@@ -206,9 +213,9 @@ class Msg:
     ''' ログに書くメッセージ '''
     nd_start_download = "{0} 件の動画の情報を取りに行きます。"
     nd_download_done = "{0} に保存しました。"
-    nd_download_video = "({0}/{1}) ID: {2} (タイトル: {3}) の動画をダウンロードします。"
-    nd_download_pict = "({0}/{1}) ID: {2} (タイトル: {3}) のサムネイルをダウンロードします。"
-    nd_download_comment = "({0}/{1}) ID: {2} (タイトル: {3}) のコメントをダウンロードします。"
+    nd_download_video = "({0}/{1}) ID: {2} (タイトル:{3}) の動画をダウンロードします。"
+    nd_download_pict = "({0}/{1}) ID: {2} (タイトル:{3}) のサムネイルをダウンロードします。"
+    nd_download_comment = "({0}/{1}) ID: {2} (タイトル:{3}) のコメントをダウンロードします。"
     nd_start_dl_video = "{0} 件の動画をダウンロードします。"
     nd_start_dl_pict = "{0} 件のサムネイルをダウンロードします。"
     nd_start_dl_comment = "{0} 件のコメントをダウンロードします。"
@@ -216,7 +223,7 @@ class Msg:
     nd_video_url_is = "{0} の動画URL: {1}"
     nd_deleted_or_private = "{0} は削除されているか、非公開です。"
 
-    ml_exported = "{0} に出力しました"
+    ml_exported = "{0} に出力しました。"
     ml_items_counts = "含まれる項目の数:"
     ml_fetching_mylist_id = "マイリスト: {0} の ID を問い合わせています..."
     ml_showing_mylist = "マイリスト「{0}」の詳細を読み込んでいます..."
@@ -239,13 +246,15 @@ class Msg:
 
     ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
     ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
-    ml_will_copyormove = "[作業内容:{0}] {1} から {2} へ, 動画ID: {3}"
+    ml_will_copy = "[作業内容:コピー] {0} から {1} へ, 動画ID: {2}"
+    ml_will_move = "[作業内容:移動] {0} から {1} へ, 動画ID: {2}"
     ml_will_purge = "[作業内容:マイリスト削除] マイリスト「{0}」を完全に削除します。"
 
 
 class Err:
     """ エラーメッセージ """
 
+    waiting_for_permission = "アクセス制限が解除されるのを待っています…"
     name_replaced = "作成しようとした名前「{0}」は特殊文字を含むため、" \
                     "「{1}」に置き換わっています。"
     cant_create = "この名前のマイリストは作成できません。"
@@ -256,12 +265,12 @@ class Err:
     invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
                       "http://www.nicovideo.jp/watch/sm1234," \
                       " sm1234, nm1234, so1234, 123456, watch/123456"
+    connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
     connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"
-    videoid_contains_all = "通常の動画IDと * を混ぜないでください。"
+    videoids_contain_all = "通常の動画IDと * を混ぜないでください。"
     list_names_are_same = "[エラー] 発信元と受信先の名前が同じです。"
-    cant_move_to_deflist = "[エラー] とりあえずマイリストには移動もコピーもできません。"
     cant_perform_all = "[エラー] このコマンドに * は指定できません。"
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
     no_commands = "[エラー] コマンドを指定してください。"
@@ -275,14 +284,14 @@ class Err:
     over_load = "[エラー] {0} にはこれ以上追加できません。"
     remaining = "以下の項目は処理されませんでした: {0}"
     already_exist = "[エラー]すでに存在しています。 ID: {0} (タイトル: {1})"
-    known_error = "[エラー] 動画: {0} サーバーからの返事: {1}"
+    known_error = "[エラー] 動画: {0}, コード: {}, 内容: {1}"
     unknown_error_itemid = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
     invalid_spec = "[エラー] {0} は不正です。マイリストの名前またはIDは" \
                    "文字列か整数で入力してください。"
-    no_items = "[エラー] 動画が1件も登録されていません。"
+    no_items = "[エラー] 指定した動画はいずれもこのマイリストには登録されていません。"
 
     '''
     APIから返ってくるエラーメッセージ
@@ -321,7 +330,7 @@ class LogIn:
         """
         :param str | None mail: メールアドレス
         :param str | None password: パスワード
-        :param T <= logging.logger | None logger:
+        :param NTLogger | None logger:
         :param requests.Session | None session: セッションオブジェクト
         """
         self.logger = self.get_logger(logger)
@@ -331,15 +340,15 @@ class LogIn:
         elif session and not (mail or password):
             self.session = session
         else:
-            _auth = self.ask_credentials(mail=mail, password=password)
+            _auth = self._ask_credentials(mail=mail, password=password)
             self.session = self.get_session(_auth, force_login=True)
         self.token = self.get_token(self.session)
 
     def get_logger(self, logger):
         """
 
-        :param T <= logging.logger logger:
-        :rtype: T <= logging.logger
+        :param NTLogger logger:
+        :rtype: NTLogger
         """
         if not (logger and hasattr(logger, "handlers")):
             return NTLogger()
@@ -355,31 +364,37 @@ class LogIn:
         :rtype: requests.Session
         """
 
-        def we_are_logged_in(_res):
-            if "<title>niconico</title>" in _res.text:
-                return True
-            elif "ログイン - niconico</title>" in _res.text:
-                print(Err.invalid_auth)
-                return False
-            else:
-                print("Couldn't determine whether we could log in."
-                      " This is the returned HTML:\n{0}".format(_res.text))
-                # self.logger.debug(res.headers["x-niconico-id"])
-                return False
-
         session = requests.session()
         if force_login:
             res = session.post(URL.URL_LogIn, params=auth)
-            if we_are_logged_in(res):
+            if self._we_are_logged_in(res.text):
                 self.save_cookies(session.cookies)
                 self.is_login = True
             else:
-                return self.get_session(self.ask_credentials(), force_login=True)
+                return self.get_session(self._ask_credentials(), force_login=True)
         else:
             cook = self.load_cookies()
             if cook:
                 session.cookies = cook
         return session
+
+    def _we_are_logged_in(self, response):
+        """
+
+        :param str response:
+        :rtype: bool
+        """
+        # 成功したとき
+        if "<title>niconico</title>" in response:
+            return True
+        # 失敗したとき
+        elif "ログイン - niconico</title>" in response:
+            print(Err.invalid_auth)
+            return False
+        else:
+            print("Couldn't determine whether we could log in."
+                  " This is the returned HTML:\n{0}".format(response))
+            return False
 
     def get_token(self, session):
         """
@@ -393,11 +408,11 @@ class LogIn:
             fragment = htmltext.split("NicoAPI.token = \"")[1]
             return fragment[:fragment.find("\"")]
         except IndexError:
-            session = self.get_session(self.ask_credentials(), force_login=True)
+            session = self.get_session(self._ask_credentials(), force_login=True)
             return self.get_token(session)
 
     @classmethod
-    def ask_credentials(cls, mail=None, password=None):
+    def _ask_credentials(cls, mail=None, password=None):
         """
         メールアドレスとパスワードをユーザーに求める。
 
@@ -427,7 +442,7 @@ class LogIn:
         }
 
     @classmethod
-    def save_cookies(cls, requests_cookiejar, file_name=Msg.COOKIE_FILE_NAME):
+    def save_cookies(cls, requests_cookiejar, file_name=COOKIE_FILE_NAME):
         """
         クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
 
@@ -439,7 +454,7 @@ class LogIn:
             pickle.dump(requests_cookiejar, fd)
 
     @classmethod
-    def load_cookies(cls, file_name=Msg.COOKIE_FILE_NAME):
+    def load_cookies(cls, file_name=COOKIE_FILE_NAME):
         """
         クッキーを読み込む。
 
@@ -454,21 +469,27 @@ class LogIn:
 
 
 class NTLogger(logging.Logger):
-    def __init__(self, file_name=Msg.LOG_FILE_ND, name=__name__, log_level=logging.INFO):
+    def __init__(self, file_name=LOG_FILE_ND, name=__name__, log_level=logging.INFO):
         """
+        ログ出力のためのクラス。
+
         :param str | Path | None file_name:
         :param str name:
         :param str | int log_level:
         """
-        if isinstance(log_level, (str, int)):
-            log_level = logging.getLevelName(log_level)
-        else:
-            raise ValueError("Invalid Logging Level. You Entered: %s", log_level)
+        if not isinstance(log_level, (str, int)):
+            raise ValueError("Invalid Logging Level: {}".format(log_level))
 
-        self.enco = get_encoding()
+        log_level = logging.getLevelName(log_level)
         self.log_level = log_level
-        formatter = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
+        if (IS_DEBUG or
+            isinstance(log_level, str) and log_level == "DEBUG" or
+            isinstance(log_level, int) and log_level <= logging.DEBUG):
+            self._is_debug = True
+        else:
+            self._is_debug = False
 
+        formatter = self.get_formatter()
         logging.Logger.__init__(self, name, log_level)
         self.logger = logging.getLogger(name=name)
 
@@ -490,9 +511,24 @@ class NTLogger(logging.Logger):
             log_file.setFormatter(formatter)
             self.addHandler(log_file)
 
+    def get_formatter(self):
+        if self._is_debug:
+            fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
+        else:
+            fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
+        return fmt
+
     def forwarding(self, level, msg, *args, **kwargs):
-        _msg = msg.encode(self.enco, Msg.BACKSLASH).decode(self.enco)
-        _args = tuple([item.encode(self.enco, Msg.BACKSLASH).decode(self.enco)
+        _enco = get_encoding()
+        if self._is_debug:
+            # ログを呼び出した関数の名前をつなげる
+            funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
+            if level <= logging.DEBUG:
+                msg = funcs + "]\t" + msg
+            else:
+                msg = funcs + "]\t\t" + msg
+        _msg = msg.encode(_enco, BACKSLASH).decode(_enco)
+        _args = tuple([item.encode(_enco, BACKSLASH).decode(_enco)
                        if isinstance(item, str) else item for item in args[0]])
         self._log(level, _msg, _args, **kwargs)
 
@@ -551,6 +587,21 @@ class Key:
     WATCH_URL       = "watch_url"
 
 
+class KeyGetFlv:
+    THREAD_ID       = "thread_id"
+    LENGTH          = "l"
+    VIDEO_URL       = "url"
+    MSG_SERVER      = "ms"
+    MSG_SUB  = "ms_sub"
+    USER_ID         = "user_id"
+    IS_PREMIUM      = "is_premium"
+    NICKNAME        = "nickname"
+    USER_KEY        = "userkey"
+
+    OPT_THREAD_ID   = "optional_thread_id"
+    NEEDS_KEY       = "needs_key"
+
+
 class MKey:
     ID = "id"
     NAME = "name"
@@ -587,13 +638,3 @@ class InheritedParser(ArgumentParser):
 
         # return the modified argument list
         return new_arg_strings
-
-    def __init__(self, prog=None, usage=None, description=None,
-                 epilog=None, parents=None, formatter_class=HelpFormatter,
-                 prefix_chars='-', fromfile_prefix_chars=None,
-                 argument_default=None, conflict_handler='error',
-                 add_help=True, allow_abbrev=True):
-        if parents is None:
-            parents = []
-        super().__init__(prog, usage, description, epilog, parents, formatter_class, prefix_chars,
-                         fromfile_prefix_chars, argument_default, conflict_handler, add_help, allow_abbrev)

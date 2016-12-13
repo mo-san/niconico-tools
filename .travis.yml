@@ -3,10 +3,14 @@ language: python
 python:
   - "3.4"
   - "3.5"
+  - "3.6-dev"
+
+os:
+  - linux
 
 # command to install dependencies
 install:
-  - pip install requests progressbar2 prettytable pytest pytest-catchlog coverage
+  - pip install requests progressbar2 prettytable pytest pytest-catchlog codecov pytest-cov
   - pip install -e .
 
 env:
@@ -14,17 +18,23 @@ env:
 
 # command to run tests
 script:
- - py.test tests/test_nicodown.py -v
- - py.test tests/test_nicoml.py -v
+  - py.test --cov=./
 
 
 after_success:
-  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicodown.py
-  - coverage run --branch --omit="nicotools/stubs/*" tests/test_nicoml.py
-  - coverage html -d "tests/coverage/"
+  - bash <(curl -s https://codecov.io/bash)
+
+after_script:
+  - chmod +x tests/travis.sh
+  - tests/travis.sh
 
 notifications:
   email:
     recipients:
       - window100@gmail.com
     on_success: always
+
+branches:
+  only:
+  - master
+  - develop

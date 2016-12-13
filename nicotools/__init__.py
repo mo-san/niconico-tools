@@ -58,19 +58,13 @@ def main(arguments=None):
     group_two.add_argument("-e", "--export", action="count", help=Msg.ml_help_export)
     group_two.add_argument("--everything", action="store_true", help=Msg.ml_help_everything)
 
-    args = parser.parse_args(arguments)
-    if len(sys.argv) <= 2 and not int(os.getenv("PYTHON_TEST")) == 1:
-        parser.print_help()
-        sys.exit()
+    args = parser.parse_args(globals().get("DEBUG_ARGS") or arguments)
+    if len(sys.argv) <= 1 and not int(os.getenv("PYTHON_TEST")):
+        parser.print_help() or sys.exit()
     if args.what:
-        print(args)
-        sys.exit()
+        print(args) or sys.exit()
 
     try:
         return args.func(args)
     except KeyboardInterrupt:
         sys.exit(Err.keyboard_interrupt)
-
-if __name__ == "__main__":
-    _ = globals().get("DEBUG_ARGS")
-    main(_)
