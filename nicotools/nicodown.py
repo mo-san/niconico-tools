@@ -1,5 +1,6 @@
 # coding: utf-8
 import html
+import os
 import socket
 import sys
 import time
@@ -34,6 +35,8 @@ from .utils import Msg, Err, URL, Key, KeyGetFlv
     ログ出力の詳細さを変える:
         nicodown --loglevel WARNING  # エラー以外表示しない
 """
+
+IS_DEBUG = int(os.getenv("PYTHON_TEST"))
 
 
 def print_info(queue, file_name=None):
@@ -238,7 +241,7 @@ class GetVideos(utils.LogIn, Canopy):
 
         :param str | None mail:
         :param str | None password:
-        :param T <= logging.logger logger:
+        :param NTLogger logger:
         :param requests.Session session:
         """
         super().__init__(mail=mail, password=password, logger=logger, session=session)
@@ -335,7 +338,7 @@ class GetVideos(utils.LogIn, Canopy):
 class GetThumbnails(Canopy):
     def __init__(self, logger=None):
         """
-        :param T <= logging.logger logger:
+        :param NTLogger logger:
         """
         super().__init__()
         self.logger = logger
@@ -420,7 +423,7 @@ class GetComments(utils.LogIn, Canopy):
         """
         :param str | None mail:
         :param str | None password:
-        :param T <= logging.logger logger:
+        :param NTLogger logger:
         :param requests.Session session:
         """
         super().__init__(mail=mail, password=password, logger=logger, session=session)
@@ -661,7 +664,8 @@ def main(args):
         return print_info(videoid, file_name)
 
     """ 本筋 """
-    logger = utils.NTLogger(log_level=args.loglevel, file_name=utils.LOG_FILE_ND)
+    log_level = "DEBUG" if IS_DEBUG else args.loglevel
+    logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
     destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
     if destination:
         destination = utils.make_dir(destination)

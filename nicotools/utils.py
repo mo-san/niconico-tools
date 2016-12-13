@@ -13,7 +13,9 @@ from pathlib import Path
 ALL_ITEM = "*"
 LOG_FILE_ND = "nicotools_download.log"
 LOG_FILE_ML = "nicotools_mylist.log"
-if os.getenv("PYTHON_TEST"):
+IS_DEBUG = int(os.getenv("PYTHON_TEST"))
+if IS_DEBUG:
+    import inspect
     os_name = os.getenv("TRAVIS_OS_NAME", os.name)
     version = (os.getenv("TRAVIS_PYTHON_VERSION") or
                os.getenv("PYTHON_VERSION") or
@@ -111,6 +113,14 @@ def check_arg(parameters):
     for _name, _value in parameters.items():
         if _value is None:
             raise ValueError(Err.not_specified.format(_name))
+
+
+class MylistError(Exception):
+    pass
+
+
+class MylistNotFoundError(MylistError):
+    pass
 
 
 class URL:
@@ -233,7 +243,8 @@ class Msg:
 
     ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
     ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
-    ml_will_copyormove = "[作業内容:{0}] {1} から {2} へ, 動画ID: {3}"
+    ml_will_copy = "[作業内容:コピー] {0} から {1} へ, 動画ID: {2}"
+    ml_will_move = "[作業内容:移動] {0} から {1} へ, 動画ID: {2}"
     ml_will_purge = "[作業内容:マイリスト削除] マイリスト「{0}」を完全に削除します。"
 
 
@@ -255,9 +266,8 @@ class Err:
     connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"
-    videoid_contains_all = "通常の動画IDと * を混ぜないでください。"
+    videoids_contain_all = "通常の動画IDと * を混ぜないでください。"
     list_names_are_same = "[エラー] 発信元と受信先の名前が同じです。"
-    cant_move_to_deflist = "[エラー] とりあえずマイリストには移動もコピーもできません。"
     cant_perform_all = "[エラー] このコマンドに * は指定できません。"
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
     no_commands = "[エラー] コマンドを指定してください。"
@@ -278,7 +288,7 @@ class Err:
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
     invalid_spec = "[エラー] {0} は不正です。マイリストの名前またはIDは" \
                    "文字列か整数で入力してください。"
-    no_items = "[エラー] 動画が1件も登録されていません。"
+    no_items = "[エラー] 指定した動画はいずれもこのマイリストには登録されていません。"
 
     '''
     APIから返ってくるエラーメッセージ
@@ -317,7 +327,7 @@ class LogIn:
         """
         :param str | None mail: メールアドレス
         :param str | None password: パスワード
-        :param T <= logging.logger | None logger:
+        :param NTLogger | None logger:
         :param requests.Session | None session: セッションオブジェクト
         """
         self.logger = self.get_logger(logger)
@@ -327,15 +337,15 @@ class LogIn:
         elif session and not (mail or password):
             self.session = session
         else:
-            _auth = self.ask_credentials(mail=mail, password=password)
+            _auth = self._ask_credentials(mail=mail, password=password)
             self.session = self.get_session(_auth, force_login=True)
         self.token = self.get_token(self.session)
 
     def get_logger(self, logger):
         """
 
-        :param T <= logging.logger logger:
-        :rtype: T <= logging.logger
+        :param NTLogger logger:
+        :rtype: NTLogger
         """
         if not (logger and hasattr(logger, "handlers")):
             return NTLogger()
@@ -358,7 +368,7 @@ class LogIn:
                 self.save_cookies(session.cookies)
                 self.is_login = True
             else:
-                return self.get_session(self.ask_credentials(), force_login=True)
+                return self.get_session(self._ask_credentials(), force_login=True)
         else:
             cook = self.load_cookies()
             if cook:
@@ -395,11 +405,11 @@ class LogIn:
             fragment = htmltext.split("NicoAPI.token = \"")[1]
             return fragment[:fragment.find("\"")]
         except IndexError:
-            session = self.get_session(self.ask_credentials(), force_login=True)
+            session = self.get_session(self._ask_credentials(), force_login=True)
             return self.get_token(session)
 
     @classmethod
-    def ask_credentials(cls, mail=None, password=None):
+    def _ask_credentials(cls, mail=None, password=None):
         """
         メールアドレスとパスワードをユーザーに求める。
 
@@ -458,20 +468,33 @@ class LogIn:
 class NTLogger(logging.Logger):
     def __init__(self, file_name=LOG_FILE_ND, name=__name__, log_level=logging.INFO):
         """
+        ログ出力のためのクラス。
+
         :param str | Path | None file_name:
         :param str name:
         :param str | int log_level:
         """
-        if isinstance(log_level, (str, int)):
-            log_level = logging.getLevelName(log_level)
+
+        if isinstance(log_level, str):
+            log_level_num = logging.getLevelName(log_level)
+            log_level_name = logging.getLevelName(log_level_num)
+        elif isinstance(log_level, int):
+            log_level_name = logging.getLevelName(log_level)
+            log_level_num = logging.getLevelName(log_level_name)
         else:
             raise ValueError("Invalid Logging Level. You Entered: %s", log_level)
 
-        self.enco = get_encoding()
         self.log_level = log_level
-        formatter = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
+        self.log_level_name = log_level_name  # type: str
+        self.log_level_num = log_level_num  # type: int
+        formatter = self.get_formatter(log_level_num)
 
-        logging.Logger.__init__(self, name, log_level)
+        if log_level_num <= logging.DEBUG:
+            self._is_debug = True
+        else:
+            self._is_debug = False
+
+        logging.Logger.__init__(self, name, log_level_name)
         self.logger = logging.getLogger(name=name)
 
         # 標準出力用ハンドラー
@@ -492,9 +515,24 @@ class NTLogger(logging.Logger):
             log_file.setFormatter(formatter)
             self.addHandler(log_file)
 
+    def get_formatter(self, level):
+        if level <= logging.DEBUG:
+            fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
+        else:
+            fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
+        return fmt
+
     def forwarding(self, level, msg, *args, **kwargs):
-        _msg = msg.encode(self.enco, BACKSLASH).decode(self.enco)
-        _args = tuple([item.encode(self.enco, BACKSLASH).decode(self.enco)
+        _enco = get_encoding()
+        if self._is_debug:
+            # ログを呼び出した関数の名前をつなげる
+            funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
+            if level <= logging.DEBUG:
+                msg = funcs + "]\t" + msg
+            else:
+                msg = funcs + "]\t\t" + msg
+        _msg = msg.encode(_enco, BACKSLASH).decode(_enco)
+        _args = tuple([item.encode(_enco, BACKSLASH).decode(_enco)
                        if isinstance(item, str) else item for item in args[0]])
         self._log(level, _msg, _args, **kwargs)
 
