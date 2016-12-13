@@ -181,6 +181,7 @@ class Canopy:
         :param str ext:
         :rtype: Path
         """
+        utils.check_arg(locals())
         file_name =  Msg.nd_file_name.format(
             video_id, self.database[video_id][Key.FILE_NAME], ext)
         return Path(self.save_dir).resolve() / file_name
@@ -212,8 +213,10 @@ class Canopy:
         :param requests.Session session:
         :rtype: dict[str, str] | None
         """
+        utils.check_arg(locals())
         suffix = {"as3": 1} if video_id.startswith("nm") else None
         response = session.get(URL.URL_GetFlv + video_id, params=suffix)
+        # self.logger.debug("GetFLV Response: {}".format(response.text))
         parameters = parse_qs(response.text)
         if parameters.get("error") is not None:
             return None
@@ -264,6 +267,8 @@ class GetVideos(utils.LogIn, Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
+        self.logger.debug("Directory to save in: {}".format(save_dir))
+        self.logger.debug("Dictionary of Videos: {}".format(database))
         self.save_dir = utils.make_dir(save_dir)
         self.database = database
         self.logger.info(Msg.nd_start_dl_video.format(len(self.database)))
@@ -289,6 +294,8 @@ class GetVideos(utils.LogIn, Canopy):
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             db[Key.V_OR_T_ID] = redirected
+        self.logger.debug("Video ID and its Thread ID (of officials):"
+                          " {}".format(video_id, db[Key.V_OR_T_ID]))
 
         response = self.get_from_getflv(db[Key.V_OR_T_ID], self.session)
 
@@ -298,6 +305,8 @@ class GetVideos(utils.LogIn, Canopy):
             file_size = db[Key.SIZE_HIGH]
         else:
             file_size = db[Key.SIZE_LOW]
+        self.logger.debug("Estimated File Size: {}"
+                          " (Premium: {})".format(file_size, [False, True][int(is_premium)]))
 
         # 動画視聴ページに行ってCookieをもらってくる
         self.session.get(URL.URL_Watch + video_id)
@@ -315,6 +324,7 @@ class GetVideos(utils.LogIn, Canopy):
         :rtype: bool
         """
         file_path = self.make_name(video_id, self.database[video_id][Key.MOVIE_TYPE])
+        self.logger.debug("File Path: {}".format(file_path))
 
         # connect timeoutを10秒, read timeoutを30秒に設定
         if progressbar is None:
@@ -354,6 +364,8 @@ class GetThumbnails(Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
+        self.logger.debug("Directory to save in: {}".format(save_dir))
+        self.logger.debug("Dictionary of Videos: {}".format(database))
         self.database = database
         self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_pict.format(len(self.database)))
@@ -401,7 +413,9 @@ class GetThumbnails(Canopy):
                         self.logger.error(Err.connection_404.format(
                             video_id, self.database[video_id][Key.TITLE]))
                         return False
-            except (TypeError, ConnectionError, socket.timeout, Timeout, TimeoutError, RequestError):
+            except (TypeError, ConnectionError,
+                    socket.timeout, Timeout, TimeoutError, RequestError) as e:
+                self.logger.debug("An exception occurred: {}".format(e))
                 if is_large:
                     return self._worker(video_id, is_large=False)
                 else:
@@ -411,6 +425,7 @@ class GetThumbnails(Canopy):
 
     def _saver(self, video_id, image_data):
         file_path = self.make_name(video_id, "jpg")
+        self.logger.debug("File Path: {}".format(file_path))
 
         with file_path.open('wb') as f:
             f.write(image_data.content)
@@ -436,6 +451,9 @@ class GetComments(utils.LogIn, Canopy):
         :param bool xml:
         """
         utils.check_arg(locals())
+        self.logger.debug("Directory to save in: {}".format(save_dir))
+        self.logger.debug("Dictionary of Videos: {}".format(database))
+        self.logger.debug("Download XML? : {}".format(xml))
         self.database = database
         self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.database)))
@@ -460,6 +478,8 @@ class GetComments(utils.LogIn, Canopy):
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             db[Key.V_OR_T_ID] = redirected
+        self.logger.debug("Video ID and its Thread ID (of officials):"
+                          " {}".format(video_id, db[Key.V_OR_T_ID]))
 
         response = self.get_from_getflv(db[Key.V_OR_T_ID], self.session)
 
@@ -478,9 +498,10 @@ class GetComments(utils.LogIn, Canopy):
         needs_key = response[KeyGetFlv.NEEDS_KEY]
 
         if xml and video_id.startswith(("sm", "nm")):
-            res_com = self.session.post(
-                url=msg_server,
-                data=self.make_param_xml(thread_id, user_id))
+            req_param = self.make_param_xml(thread_id, user_id)
+            self.logger.debug("Posting Parameters: {}".format(req_param))
+
+            res_com = self.session.post(url=msg_server, data=req_param)
             comment_data = res_com.text.replace("><", ">\n<")
         else:
             if video_id.startswith(("sm", "nm")):
@@ -493,6 +514,7 @@ class GetComments(utils.LogIn, Canopy):
                     True, user_id, user_key, thread_id,
                     opt_thread_id, thread_key, force_184)
 
+            self.logger.debug("Posting Parameters: {}".format(req_param))
             res_com = self.session.post(
                 url=URL.URL_Message_New,
                 json=req_param)
@@ -509,12 +531,14 @@ class GetComments(utils.LogIn, Canopy):
         :param bool xml:
         :return:
         """
+        utils.check_arg(locals())
         if xml and video_id.startswith(("sm", "nm")):
             extention = "xml"
         else:
             extention = "json"
 
         file_path = self.make_name(video_id, extention)
+        self.logger.debug("File Path: {}".format(file_path))
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
         self.logger.info(Msg.nd_download_done.format(file_path))
@@ -530,9 +554,11 @@ class GetComments(utils.LogIn, Canopy):
         """
         utils.check_arg(locals())
         if not needs_key == "1":
-            print("video id: {}, needs_key: {}".format(video_id, needs_key))
+            self.logger.debug("Video ID (or Thread ID): {},"
+                              " needs_key: {}".format(video_id, needs_key))
             return "", "0"
         response = self.session.get(URL.URL_GetThreadKey, params={"thread": video_id})
+        self.logger.debug("Response from GetThreadKey API: {}".format(response.text))
         parameters = parse_qs(response.text)
         threadkey = parameters["threadkey"][0]  # type: str
         force_184 = parameters["force_184"][0]  # type: str
@@ -550,6 +576,8 @@ class GetComments(utils.LogIn, Canopy):
         :param str user_id:
         :rtype: str
         """
+        utils.check_arg(locals())
+        self.logger.debug("Arguments: {}".format(locals()))
         return '<packet>' \
               '<thread thread="{0}" user_id="{1}" version="20090904" scores="1"/>' \
               '<thread thread="{0}" user_id="{1}" version="20090904" scores="1"' \
@@ -575,6 +603,9 @@ class GetComments(utils.LogIn, Canopy):
         :param str | None thread_key:
         :param str | None force_184:
         """
+        utils.check_arg({"official_video": official_video, "user_id": user_id,
+                         "user_key": user_key, "thread_id": thread_id})
+        self.logger.debug("Arguments of creating JSON: {}".format(locals()))
         result = [
             {"ping": {"content": "rs:0"}},
             {"ping": {"content": "ps:0"}},

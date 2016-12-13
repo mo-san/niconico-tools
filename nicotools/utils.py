@@ -474,27 +474,20 @@ class NTLogger(logging.Logger):
         :param str name:
         :param str | int log_level:
         """
+        if not isinstance(log_level, (str, int)):
+            raise ValueError("Invalid Logging Level: {}".format(log_level))
 
-        if isinstance(log_level, str):
-            log_level_num = logging.getLevelName(log_level)
-            log_level_name = logging.getLevelName(log_level_num)
-        elif isinstance(log_level, int):
-            log_level_name = logging.getLevelName(log_level)
-            log_level_num = logging.getLevelName(log_level_name)
-        else:
-            raise ValueError("Invalid Logging Level. You Entered: %s", log_level)
-
+        log_level = logging.getLevelName(log_level)
         self.log_level = log_level
-        self.log_level_name = log_level_name  # type: str
-        self.log_level_num = log_level_num  # type: int
-        formatter = self.get_formatter(log_level_num)
-
-        if log_level_num <= logging.DEBUG:
+        if (IS_DEBUG or
+            isinstance(log_level, str) and log_level == "DEBUG" or
+            isinstance(log_level, int) and log_level <= logging.DEBUG):
             self._is_debug = True
         else:
             self._is_debug = False
 
-        logging.Logger.__init__(self, name, log_level_name)
+        formatter = self.get_formatter()
+        logging.Logger.__init__(self, name, log_level)
         self.logger = logging.getLogger(name=name)
 
         # 標準出力用ハンドラー
@@ -515,8 +508,8 @@ class NTLogger(logging.Logger):
             log_file.setFormatter(formatter)
             self.addHandler(log_file)
 
-    def get_formatter(self, level):
-        if level <= logging.DEBUG:
+    def get_formatter(self):
+        if self._is_debug:
             fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
         else:
             fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")

@@ -301,10 +301,6 @@ class TestErrors:
         with pytest.raises(utils.MylistError):
             INSTANCE.copy(utils.Msg.ml_default_id, 1, utils.ALL_ITEM, "sm9")
 
-    def test_create_allid_internal(self):
-        with pytest.raises(utils.MylistError):
-            INSTANCE.create_mylist(utils.Msg.ml_default_id)
-
     def test_create_allname_internal(self):
         with pytest.raises(utils.MylistError):
             INSTANCE.create_mylist(utils.Msg.ml_default_name)

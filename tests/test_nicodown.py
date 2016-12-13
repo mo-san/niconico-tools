@@ -67,7 +67,8 @@ class TestUtils:
 class TestUtilsError:
     def test_logger(self):
         with pytest.raises(ValueError):
-            NTLogger(log_level=-1)
+            # noinspection PyTypeChecker
+            NTLogger(log_level=None)
 
     def test_make_dir(self):
         if os.name == "nt":
