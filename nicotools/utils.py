@@ -1,4 +1,5 @@
 # coding: utf-8
+import inspect
 import logging
 import os
 import pickle
@@ -13,9 +14,8 @@ from pathlib import Path
 ALL_ITEM = "*"
 LOG_FILE_ND = "nicotools_download.log"
 LOG_FILE_ML = "nicotools_mylist.log"
-IS_DEBUG = int(os.getenv("PYTHON_TEST"))
+IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 if IS_DEBUG:
-    import inspect
     os_name = os.getenv("TRAVIS_OS_NAME", os.name)
     version = (os.getenv("TRAVIS_PYTHON_VERSION") or
                os.getenv("PYTHON_VERSION") or
@@ -28,9 +28,6 @@ else:
 BACKSLASH = "backslashreplace"
 CHARREF = "xmlcharrefreplace"
 REPLACE = "replace"
-
-
-IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
 def get_encoding():
@@ -62,6 +59,7 @@ def validator(input_list):
     :param list[str] input_list:
     :rtype: list[str]
     """
+    check_arg(locals())
     matcher = re.compile(
         """\s*(?:
         {0}|  # 「全て」を指定するときの記号
@@ -95,6 +93,7 @@ def make_dir(directory):
     :param str | Path directory: フォルダー名
     :rtype: Path
     """
+    check_arg(locals())
     if isinstance(directory, str):
         directory = Path(directory)
     if directory.suffix:

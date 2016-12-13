@@ -301,10 +301,11 @@ class GetVideos(utils.LogIn, Canopy):
 
         vid_url = response[KeyGetFlv.VIDEO_URL]
         is_premium = response[KeyGetFlv.IS_PREMIUM]
-        if int(is_premium) == 1:
-            file_size = db[Key.SIZE_HIGH]
-        else:
-            file_size = db[Key.SIZE_LOW]
+        file_size = db[Key.SIZE_HIGH]
+        # if int(is_premium) == 1:
+        #     file_size = db[Key.SIZE_HIGH]
+        # else:
+        #     file_size = db[Key.SIZE_LOW]
         self.logger.debug("Estimated File Size: {}"
                           " (Premium: {})".format(file_size, [False, True][int(is_premium)]))
 
@@ -700,6 +701,8 @@ def main(args):
     destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
     if destination:
         destination = utils.make_dir(destination)
+    else:
+        sys.exit(Err.not_specified.format("--dest"))
     database = get_infos(videoid, logger=logger)
 
     res_t = False

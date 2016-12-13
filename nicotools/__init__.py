@@ -35,6 +35,9 @@ def main(arguments=None):
     parser_nd.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
     parser_nd.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
     parser_nd.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="FILE")
+    parser_nd.add_argument("--loglevel", type=str.upper, default="INFO",
+                        help=Msg.nd_help_loglevel,
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
 
     parser_ml = subparsers.add_parser("mylist", aliases=["m"], help=Msg.ml_description)
     parser_ml.set_defaults(func=nicoml.main)
@@ -45,6 +48,9 @@ def main(arguments=None):
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
     parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="FILE")
     parser_ml.add_argument("--yes", action="store_true", help=Msg.ml_help_yes)
+    parser_ml.add_argument("--loglevel", type=str.upper, default="INFO",
+                        help=Msg.nd_help_loglevel,
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
     group_one = parser_ml.add_argument_group(Msg.ml_help_group_a)
     group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
     group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
@@ -68,3 +74,6 @@ def main(arguments=None):
         return args.func(args)
     except KeyboardInterrupt:
         sys.exit(Err.keyboard_interrupt)
+
+if __name__ == "__main__":
+    main()
