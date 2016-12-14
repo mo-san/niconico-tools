@@ -82,6 +82,7 @@ def validator(input_list):
             if not matcher(item):
                 return []
 
+    # ................................↓"*" が入っていたときの対策
     return [matcher(item).group(1) or item.strip()
             for item in input_list if matcher(item) or ALL_ITEM in item]
 
@@ -115,6 +116,22 @@ def check_arg(parameters):
     for _name, _value in parameters.items():
         if _value is None:
             raise ValueError(Err.not_specified.format(_name))
+
+
+def sizeof_fmt(num):
+    """
+    数字を読みやすい単位で表す。
+
+    :param int num: 計りたい整数
+    :rtype: str
+    """
+    for unit in ['B', 'Kb', 'Mb']:
+        if num < 1024.0 and isinstance(num, int):
+            return "{:3}{:s}".format(num, unit)
+        elif num < 1024.0:
+            return "{:3.2f}{:s}".format(num, unit)
+        num /= 1024.0
+    return "{:.2f}Gb".format(num)
 
 
 class MylistError(Exception):
@@ -334,13 +351,14 @@ class LogIn:
         """
         self.logger = self.get_logger(logger)
         self.is_login = False
+        self._auth = None
         if not (session or mail or password):
             self.session = self.get_session()
         elif session and not (mail or password):
             self.session = session
         else:
-            _auth = self._ask_credentials(mail=mail, password=password)
-            self.session = self.get_session(_auth, force_login=True)
+            self._auth = self._ask_credentials(mail=mail, password=password)
+            self.session = self.get_session(self._auth, force_login=True)
         self.token = self.get_token(self.session)
 
     def get_logger(self, logger):
@@ -365,6 +383,7 @@ class LogIn:
 
         session = requests.session()
         if force_login:
+            auth = auth or self._auth
             res = session.post(URL.URL_LogIn, params=auth)
             if self._we_are_logged_in(res.text):
                 self.save_cookies(session.cookies)
@@ -407,7 +426,8 @@ class LogIn:
             fragment = htmltext.split("NicoAPI.token = \"")[1]
             return fragment[:fragment.find("\"")]
         except IndexError:
-            session = self.get_session(self._ask_credentials(), force_login=True)
+            self._auth = self._ask_credentials()
+            session = self.get_session(self._auth, force_login=True)
             return self.get_token(session)
 
     @classmethod
@@ -591,7 +611,7 @@ class KeyGetFlv:
     LENGTH          = "l"
     VIDEO_URL       = "url"
     MSG_SERVER      = "ms"
-    MSG_SUB  = "ms_sub"
+    MSG_SUB         = "ms_sub"
     USER_ID         = "user_id"
     IS_PREMIUM      = "is_premium"
     NICKNAME        = "nickname"

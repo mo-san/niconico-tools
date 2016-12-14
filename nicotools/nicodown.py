@@ -186,7 +186,8 @@ class Canopy:
             video_id, self.database[video_id][Key.FILE_NAME], ext)
         return Path(self.save_dir).resolve() / file_name
 
-    def get_from_getflv(self, video_id, session):
+    @classmethod
+    def get_from_getflv(cls, video_id, session):
         """
         GetFlv APIから情報を得る。
 
@@ -217,7 +218,16 @@ class Canopy:
         suffix = {"as3": 1} if video_id.startswith("nm") else None
         response = session.get(URL.URL_GetFlv + video_id, params=suffix)
         # self.logger.debug("GetFLV Response: {}".format(response.text))
-        parameters = parse_qs(response.text)
+        return cls.extract_getflv(response.text)
+
+    @classmethod
+    def extract_getflv(cls, content):
+        """
+
+        :param str content: GetFLV の返事
+        :rtype: dict[str, str] | None
+        """
+        parameters = parse_qs(content)
         if parameters.get("error") is not None:
             return None
         return {
@@ -248,16 +258,6 @@ class GetVideos(utils.LogIn, Canopy):
         :param requests.Session session:
         """
         super().__init__(mail=mail, password=password, logger=logger, session=session)
-
-        if progressbar is None:
-            self.widgets = None
-        else:
-            self.widgets = [
-                progressbar.Percentage(),
-                ' ', progressbar.Bar(),
-                ' ', progressbar.ETA(),
-                ' ', progressbar.AdaptiveTransferSpeed(),
-            ]
 
     def start(self, database, save_dir):
         """
@@ -301,17 +301,15 @@ class GetVideos(utils.LogIn, Canopy):
 
         vid_url = response[KeyGetFlv.VIDEO_URL]
         is_premium = response[KeyGetFlv.IS_PREMIUM]
-        file_size = db[Key.SIZE_HIGH]
-        # if int(is_premium) == 1:
-        #     file_size = db[Key.SIZE_HIGH]
-        # else:
-        #     file_size = db[Key.SIZE_LOW]
-        self.logger.debug("Estimated File Size: {}"
-                          " (Premium: {})".format(file_size, [False, True][int(is_premium)]))
 
         # 動画視聴ページに行ってCookieをもらってくる
         self.session.get(URL.URL_Watch + video_id)
+        # connect timeoutを10秒, read timeoutを30秒に設定
+        # ↓この時点ではダウンロードは始まらず、ヘッダーだけが来ている
         video_data = self.session.get(url=vid_url, stream=True, timeout=(10.0, 30.0))
+        file_size = int(video_data.headers["content-length"])
+        self.logger.debug("File Size: {} (Premium: {})".format(
+            file_size, [False, True][int(is_premium)]))
 
         return self._saver(video_id, video_data, file_size, chunk_size)
 
@@ -327,20 +325,26 @@ class GetVideos(utils.LogIn, Canopy):
         file_path = self.make_name(video_id, self.database[video_id][Key.MOVIE_TYPE])
         self.logger.debug("File Path: {}".format(file_path))
 
-        # connect timeoutを10秒, read timeoutを30秒に設定
         if progressbar is None:
             with file_path.open("wb") as f:
                 [f.write(chunk) for chunk in
                  video_data.iter_content(chunk_size=chunk_size) if chunk]
         else:
-            pbar = progressbar.ProgressBar(widgets=self.widgets, max_value=file_size)
+            widgets = [
+                progressbar.Percentage(),
+                ' ', progressbar.Bar(),
+                ' ', utils.sizeof_fmt(file_size),
+                ' ', progressbar.ETA(format="あと: %(eta)s"),
+                ' ', progressbar.AdaptiveTransferSpeed(),
+            ]
+            pbar = progressbar.ProgressBar(widgets=widgets, max_value=file_size)
             pbar.start()
             with file_path.open("wb") as f:
                 downloaded_size = 0
                 for chunk in video_data.iter_content(chunk_size=chunk_size):
                     if chunk:
                         downloaded_size += f.write(chunk)
-                        pbar.update(min(downloaded_size, file_size))
+                        pbar.update(downloaded_size)
             pbar.finish()
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
@@ -698,11 +702,7 @@ def main(args):
     """ 本筋 """
     log_level = "DEBUG" if IS_DEBUG else args.loglevel
     logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
-    destination = args.dest[0] if isinstance(args.dest, list) else None  # type: str
-    if destination:
-        destination = utils.make_dir(destination)
-    else:
-        sys.exit(Err.not_specified.format("--dest"))
+    destination = utils.make_dir(args.dest)
     database = get_infos(videoid, logger=logger)
 
     res_t = False
