@@ -183,7 +183,7 @@ class GetVideos(utils.LogIn):
     def start(self, database, save_dir):
         """
 
-        :param dict[str, dict[str, int | str]] database:
+        :param dict[str, dict[str, int | str]] | list[str] database:
         :param str | Path save_dir:
         :rtype: bool
         """
@@ -191,6 +191,8 @@ class GetVideos(utils.LogIn):
         self.logger.debug("Directory to save in: {}".format(save_dir))
         self.logger.debug("Dictionary of Videos: {}".format(database))
         self.save_dir = utils.make_dir(save_dir)
+        if isinstance(database, list):
+            database = get_infos(database, self.logger)
         self.database = database
         self.logger.info(Msg.nd_start_dl_video.format(len(self.database)))
 
@@ -281,7 +283,7 @@ class GetThumbnails(utils.Canopy):
     def start(self, database, save_dir, is_large=True):
         """
 
-        :param dict[str, dict[str, int | str]] database:
+        :param dict[str, dict[str, int | str]] | list[str] database:
         :param str | Path save_dir:
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool
@@ -289,6 +291,8 @@ class GetThumbnails(utils.Canopy):
         utils.check_arg(locals())
         self.logger.debug("Directory to save in: {}".format(save_dir))
         self.logger.debug("Dictionary of Videos: {}".format(database))
+        if isinstance(database, list):
+            database = get_infos(database, self.logger)
         self.database = database
         self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_pict.format(len(self.database)))
@@ -372,7 +376,7 @@ class GetComments(utils.LogIn):
     def start(self, database, save_dir, xml=False):
         """
 
-        :param dict[str, dict[str, int | str]] database:
+        :param dict[str, dict[str, int | str]] | list[str] database:
         :param str | Path save_dir:
         :param bool xml:
         """
@@ -380,6 +384,8 @@ class GetComments(utils.LogIn):
         self.logger.debug("Directory to save in: {}".format(save_dir))
         self.logger.debug("Dictionary of Videos: {}".format(database))
         self.logger.debug("Download XML? : {}".format(xml))
+        if isinstance(database, list):
+            database = get_infos(database, self.logger)
         self.database = database
         self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.database)))

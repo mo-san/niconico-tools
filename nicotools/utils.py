@@ -58,7 +58,7 @@ def validator(input_list):
         * 123456
         * watch/123456
 
-    :param list[str] input_list:
+    :param list[str] | tuple[str] | set[str] input_list:
     :rtype: list[str]
     """
     check_arg(locals())
@@ -72,13 +72,16 @@ def validator(input_list):
             ((?:sm|nm|so)?[0-9]+)  # ID本体
         )\s?""".format(re.escape(ALL_ITEM)), re.I + re.X).match
 
+    if not isinstance(input_list, (list, tuple, set)):
+        raise MylistArgumentError(Err.invalid_argument.format(input_list))
+
     if "\t" in input_list[0]:
         for line in input_list[1:]:
             if "\t" not in line:
                 return []
         input_list = [item.split("\t")[0] for item in input_list]
     else:
-        if input_list == [ALL_ITEM]:
+        if len(input_list) == 1 and input_list[0] == ALL_ITEM:
             return input_list
         for item in input_list:
             if not matcher(item):
@@ -86,7 +89,7 @@ def validator(input_list):
 
     # ................................↓"*" が入っていたときの対策
     return [matcher(item).group(1) or item.strip()
-            for item in input_list if matcher(item) or ALL_ITEM in item]
+            for item in set(input_list) if matcher(item) or ALL_ITEM in item]
 
 
 def make_dir(directory):
@@ -118,7 +121,7 @@ def check_arg(parameters):
     """
     for _name, _value in parameters.items():
         if _value is None:
-            raise ValueError(Err.not_specified.format(_name))
+            raise MylistArgumentError(Err.not_specified.format(_name))
 
 
 def sizeof_fmt(num):
@@ -143,7 +146,12 @@ class MylistError(Exception):
 
 
 class MylistNotFoundError(MylistError):
-    """ マイリスが見つからなかったときに発生させるエラー """
+    """ マイリストが見つからなかったときに発生させるエラー """
+    pass
+
+
+class MylistArgumentError(MylistError):
+    """ 引数が誤っていたときに発生させるエラー """
     pass
 
 
@@ -539,6 +547,7 @@ class Msg:
     nd_download_done = "{0} に保存しました。"
     nd_download_video = "({0}/{1}) ID: {2} (タイトル:{3}) の動画をダウンロードします。"
     nd_download_pict = "({0}/{1}) ID: {2} (タイトル:{3}) のサムネイルをダウンロードします。"
+    nd_download_pict_async = "ID: {0} (タイトル:{1}) のサムネイルをダウンロードします。"
     nd_download_comment = "({0}/{1}) ID: {2} (タイトル:{3}) のコメントをダウンロードします。"
     nd_start_dl_video = "{0} 件の動画をダウンロードします。"
     nd_start_dl_pict = "{0} 件のサムネイルをダウンロードします。"
@@ -584,6 +593,7 @@ class Err:
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
     not_installed = "{0} がインストールされていないため実行できません。"
+    invalid_argument = "引数の型が間違っています。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
     invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
