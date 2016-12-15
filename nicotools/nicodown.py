@@ -389,22 +389,25 @@ class GetThumbnails(Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
-        image_data = self._worker(video_id, is_large)
+        url = self.database[video_id][Key.THUMBNAIL_URL]
+        if is_large:
+            url += ".L"
+        image_data = self._worker(video_id, url, is_large)
         if not image_data:
             return False
         return self._saver(video_id, image_data)
 
-    def _worker(self, video_id, is_large=True):
+    def _worker(self, video_id, url, is_large=True):
         """
         サムネイル画像をダウンロードしにいく。
 
         :param str video_id: 動画ID (e.g. sm1234)
+        :param str url: 画像のURL
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool | requests.Response
         """
         utils.check_arg(locals())
         with requests.Session() as session:
-            url = self.database[video_id][Key.THUMBNAIL_URL] + ("", ".L")[is_large]
             try:
                 # connect timeoutを5秒, read timeoutを10秒に設定
                 response = session.get(url=url, timeout=(5.0, 10.0))
@@ -412,8 +415,8 @@ class GetThumbnails(Canopy):
                     return response
                 # 大きいサムネイルを求めて404が返ってきたら標準の大きさで試す
                 if response.status_code == 404:
-                    if is_large:
-                        return self._worker(video_id, is_large=False)
+                    if is_large and url.endswith(".L"):
+                        return self._worker(video_id, url[:-2], is_large=False)
                     else:
                         self.logger.error(Err.connection_404.format(
                             video_id, self.database[video_id][Key.TITLE]))
@@ -421,8 +424,8 @@ class GetThumbnails(Canopy):
             except (TypeError, ConnectionError,
                     socket.timeout, Timeout, TimeoutError, RequestError) as e:
                 self.logger.debug("An exception occurred: {}".format(e))
-                if is_large:
-                    return self._worker(video_id, is_large=False)
+                if is_large and url.endswith(".L"):
+                    return self._worker(video_id, url[:-2], is_large=False)
                 else:
                     self.logger.error(Err.connection_timeout.format(
                         video_id, self.database[video_id][Key.TITLE]))
