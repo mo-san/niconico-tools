@@ -26,9 +26,10 @@ def main(arguments=None):
     parser_nd.set_defaults(func=nicodown.main)
     parser_nd.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
     parser_nd.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
+    # nargs があるとリストに値が入る。
     parser_nd.add_argument("-l", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser_nd.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="WORD", dest="password")
-    parser_nd.add_argument("-d", "--dest", nargs=1, type=str, default=os.getcwd(), help=Msg.nd_help_destination)
+    parser_nd.add_argument("-d", "--dest", nargs=1, type=str, default=[os.getcwd()], help=Msg.nd_help_destination)
     parser_nd.add_argument("-c", "--comment", action="store_true", help=Msg.nd_help_comment)
     parser_nd.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
     parser_nd.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)

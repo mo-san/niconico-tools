@@ -4,12 +4,14 @@ import logging
 import os
 import pickle
 import re
-import requests
 import sys
 from argparse import ArgumentParser
 from getpass import getpass
 from os.path import join, expanduser
 from pathlib import Path
+from urllib.parse import parse_qs
+
+import requests
 
 ALL_ITEM = "*"
 LOG_FILE_ND = "nicotools_download.log"
@@ -109,6 +111,7 @@ def make_dir(directory):
 
 def check_arg(parameters):
     """
+    None を許容しない引数が None を含んでいないか検査する。
 
     :param dict[str, Object] parameters: パラメーターの名前と値の辞書
     :rtype: None
@@ -135,11 +138,316 @@ def sizeof_fmt(num):
 
 
 class MylistError(Exception):
+    """ マイリスト操作で誤りがあったときに発生させるエラー """
     pass
 
 
 class MylistNotFoundError(MylistError):
+    """ マイリスが見つからなかったときに発生させるエラー """
     pass
+
+
+class Canopy:
+    def __init__(self, logger=None):
+        self.database = None
+        self.save_dir = None  # type: Path
+        self.logger = self.get_logger(logger)  # type: NTLogger
+
+    def make_name(self, video_id, ext):
+        """
+        ファイル名を返す。
+
+        :param str video_id:
+        :param str ext:
+        :rtype: Path
+        """
+        check_arg(locals())
+        file_name =  Msg.nd_file_name.format(
+            video_id, self.database[video_id][Key.FILE_NAME], ext)
+        return Path(self.save_dir).resolve() / file_name
+
+    def get_logger(self, logger):
+        """
+        ロガーを返す。
+
+        すでにあるならそれを使い、無い、またはハンドラーを持たなければ新しく作って返す。
+
+        :param NTLogger logger:
+        :rtype: NTLogger
+        """
+        if not (logger and hasattr(logger, "handlers")):
+            return NTLogger()
+        else:
+            return logger
+
+    @classmethod
+    def get_from_getflv(cls, video_id, session):
+        """
+        GetFlv APIから情報を得る。
+
+        * GetFlvのサンプル:
+
+        thread_id=1406370428
+        &l=314
+        &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
+        &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
+        &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
+        &user_id=<ユーザーIDの数字>
+        &is_premium=1
+        &nickname=<URLエンコードされたユーザー名の文字列>
+        &time=1475176067845
+        &done=true
+        &ng_rv=220
+        &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
+
+        * 但しアクセス制限がかかったときには:
+
+        error=access_locked&done=true
+
+        :param str video_id:
+        :param requests.Session session:
+        :rtype: dict[str, str] | None
+        """
+        check_arg(locals())
+        suffix = {"as3": 1} if video_id.startswith("nm") else None
+        response = session.get(URL.URL_GetFlv + video_id, params=suffix)
+        # self.logger.debug("GetFLV Response: {}".format(response.text))
+        return cls.extract_getflv(response.text)
+
+    @classmethod
+    def extract_getflv(cls, content):
+        """
+
+        :param str content: GetFLV の返事
+        :rtype: dict[str, str] | None
+        """
+        parameters = parse_qs(content)
+        if parameters.get("error") is not None:
+            return None
+        return {
+            KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
+            KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
+            KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
+            KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
+            KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
+            KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
+            KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
+            KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
+            KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
+
+            # 以下は公式動画にだけあるもの。通常の動画ではNone
+            KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
+            KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
+        }
+
+
+class LogIn(Canopy):
+    def __init__(self, mail=None, password=None, logger=None, session=None):
+        """
+        :param str | None mail: メールアドレス
+        :param str | None password: パスワード
+        :param requests.Session | None session: セッションオブジェクト
+        """
+        super().__init__(logger=logger)
+        self.is_login = False
+        self._auth = None
+        if not (session or mail or password):
+            self.session = self.get_session()
+        elif session and not (mail or password):
+            self.session = session
+        else:
+            self._auth = self._ask_credentials(mail=mail, password=password)
+            self.session = self.get_session(self._auth, force_login=True)
+        self.token = self.get_token(self.session)
+
+    def get_session(self, auth=None, force_login=False):
+        """
+        クッキーを読み込み、必要ならばログインし、そのセッションを返す。
+
+        :param dict[str, str] | None auth:
+        :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
+        :rtype: requests.Session
+        """
+
+        session = requests.session()
+        if force_login:
+            auth = auth or self._auth
+            res = session.post(URL.URL_LogIn, params=auth)
+            if self._we_have_logged_in(res.text):
+                self.save_cookies(session.cookies)
+                self.is_login = True
+            else:
+                return self.get_session(self._ask_credentials(), force_login=True)
+        else:
+            cook = self.load_cookies()
+            if cook:
+                session.cookies = cook
+        return session
+
+    def _we_have_logged_in(self, response):
+        """
+
+        :param str response:
+        :rtype: bool
+        """
+        # 成功したとき
+        if "<title>niconico</title>" in response:
+            return True
+        # 失敗したとき
+        elif "ログイン - niconico</title>" in response:
+            print(Err.invalid_auth)
+            return False
+        else:
+            print("Couldn't determine whether we could log in."
+                  " This is the returned HTML:\n{0}".format(response))
+            return False
+
+    def get_token(self, session):
+        """
+        マイリストの操作に必要な"NicoAPI.token"を取ってくる。
+
+        :param requests.Session session:
+        :rtype: str
+        """
+        htmltext = session.get(URL.URL_MyListTop).text
+        try:
+            fragment = htmltext.split("NicoAPI.token = \"")[1]
+            return fragment[:fragment.find("\"")]
+        except IndexError:
+            self._auth = self._ask_credentials()
+            session = self.get_session(self._auth, force_login=True)
+            return self.get_token(session)
+
+    @classmethod
+    def _ask_credentials(cls, mail=None, password=None):
+        """
+        メールアドレスとパスワードをユーザーに求める。
+
+        :param str mail: メールアドレス。
+        :param str password: パスワード
+        :rtype: dict[str, str]
+        """
+        un, pw = mail, password
+        try:
+            if un is None:
+                r = re.compile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
+                while True:
+                    print(Msg.input_mail)
+                    un = input("-=>")
+                    if not un: continue
+                    if r.match(un): break
+            if pw is None:
+                while True:
+                    print(Msg.input_pass)
+                    pw = getpass("-=>")
+                    if pw: break
+        except (EOFError, KeyboardInterrupt):
+            exit(Err.keyboard_interrupt)
+        return {
+            "mail_tel": un,
+            "password": pw
+        }
+
+    @classmethod
+    def save_cookies(cls, requests_cookiejar, file_name=COOKIE_FILE_NAME):
+        """
+        クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
+
+        :param requests.cookies.RequestsCookieJar requests_cookiejar:
+        :param str file_name:
+        :rtype: None
+        """
+        with open(join(expanduser("~"), file_name), "wb") as fd:
+            pickle.dump(requests_cookiejar, fd)
+
+    @classmethod
+    def load_cookies(cls, file_name=COOKIE_FILE_NAME):
+        """
+        クッキーを読み込む。
+
+        :param str file_name:
+        :rtype: requests.cookies.RequestsCookieJar | None
+        """
+        try:
+            with open(join(expanduser("~"), file_name), "rb") as fd:
+                return pickle.load(fd)
+        except (FileNotFoundError, EOFError):
+            return None
+
+
+class NTLogger(logging.Logger):
+    def __init__(self, file_name=LOG_FILE_ND, name=__name__, log_level=logging.INFO):
+        """
+        ログ出力のためのクラス。
+
+        :param str | Path | None file_name:
+        :param str name:
+        :param str | int log_level:
+        """
+        if not isinstance(log_level, (str, int)):
+            raise ValueError("Invalid Logging Level: {}".format(log_level))
+
+        log_level = logging.getLevelName(log_level)
+        self.log_level = log_level
+        if (IS_DEBUG or
+            isinstance(log_level, str) and log_level == "DEBUG" or
+            isinstance(log_level, int) and log_level <= logging.DEBUG):
+            self._is_debug = True
+        else:
+            self._is_debug = False
+
+        formatter = self.get_formatter()
+        logging.Logger.__init__(self, name, log_level)
+        self.logger = logging.getLogger(name=name)
+
+        # 標準出力用ハンドラー
+        log_stdout = logging.StreamHandler(sys.stdout)
+        log_stdout.setLevel(log_level)
+        log_stdout.setFormatter(formatter)
+        self.addHandler(log_stdout)
+
+        if file_name is not None:
+            # ファイル書き込み用ハンドラー
+            if isinstance(file_name, Path):
+                log_file = logging.FileHandler(
+                    filename=str(file_name), encoding="utf-8")
+            else:
+                log_file = logging.FileHandler(encoding="utf-8",
+                    filename=join(expanduser("~"), file_name))
+            log_file.setLevel(log_level)
+            log_file.setFormatter(formatter)
+            self.addHandler(log_file)
+
+    def get_formatter(self):
+        if self._is_debug:
+            fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
+        else:
+            fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
+        return fmt
+
+    def forwarding(self, level, msg, *args, **kwargs):
+        _enco = get_encoding()
+        if self._is_debug:
+            # ログを呼び出した関数の名前をつなげる
+            funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
+            if level <= logging.DEBUG:
+                msg = funcs + "]\t" + msg
+            else:
+                msg = funcs + "]\t\t" + msg
+        _msg = msg.encode(_enco, BACKSLASH).decode(_enco)
+        _args = tuple([item.encode(_enco, BACKSLASH).decode(_enco)
+                       if isinstance(item, str) else item for item in args[0]])
+        self._log(level, _msg, _args, **kwargs)
+
+    def debug(self, msg, *args, **kwargs): self.forwarding(logging.DEBUG, msg, args, **kwargs)
+
+    def info(self, msg, *args, **kwargs): self.forwarding(logging.INFO, msg, args, **kwargs)
+
+    def warning(self, msg, *args, **kwargs): self.forwarding(logging.WARNING, msg, args, **kwargs)
+
+    def error(self, msg, *args, **kwargs): self.forwarding(logging.ERROR, msg, args, **kwargs)
+
+    def critical(self, msg, *args, **kwargs): self.forwarding(logging.CRITICAL, msg, args, **kwargs)
 
 
 class URL:
@@ -341,238 +649,19 @@ class Err:
     INTERNAL = "INTERNAL"
 
 
-class LogIn:
-    def __init__(self, mail=None, password=None, logger=None, session=None):
-        """
-        :param str | None mail: メールアドレス
-        :param str | None password: パスワード
-        :param NTLogger | None logger:
-        :param requests.Session | None session: セッションオブジェクト
-        """
-        self.logger = self.get_logger(logger)
-        self.is_login = False
-        self._auth = None
-        if not (session or mail or password):
-            self.session = self.get_session()
-        elif session and not (mail or password):
-            self.session = session
-        else:
-            self._auth = self._ask_credentials(mail=mail, password=password)
-            self.session = self.get_session(self._auth, force_login=True)
-        self.token = self.get_token(self.session)
-
-    def get_logger(self, logger):
-        """
-
-        :param NTLogger logger:
-        :rtype: NTLogger
-        """
-        if not (logger and hasattr(logger, "handlers")):
-            return NTLogger()
-        else:
-            return logger
-
-    def get_session(self, auth=None, force_login=False):
-        """
-        クッキーを読み込み、必要ならばログインし、そのセッションを返す。
-
-        :param dict[str, str] | None auth:
-        :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
-        :rtype: requests.Session
-        """
-
-        session = requests.session()
-        if force_login:
-            auth = auth or self._auth
-            res = session.post(URL.URL_LogIn, params=auth)
-            if self._we_are_logged_in(res.text):
-                self.save_cookies(session.cookies)
-                self.is_login = True
-            else:
-                return self.get_session(self._ask_credentials(), force_login=True)
-        else:
-            cook = self.load_cookies()
-            if cook:
-                session.cookies = cook
-        return session
-
-    def _we_are_logged_in(self, response):
-        """
-
-        :param str response:
-        :rtype: bool
-        """
-        # 成功したとき
-        if "<title>niconico</title>" in response:
-            return True
-        # 失敗したとき
-        elif "ログイン - niconico</title>" in response:
-            print(Err.invalid_auth)
-            return False
-        else:
-            print("Couldn't determine whether we could log in."
-                  " This is the returned HTML:\n{0}".format(response))
-            return False
-
-    def get_token(self, session):
-        """
-        マイリストの操作に必要な"NicoAPI.token"を取ってくる。
-
-        :param requests.Session session:
-        :rtype: str
-        """
-        htmltext = session.get(URL.URL_MyListTop).text
-        try:
-            fragment = htmltext.split("NicoAPI.token = \"")[1]
-            return fragment[:fragment.find("\"")]
-        except IndexError:
-            self._auth = self._ask_credentials()
-            session = self.get_session(self._auth, force_login=True)
-            return self.get_token(session)
-
-    @classmethod
-    def _ask_credentials(cls, mail=None, password=None):
-        """
-        メールアドレスとパスワードをユーザーに求める。
-
-        :param str mail: メールアドレス。
-        :param str password: パスワード
-        :rtype: dict[str, str]
-        """
-        un, pw = mail, password
-        try:
-            if un is None:
-                r = re.compile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
-                while True:
-                    print(Msg.input_mail)
-                    un = input("-=>")
-                    if not un: continue
-                    if r.match(un): break
-            if pw is None:
-                while True:
-                    print(Msg.input_pass)
-                    pw = getpass("-=>")
-                    if pw: break
-        except (EOFError, KeyboardInterrupt):
-            exit(Err.keyboard_interrupt)
-        return {
-            "mail_tel": un,
-            "password": pw
-        }
-
-    @classmethod
-    def save_cookies(cls, requests_cookiejar, file_name=COOKIE_FILE_NAME):
-        """
-        クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
-
-        :param requests.cookies.RequestsCookieJar requests_cookiejar:
-        :param str file_name:
-        :rtype: None
-        """
-        with open(join(expanduser("~"), file_name), "wb") as fd:
-            pickle.dump(requests_cookiejar, fd)
-
-    @classmethod
-    def load_cookies(cls, file_name=COOKIE_FILE_NAME):
-        """
-        クッキーを読み込む。
-
-        :param str file_name:
-        :rtype: requests.cookies.RequestsCookieJar | None
-        """
-        try:
-            with open(join(expanduser("~"), file_name), "rb") as fd:
-                return pickle.load(fd)
-        except (FileNotFoundError, EOFError):
-            return None
-
-
-class NTLogger(logging.Logger):
-    def __init__(self, file_name=LOG_FILE_ND, name=__name__, log_level=logging.INFO):
-        """
-        ログ出力のためのクラス。
-
-        :param str | Path | None file_name:
-        :param str name:
-        :param str | int log_level:
-        """
-        if not isinstance(log_level, (str, int)):
-            raise ValueError("Invalid Logging Level: {}".format(log_level))
-
-        log_level = logging.getLevelName(log_level)
-        self.log_level = log_level
-        if (IS_DEBUG or
-            isinstance(log_level, str) and log_level == "DEBUG" or
-            isinstance(log_level, int) and log_level <= logging.DEBUG):
-            self._is_debug = True
-        else:
-            self._is_debug = False
-
-        formatter = self.get_formatter()
-        logging.Logger.__init__(self, name, log_level)
-        self.logger = logging.getLogger(name=name)
-
-        # 標準出力用ハンドラー
-        log_stdout = logging.StreamHandler(sys.stdout)
-        log_stdout.setLevel(log_level)
-        log_stdout.setFormatter(formatter)
-        self.addHandler(log_stdout)
-
-        if file_name is not None:
-            # ファイル書き込み用ハンドラー
-            if isinstance(file_name, Path):
-                log_file = logging.FileHandler(
-                    filename=str(file_name), encoding="utf-8")
-            else:
-                log_file = logging.FileHandler(encoding="utf-8",
-                    filename=join(expanduser("~"), file_name))
-            log_file.setLevel(log_level)
-            log_file.setFormatter(formatter)
-            self.addHandler(log_file)
-
-    def get_formatter(self):
-        if self._is_debug:
-            fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
-        else:
-            fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
-        return fmt
-
-    def forwarding(self, level, msg, *args, **kwargs):
-        _enco = get_encoding()
-        if self._is_debug:
-            # ログを呼び出した関数の名前をつなげる
-            funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
-            if level <= logging.DEBUG:
-                msg = funcs + "]\t" + msg
-            else:
-                msg = funcs + "]\t\t" + msg
-        _msg = msg.encode(_enco, BACKSLASH).decode(_enco)
-        _args = tuple([item.encode(_enco, BACKSLASH).decode(_enco)
-                       if isinstance(item, str) else item for item in args[0]])
-        self._log(level, _msg, _args, **kwargs)
-
-    def debug(self, msg, *args, **kwargs): self.forwarding(logging.DEBUG, msg, args, **kwargs)
-
-    def info(self, msg, *args, **kwargs): self.forwarding(logging.INFO, msg, args, **kwargs)
-
-    def warning(self, msg, *args, **kwargs): self.forwarding(logging.WARNING, msg, args, **kwargs)
-
-    def error(self, msg, *args, **kwargs): self.forwarding(logging.ERROR, msg, args, **kwargs)
-
-    def critical(self, msg, *args, **kwargs): self.forwarding(logging.CRITICAL, msg, args, **kwargs)
-
-
 class Key:
     """
-    データの集まりのキーとなる文字列たち。
+    getthumbinfo から取ってきたデータのキーとなる文字列たち。
 
-    DATE ("first_retrieve"):
-        例えば…        2014-07-26
-        もともとは…    2014-07-26T19:27:07+09:00
+    DATE ("first_retrieve")について:
+        もともとは       2014-07-26T19:27:07+09:00
+        という文字列だが 2014-07-26
+        として保存しておく。
 
-    MOVIE_TYPE ("movie_type"):
-        one of "mp4", "flv" and "swf"
-    URL_PIC ("thumbnail_url"):
+    MOVIE_TYPE ("movie_type")について:
+        "mp4", "flv", "swf" のいずれか。
+
+    URL_PIC ("thumbnail_url")について:
         例えば… http://tn-skr1.smilevideo.jp/smile?i=24093152
     """
     CH_ID           = "ch_id"           # チャンネル動画のみ
@@ -607,6 +696,9 @@ class Key:
 
 
 class KeyGetFlv:
+    """
+    GetFLV を解釈するときのURLパラメーターのキー
+    """
     THREAD_ID       = "thread_id"
     LENGTH          = "l"
     VIDEO_URL       = "url"
@@ -617,11 +709,15 @@ class KeyGetFlv:
     NICKNAME        = "nickname"
     USER_KEY        = "userkey"
 
+    # ↓公式動画にだけある情報
     OPT_THREAD_ID   = "optional_thread_id"
     NEEDS_KEY       = "needs_key"
 
 
 class MKey:
+    """
+    マイリスト情報を読み取るときのJSONのキー
+    """
     ID = "id"
     NAME = "name"
     IS_PUBLIC = "is_public"
@@ -632,6 +728,9 @@ class MKey:
 
 
 class InheritedParser(ArgumentParser):
+    """
+    文字コードで問題を起こさないために ArgumentParser を上書きするクラス
+    """
     def _read_args_from_files(self, arg_strings):
         # expand arguments referencing files
         new_arg_strings = []
@@ -644,6 +743,7 @@ class InheritedParser(ArgumentParser):
             # replace arguments referencing files with the file content
             else:
                 try:
+                    # ↓文字コードを指定しないとCP932で開いてしまいエラーになる
                     with open(arg_string[1:], encoding="utf-8") as args_file:
                         arg_strings = []
                         for arg_line in args_file.read().splitlines():

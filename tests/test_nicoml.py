@@ -15,9 +15,10 @@ TEST_LIST_TO = "TEST_LIST_TO" + str(datetime.now()).replace(" ", "_").replace(":
 # テスト用の一般会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 
+# "sm9 sm8628149 ... sm500873" のようにただの文字列
 VIDEO_IDS = " ".join(sorted({
-    "watch/sm8628149": "【東方】Bad Apple!!　ＰＶ【影絵】",
     "watch/sm9": "新・豪血寺一族 -煩悩解放 - レッツゴー！陰陽師",
+    "watch/sm8628149": "【東方】Bad Apple!!　ＰＶ【影絵】",
     "watch/sm2057168": "M.C.ドナルドはダンスに夢中なのか？最終鬼畜道化師ドナルド・Ｍ",
     "watch/sm22954889": "幕末志士達のスマブラ６４実況プレイ",
     "watch/sm1097445": "【初音ミク】みくみくにしてあげる♪【してやんよ】",
@@ -62,7 +63,7 @@ class TestMla:
         INSTANCE.purge_mylist(name, True)
 
     def param(self, cond):
-        cond = "mylist -u {_mail} -p {_pass} " + cond
+        cond = "mylist -l {_mail} -p {_pass} " + cond
         return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
 
     def nicoml_add_1(self, caplog):
@@ -178,7 +179,7 @@ class TestMlb:
         return result["list_id"], result["list_name"]
 
     def param(self, cond):
-        cond = "mylist -u {_mail} -p {_pass} " + cond
+        cond = "mylist -l {_mail} -p {_pass} " + cond
         return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
 
     def test_initialize(self):
@@ -245,7 +246,7 @@ class TestErrors:
         return result["list_id"], result["list_name"]
 
     def param(self, cond):
-        cond = "mylist -u {_mail} -p {_pass} " + cond
+        cond = "mylist -l {_mail} -p {_pass} " + cond
         return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
 
     def test_add_all(self):

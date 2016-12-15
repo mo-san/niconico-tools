@@ -18,7 +18,7 @@ INPUT = "tests/ids.txt"
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 AUTH_P = (os.getenv("addr_p"), os.getenv("pass_p"))
 
-# "nm11028783 sm7174241 ... so8999636" のような文字列
+# "nm11028783 sm7174241 ... so8999636" のようにただの文字列
 VIDEO_ID = " ".join({
     "nm11028783": "[オリジナル曲] august [初音ミク]",
     "sm7174241": "【ピアノ楽譜】 Windows 起動音 [Win3.1 ～ Vista]",
@@ -97,7 +97,7 @@ class TestLogin:
 
 class TestNicodown:
     def param(self, cond, **kwargs):
-        cond = "download -u {_mail} -p {_pass} -d {save_dir} " + cond
+        cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
         params = {"_mail": AUTH_N[0], "_pass": AUTH_N[1],
                   "save_dir": SAVE_DIR_1, "video_id": VIDEO_ID}
         params.update(kwargs)
@@ -138,7 +138,7 @@ class TestNicodown:
 
 class TestNicodownError:
     def param(self, cond, **kwargs):
-        cond = "download -u {_mail} -p {_pass} -d {save_dir} " + cond
+        cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
         params = {"_mail"   : AUTH_N[0], "_pass": AUTH_N[1],
                   "save_dir": SAVE_DIR_1, "video_id": VIDEO_ID}
         params.update(kwargs)

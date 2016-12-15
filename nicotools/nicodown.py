@@ -168,86 +168,7 @@ def t2filename(text):
     return text
 
 
-class Canopy:
-    def __init__(self):
-        self.database = None
-        self.save_dir = None  # type: Path
-
-    def make_name(self, video_id, ext):
-        """
-        ファイル名を返す。
-
-        :param str video_id:
-        :param str ext:
-        :rtype: Path
-        """
-        utils.check_arg(locals())
-        file_name =  Msg.nd_file_name.format(
-            video_id, self.database[video_id][Key.FILE_NAME], ext)
-        return Path(self.save_dir).resolve() / file_name
-
-    @classmethod
-    def get_from_getflv(cls, video_id, session):
-        """
-        GetFlv APIから情報を得る。
-
-        * GetFlvのサンプル:
-
-        thread_id=1406370428
-        &l=314
-        &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
-        &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
-        &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
-        &user_id=<ユーザーIDの数字>
-        &is_premium=1
-        &nickname=<URLエンコードされたユーザー名の文字列>
-        &time=1475176067845
-        &done=true
-        &ng_rv=220
-        &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
-
-        * 但しアクセス制限がかかったときには:
-
-        error=access_locked&done=true
-
-        :param str video_id:
-        :param requests.Session session:
-        :rtype: dict[str, str] | None
-        """
-        utils.check_arg(locals())
-        suffix = {"as3": 1} if video_id.startswith("nm") else None
-        response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-        # self.logger.debug("GetFLV Response: {}".format(response.text))
-        return cls.extract_getflv(response.text)
-
-    @classmethod
-    def extract_getflv(cls, content):
-        """
-
-        :param str content: GetFLV の返事
-        :rtype: dict[str, str] | None
-        """
-        parameters = parse_qs(content)
-        if parameters.get("error") is not None:
-            return None
-        return {
-            KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
-            KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
-            KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
-            KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
-            KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
-            KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
-            KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
-            KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
-            KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
-
-            # 以下は公式動画にだけあるもの。通常の動画ではNone
-            KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
-            KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
-        }
-
-
-class GetVideos(utils.LogIn, Canopy):
+class GetVideos(utils.LogIn):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         動画をダウンロードする。
@@ -350,15 +271,12 @@ class GetVideos(utils.LogIn, Canopy):
         return True
 
 
-class GetThumbnails(Canopy):
+class GetThumbnails(utils.Canopy):
     def __init__(self, logger=None):
         """
         :param NTLogger logger:
         """
-        super().__init__()
-        self.logger = logger
-        if not logger or not hasattr(logger, "handlers"):
-            self.logger = utils.NTLogger()
+        super().__init__(logger=logger)
 
     def start(self, database, save_dir, is_large=True):
         """
@@ -441,7 +359,7 @@ class GetThumbnails(Canopy):
         return True
 
 
-class GetComments(utils.LogIn, Canopy):
+class GetComments(utils.LogIn):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         :param str | None mail:
@@ -705,7 +623,7 @@ def main(args):
     """ 本筋 """
     log_level = "DEBUG" if IS_DEBUG else args.loglevel
     logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
-    destination = utils.make_dir(args.dest)
+    destination = utils.make_dir(args.dest[0])
     database = get_infos(videoid, logger=logger)
 
     res_t = False
