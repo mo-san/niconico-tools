@@ -257,7 +257,7 @@ class GetVideos(utils.LogIn):
                 progressbar.Percentage(),
                 ' ', progressbar.Bar(),
                 ' ', utils.sizeof_fmt(file_size),
-                ' ', progressbar.ETA(format="あと: %(eta)s"),
+                ' ', progressbar.ETA(),
                 ' ', progressbar.AdaptiveTransferSpeed(),
             ]
             pbar = progressbar.ProgressBar(widgets=widgets, max_value=file_size)
