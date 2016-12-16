@@ -108,7 +108,19 @@ def make_dir(directory):
         if not directory.is_dir():
             directory.mkdir(parents=True)
         return directory.resolve()
-    except (OSError, FileNotFoundError, NotADirectoryError, PermissionError):
+    except (
+            # [WinError 87] パラメーターが間違っています。
+            # (con とか nul とか)(Python 3.5以下で起こる。)
+            OSError,
+            # [WinError 2] 指定されたファイルが見つかりません。(Python 3.5以下で起こる。)
+            FileNotFoundError,
+            # [WinError 267] ディレクトリ名が無効です。(con とか nul とか)
+            NotADirectoryError,
+            # [WinError 5] アクセスが拒否されました。(C:/ とか D:/ とか)
+            PermissionError,
+            # [WinError 183] 既に存在するファイルを作成することはできません。
+            FileExistsError
+    ):
         raise NameError(Err.invalid_dirname.format(directory))
 
 
