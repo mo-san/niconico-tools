@@ -72,14 +72,14 @@ class GetInfoAsync(utils.Canopy):
 
         info = {
             KeyDmc.VIDEO_ID     : flash_vars["videoId"],  # type: str
-            KeyDmc.VIDEO_URL    : flvinfo[KeyGetFlv.VIDEO_URL],  # type: str
+            KeyDmc.VIDEO_URL_SM : flvinfo[KeyGetFlv.VIDEO_URL],  # type: str
             KeyDmc.TITLE        : flash_vars["videoTitle"],  # type: str
             KeyDmc.FILE_NAME    : nicodown.t2filename(flash_vars["videoTitle"]),
             KeyDmc.FILE_SIZE    : None,
             KeyDmc.THUMBNAIL_URL: flash_vars["thumbImage"],  # type: str
             KeyDmc.ECO          : flash_vars.get("eco") or 0,  # type: int
             KeyDmc.MOVIE_TYPE   : flash_vars["movie_type"],  # type: str
-            KeyDmc.IS_DMC       : int(flash_vars["isDmc"]),  # type: int
+            # KeyDmc.IS_DMC       : int(flash_vars["isDmc"]),  # type: int
             KeyDmc.DELETED      : int(flash_vars["deleted"]),  # type: int
             KeyDmc.IS_DELETED   : watch_api["videoDetail"]["isDeleted"],  # type: bool
             KeyDmc.IS_PUBLIC    : watch_api["videoDetail"]["is_public"],  # type: bool
@@ -138,7 +138,7 @@ class GetInfoAsync(utils.Canopy):
 
         info = {
             KeyDmc.VIDEO_ID     : _video["id"],  # type: str
-            KeyDmc.VIDEO_URL    : _video["source"],  # type: str
+            KeyDmc.VIDEO_URL_SM : _video["source"],  # type: str
             KeyDmc.TITLE        : _video["originalTitle"],  # type: str
             KeyDmc.FILE_NAME    : nicodown.t2filename(_video["originalTitle"]),
             KeyDmc.FILE_SIZE    : None,
@@ -152,7 +152,7 @@ class GetInfoAsync(utils.Canopy):
             KeyDmc.IS_PREMIUM   : j["viewer"]["isPremium"],  # type: bool
             KeyDmc.USER_ID      : j["viewer"]["id"],  # type: int
             KeyDmc.USER_KEY     : j["context"]["userkey"],  # type: str
-            KeyDmc.IS_DMC       : None,
+            # KeyDmc.IS_DMC       : None,
             # この2つは dmcInfo にしかない。watchAPI版との整合性のために初期化しておく。
             KeyDmc.MSG_SERVER   : None,
             KeyDmc.THREAD_ID    : None,

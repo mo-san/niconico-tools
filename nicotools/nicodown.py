@@ -17,8 +17,8 @@ try:
 except ImportError:
     progressbar = None
 
-from . import utils
-from .utils import Msg, Err, URL, KeyGTI, KeyGetFlv
+from nicotools import utils
+from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
 
 """
 使い方:
@@ -650,3 +650,6 @@ def main(args):
         res_v = GetVideos(logger=logger, session=session).start(database, destination)
 
     return res_c | res_v | res_t
+
+if __name__ == "__main__":
+    GetVideos(mail=os.getenv("addr_p"), password=os.getenv("pass_p")).start(["sm30219950"], "D:/Downloads/")

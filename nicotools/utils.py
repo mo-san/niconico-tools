@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 import requests
+from requests import cookies
 
 ALL_ITEM = "*"
 LOG_FILE_ND = "async_nicotools_download.log"
@@ -323,7 +324,7 @@ class LogIn(Canopy):
         else:
             cook = self.load_cookies()
             if cook:
-                session.cookies = cook
+                session.cookies = cookies.cookiejar_from_dict(cook)
         return session
 
     def _we_have_logged_in(self, response):
@@ -748,17 +749,17 @@ class KeyDmc:
     FILE_SIZE       = "file_size"
 
     VIDEO_ID        = "video_id"
-    VIDEO_URL       = "video_url"       # Smile サーバーのほう
+    VIDEO_URL_SM    = "video_url"       # Smile サーバーのほう
     TITLE           = "title"
     THUMBNAIL_URL   = "thumbnail_url"
-    ECO             = "eco"             # type: int
+    ECO             = "eco"             # int
     MOVIE_TYPE      = "movie_type"
-    IS_DMC          = "is_dmc"          # type: int or None
-    DELETED         = "deleted"         # type: int
-    IS_DELETED      = "is_deleted"      # type: bool
-    IS_PUBLIC       = "is_public"       # type: bool
-    IS_OFFICIAL     = "is_official"     # type: bool
-    IS_PREMIUM      = "is_premium"      # type: bool
+    # IS_DMC          = "is_dmc"          # int or None
+    DELETED         = "deleted"         # int
+    IS_DELETED      = "is_deleted"      # bool
+    IS_PUBLIC       = "is_public"       # bool
+    IS_OFFICIAL     = "is_official"     # bool
+    IS_PREMIUM      = "is_premium"      # bool
     USER_ID         = "user_id"
     USER_KEY        = "user_key"
     MSG_SERVER      = "ms"
@@ -767,14 +768,14 @@ class KeyDmc:
     API_URL         = "api_url"
     RECIPE_ID       = "recipe_id"
     CONTENT_ID      = "content_id"
-    VIDEO_SRC_IDS   = "video_src_ids"   # type: list
-    AUDIO_SRC_IDS   = "audio_src_ids"   # type: list
-    HEARTBEAT       = "heartbeat"       # type: int
+    VIDEO_SRC_IDS   = "video_src_ids"   # list
+    AUDIO_SRC_IDS   = "audio_src_ids"   # list
+    HEARTBEAT       = "heartbeat"       # int
     TOKEN           = "token"
     SIGNATURE       = "signature"
     AUTH_TYPE       = "auth_type"
-    C_K_TIMEOUT     = "content_key_timeout"     # type: int
-    SVC_USER_ID = "service_user_id"     # USER_ID とたぶん同じ
+    C_K_TIMEOUT     = "content_key_timeout"     # int
+    SVC_USER_ID     = "service_user_id"     # USER_ID とたぶん同じ
     PLAYER_ID       = "player_id"
     PRIORITY        = "priority"
 
@@ -806,13 +807,13 @@ class MKey:
     """
     マイリスト情報を読み取るときのJSONのキー
     """
-    ID = "id"
-    NAME = "name"
-    IS_PUBLIC = "is_public"
-    PUBLICITY = "publicity"
-    SINCE = "since"
+    ID          = "id"
+    NAME        = "name"
+    IS_PUBLIC   = "is_public"
+    PUBLICITY   = "publicity"
+    SINCE       = "since"
     DESCRIPTION = "description"
-    ITEM_DATA = "item_data"
+    ITEM_DATA   = "item_data"
 
 
 class InheritedParser(ArgumentParser):

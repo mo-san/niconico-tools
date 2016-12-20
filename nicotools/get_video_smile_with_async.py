@@ -1,6 +1,7 @@
 # coding: utf-8
 import asyncio
 import os
+import sys
 from pathlib import Path
 from typing import Union, List, Optional
 
@@ -8,6 +9,7 @@ import aiohttp
 import functools
 from tqdm import tqdm
 
+sys.path.insert(0, r"../")
 from nicotools import utils
 from nicotools.get_info_with_async import GetInfoAsync
 from nicotools.utils import KeyDmc
@@ -21,19 +23,20 @@ class GetSmileVideosAsync(utils.Canopy):
                  return_session=False,
                  division: int=4,
                  limit: int=4,
-                 multiline_progressbars=True):
+                 chunk_size=1024*50,
+                 multiline=True):
         super().__init__(loop=loop, logger=logger)
         self.__mail = mail
         self.__password = password
         self.__downloaded_size = None  # type: List[int]
-        self.__multiline = multiline_progressbars
+        self.__multiline = multiline
         self.__division = division
         self.session = session
         self.__return_session = return_session
         self.__parallel_limit = limit
+        self.__chunk_size = chunk_size
 
-    def start(self, glossary: Union[list, dict], save_dir: str,
-              chunk_size: int=1024*50) -> Optional[aiohttp.ClientSession]:
+    def start(self, glossary: Union[list, dict], save_dir: str) -> Optional[aiohttp.ClientSession]:
         self.save_dir = utils.make_dir(save_dir)
         self.__downloaded_size = [0] * self.__division
 
@@ -47,7 +50,7 @@ class GetSmileVideosAsync(utils.Canopy):
 
         sem = asyncio.Semaphore(self.__parallel_limit)
         self.loop.run_until_complete(self._push_file_size(sem))
-        self.loop.run_until_complete(self._broker(self.__division, chunk_size))
+        self.loop.run_until_complete(self._broker())
         if self.__return_session:
             return self.session
         else:
@@ -70,27 +73,28 @@ class GetSmileVideosAsync(utils.Canopy):
             self.glossary[_id][KeyDmc.FILE_SIZE] = size
 
     async def _get_file_size_worker(self, video_id: str) -> int:
-        vid_url = self.glossary[video_id][KeyDmc.VIDEO_URL]
+        vid_url = self.glossary[video_id][KeyDmc.VIDEO_URL_SM]
         self.logger.debug("Video ID: {}, Video URL: {}".format(video_id, vid_url))
         async with self.session.head(vid_url) as resp:
             headers = resp.headers
             self.logger.debug(str(headers))
             return int(headers["content-length"])
 
-    async def _broker(self, division: int, chunk_size: int):
+    async def _broker(self):
         futures = []
         for video_id in self.glossary:
-            coro = self._download(video_id, division, chunk_size)
+            coro = self._download(video_id)
             f = asyncio.ensure_future(coro)
-            f.add_done_callback(functools.partial(self._combiner, video_id, division))
+            f.add_done_callback(functools.partial(self._combiner, video_id))
             futures.append(f)
         await asyncio.wait(futures, loop=self.loop)
 
-    async def _download(self, video_id: str, division: int, chunk_size: int):
+    async def _download(self, video_id: str):
+        division = self.__division
         file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
 
-        video_url = self.glossary[video_id][KeyDmc.VIDEO_URL]
-        file_size = self.glossary[video_id]["file_size"]
+        video_url = self.glossary[video_id][KeyDmc.VIDEO_URL_SM]
+        file_size = self.glossary[video_id][KeyDmc.FILE_SIZE]
         headers = [
             {"Range": "bytes={}-{}".format(
                 int(file_size*order/division),
@@ -103,7 +107,7 @@ class GetSmileVideosAsync(utils.Canopy):
                                   leave=False, position=order,
                                   unit="B", unit_scale=True)
                              for order in range(division)]  # type: List[tqdm]
-            tasks = [self._downlaod_worker(file_path, video_url, header, order, chunk_size, pbar)
+            tasks = [self._download_worker(file_path, video_url, header, order, pbar)
                      for header, order, pbar
                      in zip(headers, range(division), progress_bars)]
             progress_bars = await asyncio.gather(*tasks)  # type: List[tqdm]
@@ -111,27 +115,27 @@ class GetSmileVideosAsync(utils.Canopy):
             for pbar in reversed(progress_bars):
                 pbar.close()
         else:
-            tasks = [self._downlaod_worker(file_path, video_url, header, order, chunk_size)
+            tasks = [self._download_worker(file_path, video_url, header, order)
                      for header, order
                      in zip(headers, range(division))]
             await asyncio.gather(*tasks, self._counter_whole(file_size))
 
-    async def _downlaod_worker(self, file_path: Union[str, Path], video_url: str,
-                               header: dict, order: int, chunk_size: int=1024*50, pbar: tqdm=None) -> tqdm:
+    async def _download_worker(self, file_path: Union[str, Path], video_url: str,
+                               header: dict, order: int, pbar: tqdm=None) -> tqdm:
         file_path = Path("{}.{:03}".format(file_path, order))
         # => video.mp4.000 ～ video.mp4.003 (4分割の場合)
         with file_path.open("wb") as fd:
             async with self.session.get(url=video_url, headers=header) as video_data:
-                self.logger.debug("Started! Header: %s, Video URL: %s", header, video_url)
+                self.logger.debug("Started! Header: {}, Video URL: {}".format(header, video_url))
                 while True:
-                    data = await video_data.content.read(chunk_size)
+                    data = await video_data.content.read(self.__chunk_size)
                     if not data:
                         break
                     downloaded_size = fd.write(data)
                     self.__downloaded_size[order] += downloaded_size
                     if pbar:
                         pbar.update(downloaded_size)
-        self.logger.debug("Done! Header: %s", header)
+        self.logger.debug("Order: {} Done!".format(order))
         return pbar
 
     async def _counter_whole(self, file_size: int, interval: int=1):
@@ -146,13 +150,19 @@ class GetSmileVideosAsync(utils.Canopy):
                 oldsize = newsize
                 await asyncio.sleep(interval)
 
-    def _combiner(self, video_id: str, division: int, coroutine: asyncio.Task):
+    def _combiner(self, video_id: str, coroutine: asyncio.Task):
         if coroutine.done() and not coroutine.cancelled():
             file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
-            file_names = ["{}.{:03}".format(file_path, order) for order in range(division)]
+            file_names = ["{}.{:03}".format(file_path, order) for order in range(self.__division)]
             self.logger.debug("File names: {}".format(file_names))
             with file_path.open("wb") as fd:
                 for name in file_names:
                     with open(name, "rb") as file:
                         fd.write(file.read())
                     os.remove(name)
+
+if __name__ == "__main__":
+    _video_ids = ["sm30214903", "sm1028001", "sm30219950", "sm30220861"]
+    _save_dir = "D:/Downloads/videos/"
+    GetSmileVideosAsync(mail=os.getenv("addr_p"), password=os.getenv("pass_p"),
+                        logger=utils.NTLogger(log_level=20)).start(_video_ids, _save_dir)
