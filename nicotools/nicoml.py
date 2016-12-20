@@ -13,7 +13,7 @@ except ImportError:
     PrettyTable = False
 
 from . import utils
-from .utils import Msg, Err, URL, Key, MKey, MylistNotFoundError
+from .utils import Msg, Err, URL, KeyGTI, MKey, MylistNotFoundError
 
 
 # TODO: purifyコマンド
@@ -77,7 +77,7 @@ class NicoMyList(utils.LogIn):
 
         他のコマンド:
             それぞれにはログインに必要な情報を与えられる:
-                mylist MYLIST --add sm9 --user <メールアドレス> --pass <パスワード>
+                mylist MYLIST --add sm9 --mail <メールアドレス> --pass <パスワード>
 
             引数がどの様に解釈されるかを確認したいとき (確認するだけで、プログラムは実行しません):
                 mylist --export --id 12345678 --out ../file.txt --what
@@ -92,7 +92,7 @@ class NicoMyList(utils.LogIn):
         :param str | None mail: メールアドレス
         :param str | None password: パスワードの組
         :param NTLogger logger:
-        :param requests.Session | None session: requests モジュールのセッション
+        :param requests.Session | None session: requests のセッション
         :rtype: None
         """
         super().__init__(mail=mail, password=password, logger=logger, session=session)
@@ -292,7 +292,8 @@ class NicoMyList(utils.LogIn):
                 # 同じ名前のマイリストが複数あったとき
                 self.logger.error(result.get("err_msg"))
                 for single in result.get("err_dic").values():
-                    sys.exit(Err.name_ambiguous_detail.format(**single))
+                    print(Err.name_ambiguous_detail.format(**single), file=sys.stderr)
+                sys.exit()
             else:
                 # 存在しなかったとき
                 raise MylistNotFoundError(result.get("err_msg"))
@@ -812,19 +813,19 @@ class NicoMyList(utils.LogIn):
         for item in jtext["mylistitem"]:
             data = item[MKey.ITEM_DATA]
             desc = html.unescape(item[MKey.DESCRIPTION])
-            duration = int(data[Key.LENGTH_SECONDS])
+            duration = int(data[KeyGTI.LENGTH_SECONDS])
             container.append([
-                data[Key.VIDEO_ID],
-                html.unescape(data[Key.TITLE]).replace(r"\/", "/"),
-                self._get_jst_from_utime(data[Key.FIRST_RETRIEVE]),
-                data[Key.VIEW_COUNTER],
-                data[Key.NUM_RES],
-                data[Key.MYLIST_COUNTER],
+                data[KeyGTI.VIDEO_ID],
+                html.unescape(data[KeyGTI.TITLE]).replace(r"\/", "/"),
+                self._get_jst_from_utime(data[KeyGTI.FIRST_RETRIEVE]),
+                data[KeyGTI.VIEW_COUNTER],
+                data[KeyGTI.NUM_RES],
+                data[KeyGTI.MYLIST_COUNTER],
                 "{}:{}".format(duration // 60, duration % 60),
-                self.WHY_DELETED.get(data[Key.DELETED], "不明"),
+                self.WHY_DELETED.get(data[KeyGTI.DELETED], "不明"),
                 desc.strip().replace("\r", "").replace("\n", " ").replace(r"\/", "/"),
                 list_name,
-                # data[Key.LAST_RES_BODY],
+                # data[KeyGTI.LAST_RES_BODY],
             ])
         self.logger.debug("Mylists infos:\t{}".format(container))
         return container

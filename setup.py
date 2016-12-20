@@ -23,7 +23,10 @@ setup(
     install_requires=[
         'requests',
         'prettytable',
-        'progressbar2', 'bs4'
+        'progressbar2',
+        'bs4',
+        'aiohttp',
+        'tqdm'
     ],
     entry_points={
         'console_scripts': ['nicotools = nicotools.__init__:main']

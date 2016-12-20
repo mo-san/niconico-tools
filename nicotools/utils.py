@@ -1,8 +1,8 @@
 # coding: utf-8
+import asyncio
 import inspect
 import logging
 import os
-import pickle
 import re
 import sys
 from argparse import ArgumentParser
@@ -14,17 +14,17 @@ from urllib.parse import parse_qs
 import requests
 
 ALL_ITEM = "*"
-LOG_FILE_ND = "nicotools_download.log"
-LOG_FILE_ML = "nicotools_mylist.log"
+LOG_FILE_ND = "async_nicotools_download.log"
+LOG_FILE_ML = "async_nicotools_mylist.log"
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 if IS_DEBUG:
     os_name = os.getenv("TRAVIS_OS_NAME", os.name)
     version = (os.getenv("TRAVIS_PYTHON_VERSION") or
                os.getenv("PYTHON_VERSION") or
                "_" .join(map(str, sys.version_info[0:3])))
-    COOKIE_FILE_NAME = "nicotools_cokkie_{0}_{1}".format(os_name, version)
+    COOKIE_FILE_NAME = "async_nicotools_cokkie_{0}_{1}".format(os_name, version)
 else:
-    COOKIE_FILE_NAME = "nicotools_cookie.pickle"
+    COOKIE_FILE_NAME = "async_nicotools_cookie.pickle"
 
 # 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか
 BACKSLASH = "backslashreplace"
@@ -168,8 +168,21 @@ class MylistArgumentError(MylistError):
 
 
 class Canopy:
-    def __init__(self, logger=None):
-        self.database = None
+    __singleton__ = None
+
+    @classmethod
+    def __new__(cls, *more, **kwargs):
+        """
+        デザインパターン（Design Pattern）#Singleton - Qiita
+        http://qiita.com/nirperm/items/af1f83925ba43dbf22eb
+        """
+        if cls.__singleton__ is None:
+            cls.__singleton__ = super().__new__(cls)
+        return cls.__singleton__
+
+    def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
+        self.loop = loop or asyncio.get_event_loop()
+        self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
 
@@ -183,7 +196,7 @@ class Canopy:
         """
         check_arg(locals())
         file_name =  Msg.nd_file_name.format(
-            video_id, self.database[video_id][Key.FILE_NAME], ext)
+            video_id, self.glossary[video_id][KeyDmc.FILE_NAME], ext)
         return Path(self.save_dir).resolve() / file_name
 
     def get_logger(self, logger):
@@ -262,6 +275,16 @@ class Canopy:
 
 
 class LogIn(Canopy):
+    __singleton__ = None
+    is_login = False
+    cookie = {}
+
+    @classmethod
+    def __new__(cls, *more, **kwargs):
+        if cls.__singleton__ is None:
+            cls.__singleton__ = super(LogIn, cls).__new__(cls)
+        return cls.__singleton__
+
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         :param str | None mail: メールアドレス
@@ -269,8 +292,7 @@ class LogIn(Canopy):
         :param requests.Session | None session: セッションオブジェクト
         """
         super().__init__(logger=logger)
-        self.is_login = False
-        self._auth = None
+        self._auth = {}
         if not (session or mail or password):
             self.session = self.get_session()
         elif session and not (mail or password):
@@ -294,7 +316,7 @@ class LogIn(Canopy):
             auth = auth or self._auth
             res = session.post(URL.URL_LogIn, params=auth)
             if self._we_have_logged_in(res.text):
-                self.save_cookies(session.cookies)
+                self.cookie = self.save_cookies(session.cookies)
                 self.is_login = True
             else:
                 return self.get_session(self._ask_credentials(), force_login=True)
@@ -375,22 +397,25 @@ class LogIn(Canopy):
 
         :param requests.cookies.RequestsCookieJar requests_cookiejar:
         :param str file_name:
-        :rtype: None
+        :rtype: dict
         """
-        with open(join(expanduser("~"), file_name), "wb") as fd:
-            pickle.dump(requests_cookiejar, fd)
+        file_path = make_dir(Path.home() / file_name)
+        cook = {key: val for key, val in requests_cookiejar.items()}
+        file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
+        return cook
 
     @classmethod
     def load_cookies(cls, file_name=COOKIE_FILE_NAME):
         """
-        クッキーを読み込む。
+        クッキーを読み込む。名前、値をタブで区切ったテキストファイルから。
 
         :param str file_name:
-        :rtype: requests.cookies.RequestsCookieJar | None
+        :rtype: dict | None
         """
+        file = make_dir(Path.home() / file_name)
         try:
-            with open(join(expanduser("~"), file_name), "rb") as fd:
-                return pickle.load(fd)
+            return {line.split("\t")[0]: line.split("\t")[1]
+                    for line in file.read_text().split("\n")}
         except (FileNotFoundError, EOFError):
             return None
 
@@ -451,10 +476,10 @@ class NTLogger(logging.Logger):
             # ログを呼び出した関数の名前をつなげる
             funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
             if level <= logging.DEBUG:
-                msg = funcs + "]\t" + msg
+                msg = funcs + "]\t" + str(msg)
             else:
-                msg = funcs + "]\t\t" + msg
-        _msg = msg.encode(_enco, BACKSLASH).decode(_enco)
+                msg = funcs + "]\t\t" + str(msg)
+        _msg = str(msg).encode(_enco, BACKSLASH).decode(_enco)
         _args = tuple([item.encode(_enco, BACKSLASH).decode(_enco)
                        if isinstance(item, str) else item for item in args[0]])
         self._log(level, _msg, _args, **kwargs)
@@ -477,7 +502,8 @@ class URL:
     URL_Info   = "http://ext.nicovideo.jp/api/getthumbinfo/"
     URL_Pict   = "http://tn-skr1.smilevideo.jp/smile"
     URL_GetThreadKey = "http://flapi.nicovideo.jp/api/getthreadkey"
-    URL_Message_New = "http://nmsg.nicovideo.jp/api.json/"
+    URL_Message_New_JSON = "http://nmsg.nicovideo.jp/api.json/"
+    URL_Message_New_XML = "http://nmsg.nicovideo.jp/api/"
 
     # 一般のマイリストを扱うためのAPI
     URL_MyListTop  = "http://www.nicovideo.jp/my/mylist"
@@ -671,7 +697,7 @@ class Err:
     INTERNAL = "INTERNAL"
 
 
-class Key:
+class KeyGTI:
     """
     getthumbinfo から取ってきたデータのキーとなる文字列たち。
 
@@ -715,6 +741,46 @@ class Key:
     VIDEO_ID        = "video_id"
     VIEW_COUNTER    = "view_counter"    # int
     WATCH_URL       = "watch_url"
+
+
+class KeyDmc:
+    FILE_NAME       = "file_name"
+    FILE_SIZE       = "file_size"
+
+    VIDEO_ID        = "video_id"
+    VIDEO_URL       = "video_url"       # Smile サーバーのほう
+    TITLE           = "title"
+    THUMBNAIL_URL   = "thumbnail_url"
+    ECO             = "eco"             # type: int
+    MOVIE_TYPE      = "movie_type"
+    IS_DMC          = "is_dmc"          # type: int or None
+    DELETED         = "deleted"         # type: int
+    IS_DELETED      = "is_deleted"      # type: bool
+    IS_PUBLIC       = "is_public"       # type: bool
+    IS_OFFICIAL     = "is_official"     # type: bool
+    IS_PREMIUM      = "is_premium"      # type: bool
+    USER_ID         = "user_id"
+    USER_KEY        = "user_key"
+    MSG_SERVER      = "ms"
+    THREAD_ID       = "thread_id"
+
+    API_URL         = "api_url"
+    RECIPE_ID       = "recipe_id"
+    CONTENT_ID      = "content_id"
+    VIDEO_SRC_IDS   = "video_src_ids"   # type: list
+    AUDIO_SRC_IDS   = "audio_src_ids"   # type: list
+    HEARTBEAT       = "heartbeat"       # type: int
+    TOKEN           = "token"
+    SIGNATURE       = "signature"
+    AUTH_TYPE       = "auth_type"
+    C_K_TIMEOUT     = "content_key_timeout"     # type: int
+    SVC_USER_ID = "service_user_id"     # USER_ID とたぶん同じ
+    PLAYER_ID       = "player_id"
+    PRIORITY        = "priority"
+
+    # ↓公式動画にだけある情報
+    OPT_THREAD_ID   = "optional_thread_id"
+    NEEDS_KEY       = "needs_key"
 
 
 class KeyGetFlv:
