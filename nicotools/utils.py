@@ -126,6 +126,26 @@ def make_dir(directory):
         raise NameError(Err.invalid_dirname.format(directory))
 
 
+def t2filename(text):
+    """
+    ファイル名に使えない文字を全角文字に置き換える。
+
+    :param str text: ファイル名
+    :rtype: str
+    """
+    mydic = {
+        r"\/": "／", "/": "／", "'": "’", "\"": "”",
+        "<"  : "＜", ">": "＞", "|": "｜", ":": "：",
+        "*"  : "＊", "?": "？", "~": "～", "\\": "＼"
+    }
+    for item in mydic.keys():
+        text = text.replace(item, mydic[item])
+    # 置き換えるペアが増えたらこっちを使うと楽かもしれない
+    # pattern = re.compile("|".join(re.escape(key) for key in mydic.keys()))
+    # return pattern.sub(lambda x: mydic[x.group()], text)
+    return text
+
+
 def check_arg(parameters):
     """
     None を許容しない引数が None を含んでいないか検査する。

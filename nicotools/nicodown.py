@@ -118,7 +118,7 @@ def get_infos(queue, logger=None):
             pocket[KeyGTI.COMMENT_NUM]     = int(finder(KeyGTI.COMMENT_NUM).text)
             pocket[KeyGTI.DESCRIPTION]     = html.unescape(finder(KeyGTI.DESCRIPTION).text)
             pocket[KeyGTI.EMBEDDABLE]      = int(finder(KeyGTI.EMBEDDABLE).text)
-            pocket[KeyGTI.FILE_NAME]       = t2filename(finder(KeyGTI.TITLE).text)
+            pocket[KeyGTI.FILE_NAME]       = utils.t2filename(finder(KeyGTI.TITLE).text)
             pocket[KeyGTI.FIRST_RETRIEVE]  = finder(KeyGTI.FIRST_RETRIEVE).text[:10]
             pocket[KeyGTI.LAST_RES_BODY]   = finder(KeyGTI.LAST_RES_BODY).text
             pocket[KeyGTI.LENGTH]          = "{}:{}".format(minute, second)
@@ -146,26 +146,6 @@ def get_infos(queue, logger=None):
                 pocket[KeyGTI.CH_ICON_URL]     = finder(KeyGTI.CH_ICON_URL).text
             lexikon[video_id]                  = pocket
     return lexikon
-
-
-def t2filename(text):
-    """
-    ファイル名に使えない文字を全角文字に置き換える。
-
-    :param str text: ファイル名
-    :rtype: str
-    """
-    mydic = {
-        r"\/": "／", "/": "／", "'": "’", "\"": "”",
-        "<": "＜", ">": "＞", "|": "｜", ":": "：",
-        "*": "＊", "?": "？", "~": "～", "\\": "＼"
-    }
-    for item in mydic.keys():
-        text = text.replace(item, mydic[item])
-    # 置き換えるペアが増えたらこっちを使うと楽かもしれない
-    # pattern = re.compile("|".join(re.escape(key) for key in mydic.keys()))
-    # return pattern.sub(lambda x: mydic[x.group()], text)
-    return text
 
 
 class GetVideos(utils.LogIn):

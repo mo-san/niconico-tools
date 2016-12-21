@@ -7,7 +7,6 @@ from urllib.parse import unquote
 import aiohttp
 from bs4 import BeautifulSoup
 
-from nicotools import nicodown
 from nicotools import utils
 from nicotools.utils import URL, Canopy, KeyDmc, KeyGetFlv
 
@@ -74,7 +73,7 @@ class GetInfoAsync(utils.Canopy):
             KeyDmc.VIDEO_ID     : flash_vars["videoId"],  # type: str
             KeyDmc.VIDEO_URL_SM : flvinfo[KeyGetFlv.VIDEO_URL],  # type: str
             KeyDmc.TITLE        : flash_vars["videoTitle"],  # type: str
-            KeyDmc.FILE_NAME    : nicodown.t2filename(flash_vars["videoTitle"]),
+            KeyDmc.FILE_NAME    : utils.t2filename(flash_vars["videoTitle"]),
             KeyDmc.FILE_SIZE    : None,
             KeyDmc.THUMBNAIL_URL: flash_vars["thumbImage"],  # type: str
             KeyDmc.ECO          : flash_vars.get("eco") or 0,  # type: int
@@ -140,7 +139,7 @@ class GetInfoAsync(utils.Canopy):
             KeyDmc.VIDEO_ID     : _video["id"],  # type: str
             KeyDmc.VIDEO_URL_SM : _video["source"],  # type: str
             KeyDmc.TITLE        : _video["originalTitle"],  # type: str
-            KeyDmc.FILE_NAME    : nicodown.t2filename(_video["originalTitle"]),
+            KeyDmc.FILE_NAME    : utils.t2filename(_video["originalTitle"]),
             KeyDmc.FILE_SIZE    : None,
             KeyDmc.THUMBNAIL_URL: _video["thumbnailURL"],  # type: str
             KeyDmc.ECO          : j["context"]["isEconomy"],  # type: int
