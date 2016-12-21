@@ -42,6 +42,24 @@ def get_encoding():
     return sys.stdout.encoding or "UTF-8"
 
 
+def print_info(queue, file_name=None):
+    """
+    GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
+
+    :param list queue:
+    :param str | Path | None file_name:
+    :return: bool
+    """
+    text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
+    if file_name:
+        file_name = make_dir(file_name)
+        with file_name.open(encoding="utf-8", mode="w") as fd:
+            fd.write(text + "\n")
+    else:
+        print(text.encode(get_encoding(), BACKSLASH).decode(get_encoding()))
+    return True
+
+
 def validator(input_list):
     """
     動画IDが適切なものか確認する。
@@ -554,38 +572,39 @@ class Msg:
     ''' マイリスト編集コマンドのヘルプメッセージ '''
     ml_default_name = "とりあえずマイリスト"
     ml_default_id = 0
-    ml_description = "マイリストを扱います。 add, delete, move, copy の引数には " \
-                     "テキストファイルも指定できます。 その場合はファイル名の " \
-                     "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    ml_description = ("マイリストを扱います。 add, delete, move, copy の引数には"
+                      "テキストファイルも指定できます。 その場合はファイル名の"
+                      "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
     ml_help_group_b = "マイリスト自体を操作する"
     ml_help_group_a = "リスト中の項目を操作する"
     ml_help_add = "指定したIDの動画を マイリストに追加します。"
-    ml_help_delete = "そのマイリストから 指定したIDの動画を削除します。" \
-                     "動画IDの代わりに * を指定すると、 マイリストを空にします。"
+    ml_help_delete = ("そのマイリストから 指定したIDの動画を削除します。"
+                      "動画IDの代わりに * を指定すると、 マイリストを空にします。")
     ml_help_move = "移動元から移動先へと 動画を移動します。"
-    ml_help_copy = "コピー元からコピー先へと 動画をコピーします。 " \
-                   "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。"
-    ml_help_export = "登録された動画IDのみを改行で区切り、 出力します。" \
-                     "名前の代わりに * を指定すると 全マイリストを一覧にします。"
-    ml_help_show = "登録された動画の情報をタブ区切り形式で出力します。" \
-                   "名前の代わりに * を指定すると マイリスト全体のメタデータを出力します。" \
-                   "-ss のように2回指定すると表形式で表示します。"
+    ml_help_copy = ("コピー元からコピー先へと 動画をコピーします。 "
+                    "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。")
+    ml_help_export = ("登録された動画IDのみを改行で区切り、出力します。"
+                      "名前の代わりに * を指定すると 全マイリストを一覧にします。")
+    ml_help_show = ("登録された動画の情報をタブ区切り形式で出力します。"
+                    "名前の代わりに * を指定すると マイリスト全体のメタデータを出力します。"
+                    "-ss のように2回指定すると表形式で表示します。")
     ml_help_outfile = "そのファイル名で テキストファイルに出力します。"
     ml_help_purge = "そのマイリスト自体を削除します。 取り消しはできません。"
     ml_help_create = "指定した名前で 新しくマイリストを作成します。"
     ml_help_src = "移動(コピー)元、 あるいは各種の操作対象の、マイリストの名前"
     ml_help_to = "移動(コピー)先のマイリストの名前"
     ml_help_id = "マイリストの指定に、 名前の代わりにそのIDを使います。"
-    ml_help_everything = "show や export と同時に指定すると、" \
-                         "全てのマイリストの情報をまとめて取得します。"
-    ml_help_yes = "これを指定すると、マイリスト自体の削除や" \
-                  "マイリスト内の全項目の削除の時に確認しません。"
+    ml_help_everything = ("show や export と同時に指定すると、"
+                          "全てのマイリストの情報をまとめて取得します。")
+    ml_help_yes = ("これを指定すると、マイリスト自体の削除や"
+                   "マイリスト内の全項目の削除の時に確認しません。")
+    ml_help_each = "指定すると、登録や削除を、まとめずに一つずつ行います。"
 
     ''' 動画ダウンロードコマンドのヘルプメッセージ '''
-    nd_description = "ニコニコ動画のデータを ダウンロードします。"
-    nd_help_video_id = "ダウンロードしたい動画ID。 例: sm12345678 " \
-                       "テキストファイルも指定できます。 その場合はファイル名の " \
-                       "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    nd_description = "動画のいろいろをダウンロードします。"
+    nd_help_video_id = ("ダウンロードしたい動画ID。 例: sm12345678 "
+                        "テキストファイルも指定できます。 その場合はファイル名の "
+                        "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
     nd_help_password = "パスワード"
     nd_help_mail = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
@@ -593,11 +612,16 @@ class Msg:
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
     nd_help_video = "指定すると、 動画をダウンロードします。"
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
-    nd_help_xml = "コメントをXML形式でダウンロードしたい場合に指定します。" \
-                  "チャンネル動画の場合は無視されます。"
+    nd_help_xml = ("指定すると、コメントをXML形式でダウンロードします。"
+                   "チャンネル動画の場合は無視されます。")
     nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
+    nd_help_nomulti = "指定すると、プログレスバーを複数行で表示しません。"
+    nd_help_limit = ("サムネイルとコメントについては同時ダウンロードを、"
+                     "動画については1つあたりの分割数をこの数に制限します。標準は 4 です。")
+    nd_help_dmc = "動画をDMCサーバー(いわゆる新サーバー)からダウンロードします。標準はこちらです。"
+    nd_help_smile = "動画をsmileサーバー(いわゆる従来サーバー)からダウンロードします。"
 
     input_mail = "メールアドレスを入力してください。"
     input_pass = "パスワードを入力してください(画面には表示されません)。"
@@ -635,8 +659,8 @@ class Msg:
     ml_done_copy = "[完了:コピー] ({now}/{all}) 動画ID: {video_id}"
     ml_done_move = "[完了:移動] ({now}/{all}) 動画ID: {video_id}"
     ml_done_purge = "[完了:マイリスト削除] 名前: {name}"
-    ml_done_create = "[完了:マイリスト作成] ID: {_id}, 名前: {name}" \
-                     " (公開: {pub}), 説明文: {desc}"
+    ml_done_create = ("[完了:マイリスト作成] ID: {_id}, 名前:"
+                      " {name} (公開: {pub}), 説明文: {desc}")
 
     ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
     ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"

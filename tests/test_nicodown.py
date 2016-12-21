@@ -6,7 +6,7 @@ import shutil
 import pytest
 
 import nicotools
-from nicotools.nicodown import GetVideos, GetComments, GetThumbnails, get_infos
+from nicotools.nicodown import Video, Comment, Thumbnail, get_infos
 from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir
 
 SAVE_DIR_1 = "tests/downloads/"
@@ -175,41 +175,41 @@ class TestNicodownError:
 class TestComment:
     def test_comment_single(self):
         db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
-        assert GetComments(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
+        assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
 
     def test_comment_multi(self):
         db = get_infos(VIDEO_ID.split(" "), LOGGER)
-        assert GetComments(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1, xml=True)
+        assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1, xml=True)
 
     def test_comment_without_directory(self):
         db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
         with pytest.raises(ValueError):
             # noinspection PyTypeChecker
-            GetComments(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
+            Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
 
 
 class TestThumb:
     def test_thumbnail_single(self):
         db = get_infos([VIDEO_ID.split(" ")[0]])
-        assert GetThumbnails(LOGGER).start(db, SAVE_DIR_1)
+        assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
 
     def test_thumbnail_multi(self):
         db = get_infos(VIDEO_ID.split(" "))
-        assert GetThumbnails(LOGGER).start(db, SAVE_DIR_1)
+        assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
 
     def test_thumbnail_without_logger(self):
         db = get_infos(VIDEO_ID.split(" "))
-        assert GetThumbnails().start(db, SAVE_DIR_1)
+        assert Thumbnail().start(db, SAVE_DIR_1)
 
 
 class TestVideo:
     def test_video_normal_single(self):
         db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
-        assert GetVideos(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
+        assert Video(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
 
     def test_video_premium_multi(self):
         db = get_infos(VIDEO_ID.split(" ")[0:2], LOGGER)
-        assert GetVideos(AUTH_P[0], AUTH_P[1], LOGGER).start(db, SAVE_DIR_1)
+        assert Video(AUTH_P[0], AUTH_P[1], LOGGER).start(db, SAVE_DIR_1)
 
 
 def test_okatadsuke():

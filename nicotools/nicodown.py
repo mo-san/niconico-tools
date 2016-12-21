@@ -39,24 +39,6 @@ from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
-def print_info(queue, file_name=None):
-    """
-    GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
-
-    :param list queue:
-    :param str | Path | None file_name:
-    :return: bool
-    """
-    text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
-    if file_name:
-        file_name = utils.make_dir(file_name)
-        with file_name.open(encoding="utf-8", mode="w") as fd:
-            fd.write(text + "\n")
-    else:
-        print(text.encode(utils.get_encoding(), utils.BACKSLASH).decode(utils.get_encoding()))
-    return True
-
-
 def get_infos(queue, logger=None):
     """
     getthumbinfo APIから、細かな情報をもらってくる
@@ -148,7 +130,7 @@ def get_infos(queue, logger=None):
     return lexikon
 
 
-class GetVideos(utils.LogIn):
+class Video(utils.LogIn):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         動画をダウンロードする。
@@ -253,7 +235,7 @@ class GetVideos(utils.LogIn):
         return True
 
 
-class GetThumbnails(utils.Canopy):
+class Thumbnail(utils.Canopy):
     def __init__(self, logger=None):
         """
         :param NTLogger logger:
@@ -343,7 +325,7 @@ class GetThumbnails(utils.Canopy):
         return True
 
 
-class GetComments(utils.LogIn):
+class Comment(utils.LogIn):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         :param str | None mail:
@@ -604,7 +586,7 @@ def main(args):
 
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
-        return print_info(videoid, file_name)
+        return utils.print_info(videoid, file_name)
 
     """ 本筋 """
     log_level = "DEBUG" if IS_DEBUG else args.loglevel
@@ -614,7 +596,7 @@ def main(args):
 
     res_t = False
     if args.thumbnail:
-        res_t = GetThumbnails(logger=logger).start(database, destination)
+        res_t = Thumbnail(logger=logger).start(database, destination)
         if not (args.comment or args.video):
             # サムネイルのダウンロードだけならここで終える。
             return res_t
@@ -623,13 +605,13 @@ def main(args):
 
     res_c = False
     if args.comment:
-        res_c = GetComments(logger=logger, session=session).start(database, destination, args.xml)
+        res_c = Comment(logger=logger, session=session).start(database, destination, args.xml)
 
     res_v = False
     if args.video:
-        res_v = GetVideos(logger=logger, session=session).start(database, destination)
+        res_v = Video(logger=logger, session=session).start(database, destination)
 
     return res_c | res_v | res_t
 
 if __name__ == "__main__":
-    GetVideos(mail=os.getenv("addr_p"), password=os.getenv("pass_p")).start(["sm30219950"], "D:/Downloads/")
+    Video(mail=os.getenv("addr_p"), password=os.getenv("pass_p")).start(["sm30219950"], "D:/Downloads/")

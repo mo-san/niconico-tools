@@ -1322,13 +1322,13 @@ def main(args):
     elif args.purge:
         res = instnc.purge_mylist(source, confident=args.yes)
     elif args.add:
-        res = instnc.add(source, *operand)
+        res = instnc.add(source, *operand, onetime=args.each)
     elif args.copy:
-        res = instnc.copy(source, dest, *operand)
+        res = instnc.copy(source, dest, *operand, onetime=args.each)
     elif args.move:
-        res = instnc.move(source, dest, *operand)
+        res = instnc.move(source, dest, *operand, onetime=args.each)
     else:
-        res = instnc.delete(source, *operand, confident=args.yes)
+        res = instnc.delete(source, *operand, confident=args.yes, onetime=args.each)
 
     instnc.close()
     return res
