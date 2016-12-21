@@ -13,7 +13,7 @@ from nicotools.utils import Msg, URL, Err, COOKIE_FILE_NAME
 
 
 class LogInAsync:
-    def __init__(self, loop: asyncio.AbstractEventLoop,
+    def __init__(self, loop: asyncio.AbstractEventLoop=None,
                  mail: str=None, password: str=None, session: aiohttp.ClientSession=None):
         self.is_login = False
         self._auth = None
@@ -37,22 +37,24 @@ class LogInAsync:
 
     async def get_session(self, auth: Dict=None):
         print(locals())
-        session = aiohttp.ClientSession()
 
         # 認証情報が渡ってきている⇔セッションがある
         if auth is not None:
             # 以前のセッションがあれば捨てて強制的にログインしに行く
             if self.session:
                 self.session.close()
+            session = aiohttp.ClientSession()
             print("get_session:1")
             # async with session.post(URL.URL_LogIn, params=auth) as res:
-            async with session.get(URL.URL_LogIn, allow_redirects=True) as resp:
-                print(resp.url)
-                url = self.login_url(await resp.text())
-            async with session.post(resp.url + url, params=auth) as resp_2:
+            # async with session.get(URL.URL_LogIn, allow_redirects=True) as resp:
+            #     print(resp.url)
+            #     response = await resp.text()
+            #     url = self.login_url(response)
+            # async with session.post(resp.url + url, params=auth) as resp_2:
+            async with session.post(URL.URL_LogIn, params=auth) as resp_2:
                 print(resp_2.url)
                 response = await resp_2.text()
-            print(response[response.find("<title>"):response.find("</title>")+8])
+                print(response[response.find("<title>"):response.find("</title>")+8])
             with open("nicologin.html", "w", encoding="utf-8") as f:
                 f.write(response)
             if self._we_have_logged_in(response):
@@ -63,6 +65,7 @@ class LogInAsync:
                 print("get_session:4")
                 return await self.get_session(self._ask_credentials())
         else:
+            session = aiohttp.ClientSession()
             print("get_session:2")
             self.load_cookies(session.cookie_jar)
         self.session = session

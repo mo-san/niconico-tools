@@ -23,9 +23,9 @@ if IS_DEBUG:
     version = (os.getenv("TRAVIS_PYTHON_VERSION") or
                os.getenv("PYTHON_VERSION") or
                "_" .join(map(str, sys.version_info[0:3])))
-    COOKIE_FILE_NAME = "async_nicotools_cokkie_{0}_{1}".format(os_name, version)
+    COOKIE_FILE_NAME = "async_nicotools_cokkie_{0}_{1}.txt".format(os_name, version)
 else:
-    COOKIE_FILE_NAME = "async_nicotools_cookie.pickle"
+    COOKIE_FILE_NAME = "async_nicotools_cookie.txt"
 
 # 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか
 BACKSLASH = "backslashreplace"
@@ -118,6 +118,7 @@ def make_dir(directory):
             # [WinError 267] ディレクトリ名が無効です。(con とか nul とか)
             NotADirectoryError,
             # [WinError 5] アクセスが拒否されました。(C:/ とか D:/ とか)
+            # [Errno 13] Permission denied (同名のフォルダーがあってそこに書き込もうとした場合)
             PermissionError,
             # [WinError 183] 既に存在するファイルを作成することはできません。
             FileExistsError
@@ -466,7 +467,7 @@ class NTLogger(logging.Logger):
 
     def get_formatter(self):
         if self._is_debug:
-            fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
+            fmt = logging.Formatter("[line:{lineno}|{levelname: ^7}|{message}", style="{")
         else:
             fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
         return fmt
@@ -609,12 +610,13 @@ class Msg:
     ml_answer_invalid = "Y または N を入力してください。"
     ml_deleted_or_private = "{0[video_id]} {0[title]} は削除されているか非公開です。"
 
-    ml_done_add = "[完了:追加] ({0}/{1}) 動画: {2}"
-    ml_done_delete = "[完了:削除] ({0}/{1}) 動画: {2}"
-    ml_done_copy = "[完了:コピー] ({0}/{1}) 動画ID: {2}"
-    ml_done_move = "[完了:移動] ({0}/{1}) 動画ID: {2}"
-    ml_done_purge = "[完了:マイリスト削除] 名前: {0}"
-    ml_done_create = "[完了:マイリスト作成] ID: {0}, 名前: {1} (公開: {2}), 説明文: {3}"
+    ml_done_add = "[完了:追加] ({now}/{all}) 動画: {video_id}"
+    ml_done_delete = "[完了:削除] ({now}/{all}) 動画: {video_id}"
+    ml_done_copy = "[完了:コピー] ({now}/{all}) 動画ID: {video_id}"
+    ml_done_move = "[完了:移動] ({now}/{all}) 動画ID: {video_id}"
+    ml_done_purge = "[完了:マイリスト削除] 名前: {name}"
+    ml_done_create = "[完了:マイリスト作成] ID: {_id}, 名前: {name}" \
+                     " (公開: {pub}), 説明文: {desc}"
 
     ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
     ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
@@ -626,6 +628,7 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    failed_operation = "以下の理由により操作は失敗しました: {desc}"
     waiting_for_permission = "アクセス制限が解除されるのを待っています…"
     name_replaced = "作成しようとした名前「{0}」は特殊文字を含むため、" \
                     "「{1}」に置き換わっています。"

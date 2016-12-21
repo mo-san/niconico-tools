@@ -2,7 +2,7 @@
 import os
 import sys
 
-from . import nicodown, nicoml
+from . import nicodown, nicoml_async as nicoml
 from .utils import Msg, Err, InheritedParser
 
 
