@@ -1277,32 +1277,37 @@ def main(args):
     file_name = args.out[0] if isinstance(args.out, list) else None
 
     """ エラーの除外 """
-    if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
-                args.add and utils.ALL_ITEM in args.add):
-        sys.exit(Err.cant_perform_all)
-    if (args.create or args.purge) and Msg.ml_default_name == source:
-        sys.exit(Err.deflist_to_create_or_purge)
-    if args.create and "" == source:
-        sys.exit(Err.cant_create)
-    if args.copy or args.move:
-        if dest is None:
-            sys.exit(Err.not_specified.format("--to"))
-        if source == dest:
-            sys.exit(Err.list_names_are_same)
-    if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
-            (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
-            (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
-        sys.exit(Err.videoids_contain_all)
-    operand = []
-    if args.add or args.copy or args.move or args.delete:
-        if args.add:    operand = utils.validator(args.add)
-        elif args.copy: operand = utils.validator(args.copy)
-        elif args.move: operand = utils.validator(args.move)
-        else:           operand = utils.validator(args.delete)
-        if not operand: sys.exit(Err.invalid_videoid)
-    if not (args.export or args.show or args.create or args.purge
-            or args.add or args.copy or args.move or args.delete):
-        sys.exit(Err.no_commands)
+    try:
+        if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
+                    args.add and utils.ALL_ITEM in args.add):
+            raise ZeroDivisionError(Err.cant_perform_all)
+        if (args.create or args.purge) and Msg.ml_default_name == source:
+            raise ZeroDivisionError(Err.deflist_to_create_or_purge)
+        if args.create and "" == source:
+            raise ZeroDivisionError(Err.cant_create)
+        if args.copy or args.move:
+            if dest is None:
+                raise ZeroDivisionError(Err.not_specified.format("--to"))
+            if source == dest:
+                raise ZeroDivisionError(Err.list_names_are_same)
+        if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
+                (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
+                (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
+            raise ZeroDivisionError(Err.videoids_contain_all)
+        operand = []
+        if args.add or args.copy or args.move or args.delete:
+            if args.add:    operand = utils.validator(args.add)
+            elif args.copy: operand = utils.validator(args.copy)
+            elif args.move: operand = utils.validator(args.move)
+            else:           operand = utils.validator(args.delete)
+            if not operand: raise ZeroDivisionError(Err.invalid_videoid)
+        if not (args.export or args.show or args.create or args.purge
+                or args.add or args.copy or args.move or args.delete):
+            raise ZeroDivisionError(Err.no_commands)
+    except ZeroDivisionError as error:
+        # close しないと "Unclosed client session" とのエラーが出る。
+        instnc.close()
+        sys.exit(error.args)
 
     """ 本筋 """
     if args.export:
