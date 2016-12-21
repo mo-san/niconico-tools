@@ -561,7 +561,7 @@ class VideoAsyncDmc(utils.Canopy):
                 video_url = self.extract_video_url_json(res_json)
                 coro_heartbeat = asyncio.ensure_future(self.heartbeat(video_id, res_json))
 
-            self.logger.debug("動画URL:".format(video_url))
+            self.logger.debug("動画URL: {}".format(video_url))
             coro_download = asyncio.ensure_future(self._download(video_id, video_url))
             coro_download.add_done_callback(functools.partial(self._canceler, coro_heartbeat))
             coro_download.add_done_callback(functools.partial(self._combiner, video_id))

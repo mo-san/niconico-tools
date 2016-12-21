@@ -505,7 +505,7 @@ class NTLogger(logging.Logger):
 
     def get_formatter(self):
         if self._is_debug:
-            fmt = logging.Formatter("[line:{lineno}|{levelname: ^7}|{message}", style="{")
+            fmt = logging.Formatter("[{asctime}|{levelname: ^7}|{message}", style="{")
         else:
             fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
         return fmt
@@ -513,8 +513,13 @@ class NTLogger(logging.Logger):
     def forwarding(self, level, msg, *args, **kwargs):
         _enco = get_encoding()
         if self._is_debug:
-            # ログを呼び出した関数の名前をつなげる
-            funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
+            history = inspect.stack()
+            funcs = "line:{}|{}".format(
+                # ログを呼び出した場所の行数
+                history[2][2],
+                # ログを呼び出した関数の名前をつなげる
+                " from ".join(["<{}>".format(item[3]) for item in history[2:5]])
+            )
             if level <= logging.DEBUG:
                 msg = funcs + "]\t" + str(msg)
             else:
