@@ -61,7 +61,7 @@ class TestMla:
 
     def purge_by_id(self, list_id, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --purge_by_id --id --yes".format(list_id)
+        c = "{} --purge --id --yes".format(list_id)
         assert nicotools.main(self.param(c))
 
     def param(self, cond):
@@ -191,7 +191,7 @@ class TestMlb:
 
     def purge_by_id(self, list_id, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --purge_by_id --id --yes".format(list_id)
+        c = "{} --purge --id --yes".format(list_id)
         assert nicotools.main(self.param(c))
 
     def test_initialize(self):
@@ -209,7 +209,7 @@ class TestMlb:
         assert nicotools.main(self.param(c))
         c = "{} --id --show --show --out {}{}_show.txt".format(LIST_ID, SAVE_DIR, LIST_NAME)
         assert nicotools.main(self.param(c))
-        c = "{} --id --purge_by_id --yes".format(LIST_ID)
+        c = "{} --id --purge --yes".format(LIST_ID)
         assert nicotools.main(self.param(c))
 
     def test_export_everything(self):
@@ -269,7 +269,7 @@ class TestErrors:
 
     def purge_by_id(self, list_id, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --purge_by_id --id --yes".format(list_id)
+        c = "{} --purge --id --yes".format(list_id)
         assert nicotools.main(self.param(c))
 
     def test_add_all(self):
@@ -284,7 +284,7 @@ class TestErrors:
 
     def test_purge_deflist(self):
         with pytest.raises(SystemExit):
-            c = "とりあえずマイリスト --purge_by_id"
+            c = "とりあえずマイリスト --purge"
             nicotools.main(self.param(c))
 
     def test_copy_to_same(self):
