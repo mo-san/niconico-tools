@@ -41,6 +41,24 @@ def get_encoding():
     return sys.stdout.encoding or "UTF-8"
 
 
+def print_info(queue, file_name=None):
+    """
+    GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
+
+    :param list queue:
+    :param str | Path | None file_name:
+    :return: bool
+    """
+    text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
+    if file_name:
+        file_name = make_dir(file_name)
+        with file_name.open(encoding="utf-8", mode="w") as fd:
+            fd.write(text + "\n")
+    else:
+        print(text.encode(get_encoding(), BACKSLASH).decode(get_encoding()))
+    return True
+
+
 def validator(input_list):
     """
     動画IDが適切なものか確認する。
@@ -117,11 +135,32 @@ def make_dir(directory):
             # [WinError 267] ディレクトリ名が無効です。(con とか nul とか)
             NotADirectoryError,
             # [WinError 5] アクセスが拒否されました。(C:/ とか D:/ とか)
+            # [Errno 13] Permission denied (同名のフォルダーがあってそこに書き込もうとした場合)
             PermissionError,
             # [WinError 183] 既に存在するファイルを作成することはできません。
             FileExistsError
     ):
         raise NameError(Err.invalid_dirname.format(directory))
+
+
+def t2filename(text):
+    """
+    ファイル名に使えない文字を全角文字に置き換える。
+
+    :param str text: ファイル名
+    :rtype: str
+    """
+    mydic = {
+        r"\/": "／", "/": "／", "'": "’", "\"": "”",
+        "<"  : "＜", ">": "＞", "|": "｜", ":": "：",
+        "*"  : "＊", "?": "？", "~": "～", "\\": "＼"
+    }
+    for item in mydic.keys():
+        text = text.replace(item, mydic[item])
+    # 置き換えるペアが増えたらこっちを使うと楽かもしれない
+    # pattern = re.compile("|".join(re.escape(key) for key in mydic.keys()))
+    # return pattern.sub(lambda x: mydic[x.group()], text)
+    return text
 
 
 def check_arg(parameters):
@@ -168,8 +207,20 @@ class MylistArgumentError(MylistError):
 
 
 class Canopy:
+    __singleton__ = None
+
+    @classmethod
+    def __new__(cls, *more, **kwargs):
+        """
+        デザインパターン（Design Pattern）#Singleton - Qiita
+        http://qiita.com/nirperm/items/af1f83925ba43dbf22eb
+        """
+        if cls.__singleton__ is None:
+            cls.__singleton__ = super().__new__(cls)
+        return cls.__singleton__
+
     def __init__(self, logger=None):
-        self.database = None
+        self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
 
@@ -183,7 +234,7 @@ class Canopy:
         """
         check_arg(locals())
         file_name =  Msg.nd_file_name.format(
-            video_id, self.database[video_id][Key.FILE_NAME], ext)
+            video_id, self.glossary[video_id][KeyGTI.FILE_NAME], ext)
         return Path(self.save_dir).resolve() / file_name
 
     def get_logger(self, logger):
@@ -262,6 +313,16 @@ class Canopy:
 
 
 class LogIn(Canopy):
+    __singleton__ = None
+    is_login = False
+    cookie = {}
+
+    @classmethod
+    def __new__(cls, *more, **kwargs):
+        if cls.__singleton__ is None:
+            cls.__singleton__ = super(LogIn, cls).__new__(cls)
+        return cls.__singleton__
+
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         :param str | None mail: メールアドレス
@@ -269,8 +330,7 @@ class LogIn(Canopy):
         :param requests.Session | None session: セッションオブジェクト
         """
         super().__init__(logger=logger)
-        self.is_login = False
-        self._auth = None
+        self._auth = {}
         if not (session or mail or password):
             self.session = self.get_session()
         elif session and not (mail or password):
@@ -440,7 +500,7 @@ class NTLogger(logging.Logger):
 
     def get_formatter(self):
         if self._is_debug:
-            fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
+            fmt = logging.Formatter("[{asctime}|{levelname: ^7}|{message}", style="{")
         else:
             fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
         return fmt
@@ -448,13 +508,18 @@ class NTLogger(logging.Logger):
     def forwarding(self, level, msg, *args, **kwargs):
         _enco = get_encoding()
         if self._is_debug:
-            # ログを呼び出した関数の名前をつなげる
-            funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
+            history = inspect.stack()
+            funcs = "line:{}|{}".format(
+                # ログを呼び出した場所の行数
+                history[2][2],
+                # ログを呼び出した関数の名前をつなげる
+                " from ".join(["<{}>".format(item[3]) for item in history[2:5]])
+            )
             if level <= logging.DEBUG:
-                msg = funcs + "]\t" + msg
+                msg = funcs + "]\t" + str(msg)
             else:
-                msg = funcs + "]\t\t" + msg
-        _msg = msg.encode(_enco, BACKSLASH).decode(_enco)
+                msg = funcs + "]\t\t" + str(msg)
+        _msg = str(msg).encode(_enco, BACKSLASH).decode(_enco)
         _args = tuple([item.encode(_enco, BACKSLASH).decode(_enco)
                        if isinstance(item, str) else item for item in args[0]])
         self._log(level, _msg, _args, **kwargs)
@@ -477,7 +542,8 @@ class URL:
     URL_Info   = "http://ext.nicovideo.jp/api/getthumbinfo/"
     URL_Pict   = "http://tn-skr1.smilevideo.jp/smile"
     URL_GetThreadKey = "http://flapi.nicovideo.jp/api/getthreadkey"
-    URL_Message_New = "http://nmsg.nicovideo.jp/api.json/"
+    URL_Message_New_JSON = "http://nmsg.nicovideo.jp/api.json/"
+    URL_Message_New_XML = "http://nmsg.nicovideo.jp/api/"
 
     # 一般のマイリストを扱うためのAPI
     URL_MyListTop  = "http://www.nicovideo.jp/my/mylist"
@@ -506,38 +572,38 @@ class Msg:
     ''' マイリスト編集コマンドのヘルプメッセージ '''
     ml_default_name = "とりあえずマイリスト"
     ml_default_id = 0
-    ml_description = "マイリストを扱います。 add, delete, move, copy の引数には " \
-                     "テキストファイルも指定できます。 その場合はファイル名の " \
-                     "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    ml_description = ("マイリストを扱います。 add, delete, move, copy の引数には"
+                      "テキストファイルも指定できます。 その場合はファイル名の"
+                      "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
     ml_help_group_b = "マイリスト自体を操作する"
     ml_help_group_a = "リスト中の項目を操作する"
     ml_help_add = "指定したIDの動画を マイリストに追加します。"
-    ml_help_delete = "そのマイリストから 指定したIDの動画を削除します。" \
-                     "動画IDの代わりに * を指定すると、 マイリストを空にします。"
+    ml_help_delete = ("そのマイリストから 指定したIDの動画を削除します。"
+                      "動画IDの代わりに * を指定すると、 マイリストを空にします。")
     ml_help_move = "移動元から移動先へと 動画を移動します。"
-    ml_help_copy = "コピー元からコピー先へと 動画をコピーします。 " \
-                   "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。"
-    ml_help_export = "登録された動画IDのみを改行で区切り、 出力します。" \
-                     "名前の代わりに * を指定すると 全マイリストを一覧にします。"
-    ml_help_show = "登録された動画の情報をタブ区切り形式で出力します。" \
-                   "名前の代わりに * を指定すると マイリスト全体のメタデータを出力します。" \
-                   "-ss のように2回指定すると表形式で表示します。"
+    ml_help_copy = ("コピー元からコピー先へと 動画をコピーします。 "
+                    "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。")
+    ml_help_export = ("登録された動画IDのみを改行で区切り、出力します。"
+                      "名前の代わりに * を指定すると 全マイリストを一覧にします。")
+    ml_help_show = ("登録された動画の情報をタブ区切り形式で出力します。"
+                    "名前の代わりに * を指定すると マイリスト全体のメタデータを出力します。"
+                    "-ss のように2回指定すると表形式で表示します。")
     ml_help_outfile = "そのファイル名で テキストファイルに出力します。"
     ml_help_purge = "そのマイリスト自体を削除します。 取り消しはできません。"
     ml_help_create = "指定した名前で 新しくマイリストを作成します。"
     ml_help_src = "移動(コピー)元、 あるいは各種の操作対象の、マイリストの名前"
     ml_help_to = "移動(コピー)先のマイリストの名前"
     ml_help_id = "マイリストの指定に、 名前の代わりにそのIDを使います。"
-    ml_help_everything = "show や export と同時に指定すると、" \
-                         "全てのマイリストの情報をまとめて取得します。"
-    ml_help_yes = "これを指定すると、マイリスト自体の削除や" \
-                  "マイリスト内の全項目の削除の時に確認しません。"
+    ml_help_everything = ("show や export と同時に指定すると、"
+                          "全てのマイリストの情報をまとめて取得します。")
+    ml_help_yes = ("これを指定すると、マイリスト自体の削除や"
+                   "マイリスト内の全項目の削除の時に確認しません。")
 
     ''' 動画ダウンロードコマンドのヘルプメッセージ '''
-    nd_description = "ニコニコ動画のデータを ダウンロードします。"
-    nd_help_video_id = "ダウンロードしたい動画ID。 例: sm12345678 " \
-                       "テキストファイルも指定できます。 その場合はファイル名の " \
-                       "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    nd_description = "動画のいろいろをダウンロードします。"
+    nd_help_video_id = ("ダウンロードしたい動画ID。 例: sm12345678 "
+                        "テキストファイルも指定できます。 その場合はファイル名の "
+                        "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
     nd_help_password = "パスワード"
     nd_help_mail = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
@@ -545,8 +611,8 @@ class Msg:
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
     nd_help_video = "指定すると、 動画をダウンロードします。"
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
-    nd_help_xml = "コメントをXML形式でダウンロードしたい場合に指定します。" \
-                  "チャンネル動画の場合は無視されます。"
+    nd_help_xml = ("指定すると、コメントをXML形式でダウンロードします。"
+                   "チャンネル動画の場合は無視されます。")
     nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
@@ -582,12 +648,13 @@ class Msg:
     ml_answer_invalid = "Y または N を入力してください。"
     ml_deleted_or_private = "{0[video_id]} {0[title]} は削除されているか非公開です。"
 
-    ml_done_add = "[完了:追加] ({0}/{1}) 動画: {2}"
-    ml_done_delete = "[完了:削除] ({0}/{1}) 動画: {2}"
-    ml_done_copy = "[完了:コピー] ({0}/{1}) 動画ID: {2}"
-    ml_done_move = "[完了:移動] ({0}/{1}) 動画ID: {2}"
-    ml_done_purge = "[完了:マイリスト削除] 名前: {0}"
-    ml_done_create = "[完了:マイリスト作成] ID: {0}, 名前: {1} (公開: {2}), 説明文: {3}"
+    ml_done_add = "[完了:追加] ({now}/{all}) 動画: {video_id}"
+    ml_done_delete = "[完了:削除] ({now}/{all}) 動画: {video_id}"
+    ml_done_copy = "[完了:コピー] ({now}/{all}) 動画ID: {video_id}"
+    ml_done_move = "[完了:移動] ({now}/{all}) 動画ID: {video_id}"
+    ml_done_purge = "[完了:マイリスト削除] 名前: {name}"
+    ml_done_create = ("[完了:マイリスト作成] ID: {_id}, 名前:"
+                      " {name} (公開: {pub}), 説明文: {desc}")
 
     ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
     ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
@@ -671,7 +738,7 @@ class Err:
     INTERNAL = "INTERNAL"
 
 
-class Key:
+class KeyGTI:
     """
     getthumbinfo から取ってきたデータのキーとなる文字列たち。
 
@@ -740,13 +807,13 @@ class MKey:
     """
     マイリスト情報を読み取るときのJSONのキー
     """
-    ID = "id"
-    NAME = "name"
-    IS_PUBLIC = "is_public"
-    PUBLICITY = "publicity"
-    SINCE = "since"
+    ID          = "id"
+    NAME        = "name"
+    IS_PUBLIC   = "is_public"
+    PUBLICITY   = "publicity"
+    SINCE       = "since"
     DESCRIPTION = "description"
-    ITEM_DATA = "item_data"
+    ITEM_DATA   = "item_data"
 
 
 class InheritedParser(ArgumentParser):
