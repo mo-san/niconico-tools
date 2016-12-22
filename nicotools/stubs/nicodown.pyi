@@ -1,4 +1,4 @@
-# coding: utf-8
+# coding: UTF-8
 import logging
 import requests
 from abc import ABCMeta, abstractmethod
