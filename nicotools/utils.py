@@ -1,4 +1,4 @@
-# coding: utf-8
+# coding: UTF-8
 import inspect
 import logging
 import os
@@ -311,15 +311,22 @@ class Canopy:
 
 class LogIn:
     __singleton__ = None
+    is_login = False
+    cookie = {}
 
     @classmethod
     def __new__(cls, *more, **kwargs):
-        if cls.__singleton__ is None:
-            cls.__singleton__ = super(LogIn, cls).__new__(cls)
-        return cls.__singleton__
+        """
+        ログイン処理が一度だけなのを保障するためにシングルトンとして振る舞わせる。
 
-    is_login = False
-    cookie = {}
+        参考:
+            デザインパターン（Design Pattern）#Singleton - Qiita
+            http://qiita.com/nirperm/items/af1f83925ba43dbf22eb
+        """
+
+        if cls.__singleton__ is None:
+            cls.__singleton__ = super().__new__(cls)
+        return cls.__singleton__
 
     def __init__(self, mail=None, password=None, session=None):
         """
@@ -363,6 +370,7 @@ class LogIn:
 
     def _we_have_logged_in(self, response):
         """
+        ログインできたかどうかをHTMLの文面から推測する
 
         :param str response:
         :rtype: bool
@@ -400,8 +408,8 @@ class LogIn:
         """
         メールアドレスとパスワードをユーザーに求める。
 
-        :param str mail: メールアドレス。
-        :param str password: パスワード
+        :param str | None mail: メールアドレス。
+        :param str | None password: パスワード
         :rtype: dict[str, str]
         """
         un, pw = mail, password
@@ -595,6 +603,7 @@ class Msg:
                           "全てのマイリストの情報をまとめて取得します。")
     ml_help_yes = ("これを指定すると、マイリスト自体の削除や"
                    "マイリスト内の全項目の削除の時に確認しません。")
+    ml_help_each = "指定すると、登録や削除を、まとめずに一つずつ行います。"
 
     ''' 動画ダウンロードコマンドのヘルプメッセージ '''
     nd_description = "動画のいろいろをダウンロードします。"
@@ -613,6 +622,11 @@ class Msg:
     nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
+    nd_help_nomulti = "指定すると、プログレスバーを複数行で表示しません。"
+    nd_help_limit = ("サムネイルとコメントについては同時ダウンロードを、"
+                     "動画については1つあたりの分割数をこの数に制限します。標準は 4 です。")
+    nd_help_dmc = "動画をDMCサーバー(いわゆる新サーバー)からダウンロードします。標準はこちらです。"
+    nd_help_smile = "動画をsmileサーバー(いわゆる従来サーバー)からダウンロードします。"
 
     input_mail = "メールアドレスを入力してください。"
     input_pass = "パスワードを入力してください(画面には表示されません)。"
@@ -663,18 +677,19 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    failed_operation = "以下の理由により操作は失敗しました: {desc}"
     waiting_for_permission = "アクセス制限が解除されるのを待っています…"
-    name_replaced = "作成しようとした名前「{0}」は特殊文字を含むため、" \
-                    "「{1}」に置き換わっています。"
+    name_replaced = ("作成しようとした名前「{0}」は特殊文字を含むため、"
+                     "「{1}」に置き換わっています。")
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
     not_installed = "{0} がインストールされていないため実行できません。"
     invalid_argument = "引数の型が間違っています。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
-    invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
-                      "http://www.nicovideo.jp/watch/sm1234," \
-                      " sm1234, nm1234, so1234, 123456, watch/123456"
+    invalid_videoid = ("[エラー] 指定できる動画IDの形式は以下の通りです。"
+                       "http://www.nicovideo.jp/watch/sm1234, "
+                       "sm1234, nm1234, so1234,  123456, watch/123456")
     connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
     connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
     keyboard_interrupt = "操作を中断しました。"
@@ -685,10 +700,10 @@ class Err:
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
     no_commands = "[エラー] コマンドを指定してください。"
     item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
-    name_ambiguous = "同名のマイリストが {0}件あります。名前の代わりに" \
-                     "IDで(--id を使って)指定し直してください。"
-    name_ambiguous_detail = "ID: {id}, 名前: {name}, {publicity}," \
-                            " 作成日: {since}, 説明文: {description}"
+    name_ambiguous = ("同名のマイリストが {0}件あります。名前の代わりに"
+                      "IDで(--id を使って)指定し直してください。")
+    name_ambiguous_detail = ("ID: {id}, 名前: {name}, {publicity},"
+                             " 作成日: {since}, 説明文: {description}")
     mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
     mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
     over_load = "[エラー] {0} にはこれ以上追加できません。"
@@ -699,8 +714,8 @@ class Err:
     unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
-    invalid_spec = "[エラー] {0} は不正です。マイリストの名前またはIDは" \
-                   "文字列か整数で入力してください。"
+    invalid_spec = ("[エラー] {0} は不正です。マイリストの名前"
+                    "またはIDは文字列か整数で入力してください。")
     no_items = "[エラー] 指定した動画はいずれもこのマイリストには登録されていません。"
 
     '''
@@ -782,10 +797,48 @@ class KeyGTI:
     WATCH_URL       = "watch_url"
 
 
+class KeyDmc:
+    FILE_NAME       = "file_name"
+    FILE_SIZE       = "file_size"
+
+    VIDEO_ID        = "video_id"
+    VIDEO_URL_SM    = "video_url"       # Smile サーバーのほう
+    TITLE           = "title"
+    THUMBNAIL_URL   = "thumbnail_url"
+    ECO             = "eco"             # int
+    MOVIE_TYPE      = "movie_type"
+    # IS_DMC          = "is_dmc"          # int or None
+    DELETED         = "deleted"         # int
+    IS_DELETED      = "is_deleted"      # bool
+    IS_PUBLIC       = "is_public"       # bool
+    IS_OFFICIAL     = "is_official"     # bool
+    IS_PREMIUM      = "is_premium"      # bool
+    USER_ID         = "user_id"
+    USER_KEY        = "user_key"
+    MSG_SERVER      = "ms"
+    THREAD_ID       = "thread_id"
+
+    API_URL         = "api_url"
+    RECIPE_ID       = "recipe_id"
+    CONTENT_ID      = "content_id"
+    VIDEO_SRC_IDS   = "video_src_ids"   # list
+    AUDIO_SRC_IDS   = "audio_src_ids"   # list
+    HEARTBEAT       = "heartbeat"       # int
+    TOKEN           = "token"
+    SIGNATURE       = "signature"
+    AUTH_TYPE       = "auth_type"
+    C_K_TIMEOUT     = "content_key_timeout"     # int
+    SVC_USER_ID     = "service_user_id"     # USER_ID とたぶん同じ
+    PLAYER_ID       = "player_id"
+    PRIORITY        = "priority"
+
+    # ↓公式動画にだけある情報
+    OPT_THREAD_ID   = "optional_thread_id"
+    NEEDS_KEY       = "needs_key"
+
+
 class KeyGetFlv:
-    """
-    GetFLV を解釈するときのURLパラメーターのキー
-    """
+    """ GetFLV を解釈するときのURLパラメーターのキー """
     THREAD_ID       = "thread_id"
     LENGTH          = "l"
     VIDEO_URL       = "url"
@@ -802,9 +855,7 @@ class KeyGetFlv:
 
 
 class MKey:
-    """
-    マイリスト情報を読み取るときのJSONのキー
-    """
+    """ マイリスト情報を読み取るときのJSONのキー """
     ID          = "id"
     NAME        = "name"
     IS_PUBLIC   = "is_public"
@@ -815,9 +866,7 @@ class MKey:
 
 
 class InheritedParser(ArgumentParser):
-    """
-    文字コードで問題を起こさないために ArgumentParser を上書きするクラス
-    """
+    """ 文字コードで問題を起こさないために ArgumentParser を上書きするクラス """
     def _read_args_from_files(self, arg_strings):
         # expand arguments referencing files
         new_arg_strings = []

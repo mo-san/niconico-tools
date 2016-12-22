@@ -20,7 +20,7 @@ from .utils import Msg, Err, URL, KeyGTI, MKey, MylistNotFoundError
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
-class NicoMyList(utils.LogIn):
+class NicoMyList(utils.Canopy):
     WHY_DELETED = {
         "0": "公開",
         "1": "削除",
@@ -29,7 +29,7 @@ class NicoMyList(utils.LogIn):
         "8": "非公開",
     }
 
-    def __init__(self, mail=None, password=None, logger=None, session=None):
+    def __init__(self, mail=None, password=None, logger=None):
         """
         使い方:
 
@@ -92,10 +92,12 @@ class NicoMyList(utils.LogIn):
         :param str | None mail: メールアドレス
         :param str | None password: パスワードの組
         :param NTLogger logger:
-        :param requests.Session | None session: requests のセッション
         :rtype: None
         """
-        super().__init__(mail=mail, password=password, logger=logger, session=session)
+        super().__init__(logger=logger)
+        __login = utils.LogIn(mail=mail, password=password)
+        self.session = __login.session
+        self.token = __login.token
         self.mylists = self.get_mylists_info()
 
     @classmethod
@@ -1022,6 +1024,12 @@ class NicoMyList(utils.LogIn):
             _text = text.encode(enco, utils.BACKSLASH).decode(enco) + "\n"
             print(_text)
         return _text
+
+    def download(self, video_id, flag): pass
+
+    def start(self, glossary, save_dir, option): pass
+
+    def _saver(self, video_id, data, option): pass
 
 
 def main(args):

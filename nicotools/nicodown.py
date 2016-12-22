@@ -1,4 +1,4 @@
-# coding: utf-8
+# coding: UTF-8
 import html
 import os
 import socket
@@ -505,6 +505,7 @@ class Comment(utils.Canopy):
         :param str | None optional_thread_id:
         :param str | None thread_key:
         :param str | None force_184:
+        :rtype: list[dict]
         """
         utils.check_arg({"official_video": official_video, "user_id": user_id,
                          "user_key": user_key, "thread_id": thread_id})
