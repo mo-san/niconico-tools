@@ -1,13 +1,15 @@
 # coding: UTF-8
 import asyncio
-import time
+import json
+import re
 from pathlib import Path
 from typing import List
 from urllib.parse import parse_qs
 
 import aiohttp
+import functools
 
-from nicotools.nicodown_async import InfoAsync
+from nicotools.nicodown_async import Info
 
 try:
     import progressbar
@@ -15,7 +17,7 @@ except ImportError:
     progressbar = None
 
 from nicotools import utils
-from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
+from nicotools.utils import Msg, URL, KeyDmc
 
 
 class Comment(utils.CanopyAsync):
@@ -42,6 +44,9 @@ class Comment(utils.CanopyAsync):
             cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
             return aiohttp.ClientSession(cookies=cook)
 
+    def close(self):
+        self.session.close()
+
     def start(self, glossary, save_dir, xml=False):
         """
 
@@ -53,88 +58,69 @@ class Comment(utils.CanopyAsync):
         self.save_dir = utils.make_dir(save_dir)
 
         if isinstance(glossary, list):
-            glossary, self.session = InfoAsync(
+            glossary, self.session = Info(
                 mail=self.__mail, password=self.__password,
                 session=self.session, return_session=True).get_data(glossary)
         self.glossary = glossary
 
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.glossary)))
-        for index, video_id in enumerate(self.glossary.keys()):
-            self.logger.info(
-                Msg.nd_download_comment.format(
-                    index + 1, len(glossary), video_id,
-                    self.glossary[video_id][KeyGTI.TITLE]))
-            self.download(video_id, xml)
-            if len(self.glossary) > 1:
-                time.sleep(1.5)
-        return True
 
-    def download(self, video_id, xml=False):
-        """
-        :param str video_id: 動画ID (e.g. sm1234)
-        :param bool xml:
-        :rtype: bool
-        """
+        futures = []
+        for video_id in self.glossary:
+            coro = self._download(self.glossary[video_id], xml)
+            f = asyncio.ensure_future(coro)
+            f.add_done_callback(functools.partial(self.saver, video_id, xml))
+            futures.append(f)
+
+        self.loop.run_until_complete(asyncio.wait(futures, loop=self.loop))
+        return self
+
+    async def _download(self, info: dict, is_xml: bool) -> str:
         utils.check_arg(locals())
-        db = self.glossary[video_id]
-        if video_id.startswith("so"):
-            redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
-            db[KeyGTI.V_OR_T_ID] = redirected
-        self.logger.debug("Video ID and its Thread ID (of officials):"
-                          " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        thread_id       = info[KeyDmc.THREAD_ID]
+        msg_server      = info[KeyDmc.MSG_SERVER]
+        user_id         = info[KeyDmc.USER_ID]
+        user_key        = info[KeyDmc.USER_KEY]
 
-        if response is None:
-            time.sleep(4)
-            print(Err.waiting_for_permission)
-            time.sleep(4)
-            return self.download(video_id, xml)
+        # 以下は公式動画で必要
+        opt_thread_id   = info[KeyDmc.OPT_THREAD_ID]    # int なければ None
+        needs_key       = info[KeyDmc.NEEDS_KEY]        # int なければ None
+        thread_key      = None
+        force_184       = None
 
-        thread_id = response[KeyGetFlv.THREAD_ID]
-        msg_server = response[KeyGetFlv.MSG_SERVER]
-        user_id = response[KeyGetFlv.USER_ID]
-        user_key = response[KeyGetFlv.USER_KEY]
+        is_official = re.match("^(?:so|\d)", info[KeyDmc.VIDEO_ID]) is not None
 
-        opt_thread_id = response[KeyGetFlv.OPT_THREAD_ID]
-        needs_key = response[KeyGetFlv.NEEDS_KEY]
+        if is_official:
+            thread_key, force_184 = await self.get_thread_key(thread_id, needs_key)
 
-        if xml and video_id.startswith(("sm", "nm")):
-            req_param = self.make_param_xml(thread_id, user_id)
-            self.logger.debug("Posting Parameters: {}".format(req_param))
-
-            res_com = self.session.post(url=msg_server, data=req_param)
-            comment_data = res_com.text.replace("><", ">\n<")
+        if is_xml:
+            req_param = self.make_param_xml(thread_id, user_id, thread_key, force_184)
+            com_data = await self.retriever(data=req_param, url=msg_server)
         else:
-            if video_id.startswith(("sm", "nm")):
-                req_param = self.make_param_json(
-                    False, user_id, user_key, thread_id)
-            else:
-                thread_key, force_184 = self.get_thread_key(db[KeyGTI.V_OR_T_ID],
-                                                            needs_key)
-                req_param = self.make_param_json(
-                    True, user_id, user_key, thread_id,
-                    opt_thread_id, thread_key, force_184)
+            req_param = self.make_param_json(
+                is_official, user_id, user_key, thread_id,
+                opt_thread_id, thread_key, force_184)
+            com_data = await self.retriever(data=json.dumps(req_param), url=URL.URL_Msg_JSON)
 
-            self.logger.debug("Posting Parameters: {}".format(req_param))
-            res_com = self.session.post(
-                url=URL.URL_Message_New_JSON,
-                json=req_param)
-            comment_data = res_com.text.replace("}, ", "},\n")
+        return self.postprocesser(is_xml, com_data)
 
-        comment_data = comment_data.encode(res_com.encoding).decode("utf-8")
-        return self._saver(video_id, comment_data, xml)
+    async def retriever(self, data: str, url: str) -> str:
+        self.logger.debug("Posting Parameters: {}".format(data))
+        async with asyncio.Semaphore(self.__parallel_limit):
+            async with self.session.post(url=url, data=data) as resp:  # type: aiohttp.ClientResponse
+                return await resp.text()
 
-    def _saver(self, video_id, comment_data, xml):
-        """
+    def postprocesser(self, is_xml: bool, result: str):
+        if is_xml:
+            return result.replace("><", ">\n<")
+        else:
+            return result.replace("}, ", "},\n")
 
-        :param str video_id:
-        :param str comment_data:
-        :param bool xml:
-        :return:
-        """
+    def saver(self, video_id: str, is_xml: bool, coroutine: asyncio.Task) -> bool:
         utils.check_arg(locals())
-        if xml and video_id.startswith(("sm", "nm")):
+        comment_data = coroutine.result()
+        if is_xml:
             extention = "xml"
         else:
             extention = "json"
@@ -146,27 +132,30 @@ class Comment(utils.CanopyAsync):
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
-    def get_thread_key(self, video_id, needs_key):
+    async def get_thread_key(self, thread_id, needs_key):
         """
         専用のAPIにアクセスして thread_key を取得する。
 
+        :param str thread_id:
         :param str needs_key:
-        :param str video_id:
         :rtype: tuple[str, str]
         """
         utils.check_arg(locals())
-        if not needs_key == "1":
-            self.logger.debug("Video ID (or Thread ID): {},"
-                              " needs_key: {}".format(video_id, needs_key))
+        if not int(needs_key) == 1:
+            self.logger.debug("needs_key is not 1. Video ID (or Thread ID): {},"
+                              " needs_key: {}".format(thread_id, needs_key))
             return "", "0"
-        response = self.session.get(URL.URL_GetThreadKey, params={"thread": video_id})
-        self.logger.debug("Response from GetThreadKey API: {}".format(response.text))
-        parameters = parse_qs(response.text)
+        async with self.session.get(URL.URL_GetThreadKey, params={"thread": thread_id}) as resp:
+            response = await resp.text()
+        self.logger.debug("Response from GetThreadKey API"
+                          " (thread id is {}): {}".format(thread_id, response))
+        parameters = parse_qs(response)
         threadkey = parameters["threadkey"][0]  # type: str
         force_184 = parameters["force_184"][0]  # type: str
         return threadkey, force_184
 
-    def make_param_xml(self, thread_id, user_id):
+    def make_param_xml(self, thread_id, user_id, thread_key=None, force_184=None,
+                       quantity=1000, density="0-99999:9999,1000"):
         """
         コメント取得用のxmlを構成する。
 
@@ -176,20 +165,43 @@ class Comment(utils.CanopyAsync):
 
         :param str thread_id:
         :param str user_id:
+        :param str thread_key:
+        :param str force_184:
+        :param int | str quantity:取りに行くコメント数
+        :param str density: 取りに行くコメントの密度。 0-99999:9999,1000 のような形式。
         :rtype: str
         """
-        utils.check_arg(locals())
+        utils.check_arg({"thread_id": thread_id, "user_id": user_id})
         self.logger.debug("Arguments: {}".format(locals()))
-        return '<packet>' \
-               '<thread thread="{0}" user_id="{1}" version="20090904" scores="1"/>' \
-               '<thread thread="{0}" user_id="{1}" version="20090904" scores="1"' \
-               ' fork="1" res_from="-1000"/>' \
-               '<thread_leaves thread="{0}" user_id="{1}" scores="1">' \
-               '0-99999:9999,1000</thread_leaves>' \
-               '</packet>'.format(thread_id, user_id)
+        if thread_key:
+            return (
+                '<packet>'
+                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
+                ' threadkey="{thread_key}" force_184="{force_184}"'
+                ' version="20090904" res_from="-{quantity}"/>'
+                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
+                ' threadkey="{thread_key}" force_184="{force_184}"'
+                ' version="20090904" res_from="-{quantity}" fork="1"/>'
+                '<thread_leaves thread="{thread_id}" user_id="{user_id}" scores="1">'
+                '{density}</thread_leaves>'
+                '</packet>').format(thread_id=thread_id, user_id=user_id,
+                                    thread_key=thread_key, force_184=force_184,
+                                    quantity=quantity, density=density)
+        else:
+            return (
+                '<packet>'
+                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
+                ' version="20090904" res_from="-{quantity}"/>'
+                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
+                ' version="20090904" res_from="-{quantity}" fork="1"/>'
+                '<thread_leaves thread="{thread_id}" user_id="{user_id}" scores="1">'
+                '{density}</thread_leaves>'
+                '</packet>').format(thread_id=thread_id, user_id=user_id,
+                                    quantity=quantity, density=density)
 
     def make_param_json(self, official_video, user_id, user_key, thread_id,
-                        optional_thread_id=None, thread_key=None, force_184=None):
+                        optional_thread_id=None, thread_key=None, force_184=None,
+                        density="0-99999:9999,1000"):
         """
         コメント取得用のjsonを構成する。
 
@@ -204,6 +216,8 @@ class Comment(utils.CanopyAsync):
         :param str | None optional_thread_id:
         :param str | None thread_key:
         :param str | None force_184:
+        :param str density: 取りに行くコメントの密度。 0-99999:9999,1000 のような形式。
+        :rtype: str
         """
         utils.check_arg({"official_video": official_video, "user_id": user_id,
                          "user_key": user_key, "thread_id": thread_id})
@@ -231,7 +245,7 @@ class Comment(utils.CanopyAsync):
                     "language": 0,
                     "user_id" : user_id,
                     # "content" : "0-4:100,250",  # 公式仕様のデフォルト値
-                    "content" : "0-99999:9999,1000",
+                    "content" : density,
                     "scores"  : 1,
                     "nicoru"  : 0,
                     "userkey" : user_key
@@ -263,7 +277,7 @@ class Comment(utils.CanopyAsync):
                                "language" : 0,
                                "user_id"  : user_id,
                                # "content"  : "0-4:100,250",  # 公式仕様のデフォルト値
-                               "content"  : "0-99999:9999,1000",
+                               "content"  : density,
                                "scores"   : 1,
                                "nicoru"   : 0,
                                "force_184": force_184,

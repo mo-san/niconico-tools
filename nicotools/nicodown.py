@@ -165,12 +165,12 @@ class Video(utils.Canopy):
                 Msg.nd_download_video.format(
                     index + 1, len(glossary), video_id,
                     self.glossary[video_id][KeyGTI.TITLE]))
-            self.download(video_id, chunk_size)
+            self._download(video_id, chunk_size)
             if len(glossary) > 1:
                 time.sleep(1)
         return True
 
-    def download(self, video_id, chunk_size=1024*50):
+    def _download(self, video_id, chunk_size=1024 * 50):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param int chunk_size: 一度にサーバーに要求するファイルサイズ
@@ -265,10 +265,10 @@ class Thumbnail(utils.Canopy):
                 Msg.nd_download_pict.format(
                     index + 1, len(glossary), video_id,
                     self.glossary[video_id][KeyGTI.TITLE]))
-            self.download(video_id, is_large)
+            self._download(video_id, is_large)
         return True
 
-    def download(self, video_id, is_large=True):
+    def _download(self, video_id, is_large=True):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
@@ -365,12 +365,12 @@ class Comment(utils.Canopy):
                 Msg.nd_download_comment.format(
                     index + 1, len(glossary), video_id,
                     self.glossary[video_id][KeyGTI.TITLE]))
-            self.download(video_id, xml)
+            self._download(video_id, xml)
             if len(self.glossary) > 1:
                 time.sleep(1.5)
         return True
 
-    def download(self, video_id, xml=False):
+    def _download(self, video_id, xml=False):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param bool xml:
@@ -390,7 +390,7 @@ class Comment(utils.Canopy):
             time.sleep(4)
             print(Err.waiting_for_permission)
             time.sleep(4)
-            return self.download(video_id, xml)
+            return self._download(video_id, xml)
 
         thread_id = response[KeyGetFlv.THREAD_ID]
         msg_server = response[KeyGetFlv.MSG_SERVER]
@@ -419,7 +419,7 @@ class Comment(utils.Canopy):
 
             self.logger.debug("Posting Parameters: {}".format(req_param))
             res_com = self.session.post(
-                url=URL.URL_Message_New_JSON,
+                url=URL.URL_Msg_JSON,
                 json=req_param)
             comment_data = res_com.text.replace("}, ", "},\n")
 
@@ -447,20 +447,20 @@ class Comment(utils.Canopy):
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
-    def get_thread_key(self, video_id, needs_key):
+    def get_thread_key(self, thread_id, needs_key):
         """
         専用のAPIにアクセスして thread_key を取得する。
 
+        :param str thread_id:
         :param str needs_key:
-        :param str video_id:
         :rtype: tuple[str, str]
         """
         utils.check_arg(locals())
         if not needs_key == "1":
             self.logger.debug("Video ID (or Thread ID): {},"
-                              " needs_key: {}".format(video_id, needs_key))
+                              " needs_key: {}".format(thread_id, needs_key))
             return "", "0"
-        response = self.session.get(URL.URL_GetThreadKey, params={"thread": video_id})
+        response = self.session.get(URL.URL_GetThreadKey, params={"thread": thread_id})
         self.logger.debug("Response from GetThreadKey API: {}".format(response.text))
         parameters = parse_qs(response.text)
         threadkey = parameters["threadkey"][0]  # type: str

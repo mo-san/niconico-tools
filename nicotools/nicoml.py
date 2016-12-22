@@ -1025,12 +1025,6 @@ class NicoMyList(utils.Canopy):
             print(_text)
         return _text
 
-    def download(self, video_id, flag): pass
-
-    def start(self, glossary, save_dir, option): pass
-
-    def _saver(self, video_id, data, option): pass
-
 
 def main(args):
     """
