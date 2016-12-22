@@ -293,6 +293,7 @@ class Thumbnail(utils.Canopy):
         :rtype: bool | requests.Response
         """
         utils.check_arg(locals())
+        db = self.glossary[video_id]
         with requests.Session() as session:
             try:
                 # connect timeoutを5秒, read timeoutを10秒に設定
@@ -305,7 +306,7 @@ class Thumbnail(utils.Canopy):
                         return self._worker(video_id, url[:-2], is_large=False)
                     else:
                         self.logger.error(Err.connection_404.format(
-                            video_id, self.glossary[video_id][KeyGTI.TITLE]))
+                            video_id, db[KeyGTI.TITLE]))
                         return False
             except (TypeError, ConnectionError,
                     socket.timeout, Timeout, TimeoutError, RequestError) as e:
@@ -313,8 +314,8 @@ class Thumbnail(utils.Canopy):
                 if is_large and url.endswith(".L"):
                     return self._worker(video_id, url[:-2], is_large=False)
                 else:
-                    self.logger.error(Err.connection_timeout.format(
-                        video_id, self.glossary[video_id][KeyGTI.TITLE]))
+                    self.logger.error(Err.connection_timeout.format(video_id)
+                                      + " (タイトル: {})".format(db[KeyGTI.TITLE]))
                     return False
 
     def _saver(self, video_id, image_data, _=None):

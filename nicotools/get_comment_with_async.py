@@ -10,12 +10,6 @@ import aiohttp
 import functools
 
 from nicotools.nicodown_async import Info
-
-try:
-    import progressbar
-except ImportError:
-    progressbar = None
-
 from nicotools import utils
 from nicotools.utils import Msg, URL, KeyDmc
 

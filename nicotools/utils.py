@@ -706,7 +706,7 @@ class Err:
                        "http://www.nicovideo.jp/watch/sm1234, "
                        "sm1234, nm1234, so1234,  123456, watch/123456")
     connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
-    connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
+    connection_timeout = "接続が時間切れになりました。 ID: {0}"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"
     videoids_contain_all = "通常の動画IDと * を混ぜないでください。"
