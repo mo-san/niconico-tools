@@ -411,19 +411,12 @@ class NicoMyList(utils.Canopy):
         icon_id = kwargs.get("icon_id", 0)  # type: int
 
         if "move" == mode and to_def:
-            payload = {
-                "item_type"      : 0,
-                "item_id"        : video_id,
-                "description"    : description,
-                "token"          : self.token
-            }
-            url = URL.URL_AddDef
-            payload = {
-                "id_list[0][]": item_id,
-                "token"       : self.token
-            }
-            url = URL.URL_DeleteDef
-        elif "add" == mode or ("copy" == mode and to_def):
+            # とりあえずマイリストには直接移動できないので、追加と削除を別でやる。
+            self.get_response("add", to_def=True, video_id=video_id,
+                              description=description)
+            return self.get_response("delete", from_def=True, item_id=item_id)
+
+        if "add" == mode or ("copy" == mode and to_def):
             payload = {
                 "item_type"      : 0,
                 "item_id"        : video_id,
