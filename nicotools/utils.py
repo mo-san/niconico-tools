@@ -62,7 +62,7 @@ def print_info(queue, file_name=None):
 
 def validator(input_list):
     """
-    動画IDが適切なものか確認する。
+    動画IDが適切なものか確認する。元のリスト内の順番は保持されない。
 
     受け入れるのは以下の形式:
         * "*"
@@ -88,7 +88,7 @@ def validator(input_list):
             (?:(?:h?t?tp://)?www\.nicovideo\.jp/)?watch/  # 通常URL
            |(?:h?t?tp://)?nico\.ms/  # 短縮URL
         )?
-            ((?:sm|nm|so)?[0-9]+)  # ID本体
+            ((?:sm|nm|so)?\d+)  # ID本体
         )\s?""".format(re.escape(ALL_ITEM)), re.I + re.X).match
 
     if not isinstance(input_list, (list, tuple, set)):
@@ -192,6 +192,66 @@ def sizeof_fmt(num):
     return "{:.2f}Gb".format(num)
 
 
+def get_from_getflv(video_id, session):
+    """
+    GetFlv APIから情報を得る。
+
+    * GetFlvのサンプル:
+
+    thread_id=1406370428
+    &l=314
+    &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
+    &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
+    &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
+    &user_id=<ユーザーIDの数字>
+    &is_premium=1
+    &nickname=<URLエンコードされたユーザー名の文字列>
+    &time=1475176067845
+    &done=true
+    &ng_rv=220
+    &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
+
+    * 但しアクセス制限がかかったときには:
+
+    error=access_locked&done=true
+
+    :param str video_id:
+    :param requests.Session session:
+    :rtype: dict[str, str] | None
+    """
+    check_arg(locals())
+    suffix = {"as3": 1} if video_id.startswith("nm") else None
+    response = session.get(URL.URL_GetFlv + video_id, params=suffix)
+    # self.logger.debug("GetFLV Response: {}".format(response.text))
+    return extract_getflv(response.text)
+
+
+def extract_getflv(content):
+    """
+
+    :param str content: GetFLV の返事
+    :rtype: dict[str, str] | None
+    """
+    parameters = parse_qs(content)
+    if parameters.get("error") is not None:
+        return None
+    return {
+        KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
+        KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
+        KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
+        KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
+        KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
+        KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
+        KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
+        KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
+        KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
+
+        # 以下は公式動画にだけあるもの。通常の動画ではNone
+        KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
+        KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
+    }
+
+
 class MylistError(Exception):
     """ マイリスト操作で誤りがあったときに発生させるエラー """
     pass
@@ -208,18 +268,6 @@ class MylistArgumentError(MylistError):
 
 
 class Canopy:
-    __singleton__ = None
-
-    @classmethod
-    def __new__(cls, *more, **kwargs):
-        """
-        デザインパターン（Design Pattern）#Singleton - Qiita
-        http://qiita.com/nirperm/items/af1f83925ba43dbf22eb
-        """
-        if cls.__singleton__ is None:
-            cls.__singleton__ = super().__new__(cls)
-        return cls.__singleton__
-
     def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
         self.loop = loop or asyncio.get_event_loop()
         self.glossary = None
@@ -236,7 +284,7 @@ class Canopy:
         """
         check_arg(locals())
         file_name =  Msg.nd_file_name.format(
-            video_id, self.glossary[video_id][KeyDmc.FILE_NAME], ext)
+            video_id, self.glossary[video_id][KeyGTI.FILE_NAME], ext)
         return Path(self.save_dir).resolve() / file_name
 
     def get_logger(self, logger):
@@ -253,85 +301,41 @@ class Canopy:
         else:
             return logger
 
-    @classmethod
-    def get_from_getflv(cls, video_id, session):
-        """
-        GetFlv APIから情報を得る。
+    def start(self, glossary, save_dir, option):
+        raise NotImplementedError
 
-        * GetFlvのサンプル:
+    def download(self, video_id, flag):
+        raise NotImplementedError
 
-        thread_id=1406370428
-        &l=314
-        &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
-        &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
-        &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
-        &user_id=<ユーザーIDの数字>
-        &is_premium=1
-        &nickname=<URLエンコードされたユーザー名の文字列>
-        &time=1475176067845
-        &done=true
-        &ng_rv=220
-        &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
-
-        * 但しアクセス制限がかかったときには:
-
-        error=access_locked&done=true
-
-        :param str video_id:
-        :param requests.Session session:
-        :rtype: dict[str, str] | None
-        """
-        check_arg(locals())
-        suffix = {"as3": 1} if video_id.startswith("nm") else None
-        response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-        # self.logger.debug("GetFLV Response: {}".format(response.text))
-        return cls.extract_getflv(response.text)
-
-    @classmethod
-    def extract_getflv(cls, content):
-        """
-
-        :param str content: GetFLV の返事
-        :rtype: dict[str, str] | None
-        """
-        parameters = parse_qs(content)
-        if parameters.get("error") is not None:
-            return None
-        return {
-            KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
-            KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
-            KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
-            KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
-            KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
-            KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
-            KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
-            KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
-            KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
-
-            # 以下は公式動画にだけあるもの。通常の動画ではNone
-            KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
-            KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
-        }
+    def _saver(self, video_id, data, option):
+        raise NotImplementedError
 
 
-class LogIn(Canopy):
+class LogIn:
     __singleton__ = None
     is_login = False
     cookie = {}
 
     @classmethod
     def __new__(cls, *more, **kwargs):
+        """
+        ログイン処理が一度だけなのを保障するためにシングルトンとして振る舞わせる。
+
+        参考:
+            デザインパターン（Design Pattern）#Singleton - Qiita
+            http://qiita.com/nirperm/items/af1f83925ba43dbf22eb
+        """
+
         if cls.__singleton__ is None:
-            cls.__singleton__ = super(LogIn, cls).__new__(cls)
+            cls.__singleton__ = super().__new__(cls)
         return cls.__singleton__
 
-    def __init__(self, mail=None, password=None, logger=None, session=None):
+    def __init__(self, mail=None, password=None, session=None):
         """
         :param str | None mail: メールアドレス
         :param str | None password: パスワード
         :param requests.Session | None session: セッションオブジェクト
         """
-        super().__init__(logger=logger)
         self._auth = {}
         if not (session or mail or password):
             self.session = self.get_session()
@@ -368,6 +372,7 @@ class LogIn(Canopy):
 
     def _we_have_logged_in(self, response):
         """
+        ログインできたかどうかをHTMLの文面から推測する
 
         :param str response:
         :rtype: bool
@@ -405,8 +410,8 @@ class LogIn(Canopy):
         """
         メールアドレスとパスワードをユーザーに求める。
 
-        :param str mail: メールアドレス。
-        :param str password: パスワード
+        :param str | None mail: メールアドレス。
+        :param str | None password: パスワード
         :rtype: dict[str, str]
         """
         un, pw = mail, password
@@ -679,17 +684,17 @@ class Err:
 
     failed_operation = "以下の理由により操作は失敗しました: {desc}"
     waiting_for_permission = "アクセス制限が解除されるのを待っています…"
-    name_replaced = "作成しようとした名前「{0}」は特殊文字を含むため、" \
-                    "「{1}」に置き換わっています。"
+    name_replaced = ("作成しようとした名前「{0}」は特殊文字を含むため、"
+                     "「{1}」に置き換わっています。")
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
     not_installed = "{0} がインストールされていないため実行できません。"
     invalid_argument = "引数の型が間違っています。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
-    invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
-                      "http://www.nicovideo.jp/watch/sm1234," \
-                      " sm1234, nm1234, so1234, 123456, watch/123456"
+    invalid_videoid = ("[エラー] 指定できる動画IDの形式は以下の通りです。"
+                       "http://www.nicovideo.jp/watch/sm1234, "
+                       "sm1234, nm1234, so1234,  123456, watch/123456")
     connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
     connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
     keyboard_interrupt = "操作を中断しました。"
@@ -700,10 +705,10 @@ class Err:
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
     no_commands = "[エラー] コマンドを指定してください。"
     item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
-    name_ambiguous = "同名のマイリストが {0}件あります。名前の代わりに" \
-                     "IDで(--id を使って)指定し直してください。"
-    name_ambiguous_detail = "ID: {id}, 名前: {name}, {publicity}," \
-                            " 作成日: {since}, 説明文: {description}"
+    name_ambiguous = ("同名のマイリストが {0}件あります。名前の代わりに"
+                      "IDで(--id を使って)指定し直してください。")
+    name_ambiguous_detail = ("ID: {id}, 名前: {name}, {publicity},"
+                             " 作成日: {since}, 説明文: {description}")
     mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
     mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
     over_load = "[エラー] {0} にはこれ以上追加できません。"
@@ -714,8 +719,8 @@ class Err:
     unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
-    invalid_spec = "[エラー] {0} は不正です。マイリストの名前またはIDは" \
-                   "文字列か整数で入力してください。"
+    invalid_spec = ("[エラー] {0} は不正です。マイリストの名前"
+                    "またはIDは文字列か整数で入力してください。")
     no_items = "[エラー] 指定した動画はいずれもこのマイリストには登録されていません。"
 
     '''
@@ -773,7 +778,8 @@ class KeyGTI:
     DELETED         = "deleted"
     DESCRIPTION     = "description"
     EMBEDDABLE      = "embeddable"      # int; 0 or 1
-    FILE_NAME       = "file_name"
+    FILE_NAME       = "file_name"       # 元データには無い
+    FILE_SIZE       = "file_size"       # 元データには無い
     LAST_RES_BODY   = "last_res_body"
     LENGTH          = "length"          # str
     LENGTH_SECONDS  = "length_seconds"  # int
@@ -837,9 +843,7 @@ class KeyDmc:
 
 
 class KeyGetFlv:
-    """
-    GetFLV を解釈するときのURLパラメーターのキー
-    """
+    """ GetFLV を解釈するときのURLパラメーターのキー """
     THREAD_ID       = "thread_id"
     LENGTH          = "l"
     VIDEO_URL       = "url"
@@ -856,9 +860,7 @@ class KeyGetFlv:
 
 
 class MKey:
-    """
-    マイリスト情報を読み取るときのJSONのキー
-    """
+    """ マイリスト情報を読み取るときのJSONのキー """
     ID          = "id"
     NAME        = "name"
     IS_PUBLIC   = "is_public"
@@ -869,9 +871,7 @@ class MKey:
 
 
 class InheritedParser(ArgumentParser):
-    """
-    文字コードで問題を起こさないために ArgumentParser を上書きするクラス
-    """
+    """ 文字コードで問題を起こさないために ArgumentParser を上書きするクラス """
     def _read_args_from_files(self, arg_strings):
         # expand arguments referencing files
         new_arg_strings = []
