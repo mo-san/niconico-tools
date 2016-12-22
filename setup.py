@@ -23,7 +23,6 @@ setup(
     install_requires=[
         'requests',
         'prettytable',
-        'progressbar2',
         'bs4',
         'aiohttp',
         'tqdm'
