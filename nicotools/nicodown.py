@@ -130,7 +130,7 @@ def get_infos(queue, logger=None):
     return lexikon
 
 
-class Video(utils.LogIn):
+class Video(utils.Canopy):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         動画をダウンロードする。
@@ -140,35 +140,37 @@ class Video(utils.LogIn):
         :param NTLogger logger:
         :param requests.Session session:
         """
-        super().__init__(mail=mail, password=password, logger=logger, session=session)
+        super().__init__(logger=logger)
+        self.session = session or utils.LogIn(mail=mail, password=password).session
 
-    def start(self, database, save_dir):
+    def start(self, glossary, save_dir, chunk_size=1024*50):
         """
 
-        :param dict[str, dict[str, int | str]] | list[str] database:
+        :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
+        :param int chunk_size: 一度にサーバーに要求するファイルサイズ
         :rtype: bool
         """
         utils.check_arg(locals())
         self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(database))
+        self.logger.debug("Dictionary of Videos: {}".format(glossary))
         self.save_dir = utils.make_dir(save_dir)
-        if isinstance(database, list):
-            database = get_infos(database, self.logger)
-        self.glossary = database
+        if isinstance(glossary, list):
+            glossary = get_infos(glossary, self.logger)
+        self.glossary = glossary
         self.logger.info(Msg.nd_start_dl_video.format(len(self.glossary)))
 
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_video.format(
-                    index + 1, len(database), video_id,
+                    index + 1, len(glossary), video_id,
                     self.glossary[video_id][KeyGTI.TITLE]))
-            self.download(video_id)
-            if len(database) > 1:
+            self.download(video_id, chunk_size)
+            if len(glossary) > 1:
                 time.sleep(1)
         return True
 
-    def download(self, video_id, chunk_size=1024 * 50):
+    def download(self, video_id, chunk_size=1024*50):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param int chunk_size: 一度にサーバーに要求するファイルサイズ
@@ -182,7 +184,7 @@ class Video(utils.LogIn):
         self.logger.debug("Video ID and its Thread ID (of officials):"
                           " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = self.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
 
         vid_url = response[KeyGetFlv.VIDEO_URL]
         is_premium = response[KeyGetFlv.IS_PREMIUM]
@@ -192,23 +194,23 @@ class Video(utils.LogIn):
         # connect timeoutを10秒, read timeoutを30秒に設定
         # ↓この時点ではダウンロードは始まらず、ヘッダーだけが来ている
         video_data = self.session.get(url=vid_url, stream=True, timeout=(10.0, 30.0))
-        file_size = int(video_data.headers["content-length"])
+        db[KeyGTI.FILE_SIZE] = int(video_data.headers["content-length"])
         self.logger.debug("File Size: {} (Premium: {})".format(
-            file_size, [False, True][int(is_premium)]))
+            db[KeyGTI.FILE_SIZE], [False, True][int(is_premium)]))
 
-        return self._saver(video_id, video_data, file_size, chunk_size)
+        return self._saver(video_id, video_data, chunk_size)
 
-    def _saver(self, video_id, video_data, file_size, chunk_size):
+    def _saver(self, video_id, video_data, chunk_size):
         """
 
         :param str video_id:
         :param requests.Response video_data: 動画ファイルのURL
-        :param int file_size: ファイルサイズ
         :param int chunk_size: 一度にサーバーに要求するファイルサイズ
         :rtype: bool
         """
         file_path = self.make_name(video_id, self.glossary[video_id][KeyGTI.MOVIE_TYPE])
         self.logger.debug("File Path: {}".format(file_path))
+        db = self.glossary[video_id]
 
         if progressbar is None:
             with file_path.open("wb") as f:
@@ -218,11 +220,11 @@ class Video(utils.LogIn):
             widgets = [
                 progressbar.Percentage(),
                 ' ', progressbar.Bar(),
-                ' ', utils.sizeof_fmt(file_size),
+                ' ', utils.sizeof_fmt(db[KeyGTI.FILE_SIZE]),
                 ' ', progressbar.ETA(),
                 ' ', progressbar.AdaptiveTransferSpeed(),
             ]
-            pbar = progressbar.ProgressBar(widgets=widgets, max_value=file_size)
+            pbar = progressbar.ProgressBar(widgets=widgets, max_value=db[KeyGTI.FILE_SIZE])
             pbar.start()
             with file_path.open("wb") as f:
                 downloaded_size = 0
@@ -242,26 +244,26 @@ class Thumbnail(utils.Canopy):
         """
         super().__init__(logger=logger)
 
-    def start(self, database, save_dir, is_large=True):
+    def start(self, glossary, save_dir, is_large=True):
         """
 
-        :param dict[str, dict[str, int | str]] | list[str] database:
+        :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool
         """
         utils.check_arg(locals())
         self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(database))
-        if isinstance(database, list):
-            database = get_infos(database, self.logger)
-        self.glossary = database
+        self.logger.debug("Dictionary of Videos: {}".format(glossary))
+        if isinstance(glossary, list):
+            glossary = get_infos(glossary, self.logger)
+        self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_pict.format(len(self.glossary)))
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_pict.format(
-                    index + 1, len(database), video_id,
+                    index + 1, len(glossary), video_id,
                     self.glossary[video_id][KeyGTI.TITLE]))
             self.download(video_id, is_large)
         return True
@@ -315,7 +317,13 @@ class Thumbnail(utils.Canopy):
                         video_id, self.glossary[video_id][KeyGTI.TITLE]))
                     return False
 
-    def _saver(self, video_id, image_data):
+    def _saver(self, video_id, image_data, _=None):
+        """
+
+        :param str video_id: 動画ID (e.g. sm1234)
+        :param requests.Response image_data: 画像のデータ
+        :return:
+        """
         file_path = self.make_name(video_id, "jpg")
         self.logger.debug("File Path: {}".format(file_path))
 
@@ -325,7 +333,7 @@ class Thumbnail(utils.Canopy):
         return True
 
 
-class Comment(utils.LogIn):
+class Comment(utils.Canopy):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         :param str | None mail:
@@ -333,28 +341,29 @@ class Comment(utils.LogIn):
         :param NTLogger logger:
         :param requests.Session session:
         """
-        super().__init__(mail=mail, password=password, logger=logger, session=session)
+        super().__init__(logger=logger)
+        self.session = session or utils.LogIn(mail=mail, password=password).session
 
-    def start(self, database, save_dir, xml=False):
+    def start(self, glossary, save_dir, xml=False):
         """
 
-        :param dict[str, dict[str, int | str]] | list[str] database:
+        :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
         :param bool xml:
         """
         utils.check_arg(locals())
         self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(database))
+        self.logger.debug("Dictionary of Videos: {}".format(glossary))
         self.logger.debug("Download XML? : {}".format(xml))
-        if isinstance(database, list):
-            database = get_infos(database, self.logger)
-        self.glossary = database
+        if isinstance(glossary, list):
+            glossary = get_infos(glossary, self.logger)
+        self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.glossary)))
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_comment.format(
-                    index + 1, len(database), video_id,
+                    index + 1, len(glossary), video_id,
                     self.glossary[video_id][KeyGTI.TITLE]))
             self.download(video_id, xml)
             if len(self.glossary) > 1:
@@ -375,7 +384,7 @@ class Comment(utils.LogIn):
         self.logger.debug("Video ID and its Thread ID (of officials):"
                           " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = self.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
 
         if response is None:
             time.sleep(4)
@@ -601,7 +610,7 @@ def main(args):
             # サムネイルのダウンロードだけならここで終える。
             return res_t
 
-    session = utils.LogIn(mail=mailadrs, password=password, logger=logger).session
+    session = utils.LogIn(mail=mailadrs, password=password).session
 
     res_c = False
     if args.comment:

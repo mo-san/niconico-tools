@@ -61,7 +61,7 @@ def print_info(queue, file_name=None):
 
 def validator(input_list):
     """
-    動画IDが適切なものか確認する。
+    動画IDが適切なものか確認する。元のリスト内の順番は保持されない。
 
     受け入れるのは以下の形式:
         * "*"
@@ -87,7 +87,7 @@ def validator(input_list):
             (?:(?:h?t?tp://)?www\.nicovideo\.jp/)?watch/  # 通常URL
            |(?:h?t?tp://)?nico\.ms/  # 短縮URL
         )?
-            ((?:sm|nm|so)?[0-9]+)  # ID本体
+            ((?:sm|nm|so)?\d+)  # ID本体
         )\s?""".format(re.escape(ALL_ITEM)), re.I + re.X).match
 
     if not isinstance(input_list, (list, tuple, set)):
@@ -191,6 +191,66 @@ def sizeof_fmt(num):
     return "{:.2f}Gb".format(num)
 
 
+def get_from_getflv(video_id, session):
+    """
+    GetFlv APIから情報を得る。
+
+    * GetFlvのサンプル:
+
+    thread_id=1406370428
+    &l=314
+    &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
+    &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
+    &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
+    &user_id=<ユーザーIDの数字>
+    &is_premium=1
+    &nickname=<URLエンコードされたユーザー名の文字列>
+    &time=1475176067845
+    &done=true
+    &ng_rv=220
+    &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
+
+    * 但しアクセス制限がかかったときには:
+
+    error=access_locked&done=true
+
+    :param str video_id:
+    :param requests.Session session:
+    :rtype: dict[str, str] | None
+    """
+    check_arg(locals())
+    suffix = {"as3": 1} if video_id.startswith("nm") else None
+    response = session.get(URL.URL_GetFlv + video_id, params=suffix)
+    # self.logger.debug("GetFLV Response: {}".format(response.text))
+    return extract_getflv(response.text)
+
+
+def extract_getflv(content):
+    """
+
+    :param str content: GetFLV の返事
+    :rtype: dict[str, str] | None
+    """
+    parameters = parse_qs(content)
+    if parameters.get("error") is not None:
+        return None
+    return {
+        KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
+        KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
+        KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
+        KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
+        KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
+        KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
+        KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
+        KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
+        KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
+
+        # 以下は公式動画にだけあるもの。通常の動画ではNone
+        KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
+        KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
+    }
+
+
 class MylistError(Exception):
     """ マイリスト操作で誤りがあったときに発生させるエラー """
     pass
@@ -207,18 +267,6 @@ class MylistArgumentError(MylistError):
 
 
 class Canopy:
-    __singleton__ = None
-
-    @classmethod
-    def __new__(cls, *more, **kwargs):
-        """
-        デザインパターン（Design Pattern）#Singleton - Qiita
-        http://qiita.com/nirperm/items/af1f83925ba43dbf22eb
-        """
-        if cls.__singleton__ is None:
-            cls.__singleton__ = super().__new__(cls)
-        return cls.__singleton__
-
     def __init__(self, logger=None):
         self.glossary = None
         self.save_dir = None  # type: Path
@@ -251,71 +299,18 @@ class Canopy:
         else:
             return logger
 
-    @classmethod
-    def get_from_getflv(cls, video_id, session):
-        """
-        GetFlv APIから情報を得る。
+    def start(self, glossary, save_dir, option):
+        raise NotImplementedError
 
-        * GetFlvのサンプル:
+    def download(self, video_id, flag):
+        raise NotImplementedError
 
-        thread_id=1406370428
-        &l=314
-        &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
-        &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
-        &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
-        &user_id=<ユーザーIDの数字>
-        &is_premium=1
-        &nickname=<URLエンコードされたユーザー名の文字列>
-        &time=1475176067845
-        &done=true
-        &ng_rv=220
-        &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
-
-        * 但しアクセス制限がかかったときには:
-
-        error=access_locked&done=true
-
-        :param str video_id:
-        :param requests.Session session:
-        :rtype: dict[str, str] | None
-        """
-        check_arg(locals())
-        suffix = {"as3": 1} if video_id.startswith("nm") else None
-        response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-        # self.logger.debug("GetFLV Response: {}".format(response.text))
-        return cls.extract_getflv(response.text)
-
-    @classmethod
-    def extract_getflv(cls, content):
-        """
-
-        :param str content: GetFLV の返事
-        :rtype: dict[str, str] | None
-        """
-        parameters = parse_qs(content)
-        if parameters.get("error") is not None:
-            return None
-        return {
-            KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
-            KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
-            KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
-            KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
-            KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
-            KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
-            KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
-            KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
-            KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
-
-            # 以下は公式動画にだけあるもの。通常の動画ではNone
-            KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
-            KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
-        }
+    def _saver(self, video_id, data, option):
+        raise NotImplementedError
 
 
-class LogIn(Canopy):
+class LogIn:
     __singleton__ = None
-    is_login = False
-    cookie = {}
 
     @classmethod
     def __new__(cls, *more, **kwargs):
@@ -323,13 +318,15 @@ class LogIn(Canopy):
             cls.__singleton__ = super(LogIn, cls).__new__(cls)
         return cls.__singleton__
 
-    def __init__(self, mail=None, password=None, logger=None, session=None):
+    is_login = False
+    cookie = {}
+
+    def __init__(self, mail=None, password=None, session=None):
         """
         :param str | None mail: メールアドレス
         :param str | None password: パスワード
         :param requests.Session | None session: セッションオブジェクト
         """
-        super().__init__(logger=logger)
         self._auth = {}
         if not (session or mail or password):
             self.session = self.get_session()
@@ -761,7 +758,8 @@ class KeyGTI:
     DELETED         = "deleted"
     DESCRIPTION     = "description"
     EMBEDDABLE      = "embeddable"      # int; 0 or 1
-    FILE_NAME       = "file_name"
+    FILE_NAME       = "file_name"       # 元データには無い
+    FILE_SIZE       = "file_size"       # 元データには無い
     LAST_RES_BODY   = "last_res_body"
     LENGTH          = "length"          # str
     LENGTH_SECONDS  = "length_seconds"  # int

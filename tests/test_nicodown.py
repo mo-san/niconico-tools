@@ -7,7 +7,7 @@ import pytest
 
 import nicotools
 from nicotools.nicodown import Video, Comment, Thumbnail, get_infos
-from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir
+from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir, MylistArgumentError
 
 SAVE_DIR_1 = "tests/downloads/"
 SAVE_DIR_2 = "tests/aaaaa"
@@ -38,17 +38,17 @@ class TestUtils:
 
     def test_validator(self):
         assert validator(["*", "sm9", "-d"]) == []
-        assert (validator(
+        assert (set(validator(
             ["*", " http://www.nicovideo.jp/watch/1341499584",
              " sm1234 ", "watch/sm123456",
              " nm1234 ", "watch/nm123456",
              " so1234 ", "watch/so123456",
-             " 123456 ", "watch/1278053154"]) ==
-            ["*", "1341499584",
+             " 123456 ", "watch/1278053154"])) ==
+            {"*", "1341499584",
              "sm1234", "sm123456",
              "nm1234", "nm123456",
              "so1234", "so123456",
-             "123456", "1278053154"])
+             "123456", "1278053154"})
 
     def test_make_dir(self):
         save_dir = ["test", "foo", "foo/bar", "some/thing/text.txt"]
@@ -183,7 +183,7 @@ class TestComment:
 
     def test_comment_without_directory(self):
         db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
-        with pytest.raises(ValueError):
+        with pytest.raises(MylistArgumentError):
             # noinspection PyTypeChecker
             Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
 
