@@ -17,8 +17,8 @@ try:
 except ImportError:
     progressbar = None
 
-from . import utils
-from .utils import Msg, Err, URL, Key, KeyGetFlv
+from nicotools import utils
+from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
 
 """
 使い方:
@@ -37,24 +37,6 @@ from .utils import Msg, Err, URL, Key, KeyGetFlv
 """
 
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
-
-
-def print_info(queue, file_name=None):
-    """
-    GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
-
-    :param list queue:
-    :param str | Path | None file_name:
-    :return: bool
-    """
-    text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
-    if file_name:
-        file_name = utils.make_dir(file_name)
-        with file_name.open(encoding="utf-8", mode="w") as fd:
-            fd.write(text + "\n")
-    else:
-        print(text.encode(utils.get_encoding(), utils.BACKSLASH).decode(utils.get_encoding()))
-    return True
 
 
 def get_infos(queue, logger=None):
@@ -113,62 +95,42 @@ def get_infos(queue, logger=None):
             # 日本語以外のタグが設定されている場合にそれらも巻き込む
             tag_list = [tagstr.text for tagstr in document.iter("tag")]
             # 「分:秒」形式を秒数に直すため分離する
-            minute, second = finder(Key.LENGTH).text.split(":")
+            minute, second = finder(KeyGTI.LENGTH).text.split(":")
 
-            pocket[Key.COMMENT_NUM]     = int(finder(Key.COMMENT_NUM).text)
-            pocket[Key.DESCRIPTION]     = html.unescape(finder(Key.DESCRIPTION).text)
-            pocket[Key.EMBEDDABLE]      = int(finder(Key.EMBEDDABLE).text)
-            pocket[Key.FILE_NAME]       = t2filename(finder(Key.TITLE).text)
-            pocket[Key.FIRST_RETRIEVE]  = finder(Key.FIRST_RETRIEVE).text[:10]
-            pocket[Key.LAST_RES_BODY]   = finder(Key.LAST_RES_BODY).text
-            pocket[Key.LENGTH]          = "{}:{}".format(minute, second)
-            pocket[Key.LENGTH_SECONDS]  = int(minute) * 60 + int(second)
-            pocket[Key.MYLIST_COUNTER]  = int(finder(Key.MYLIST_COUNTER).text)
-            pocket[Key.MOVIE_TYPE]      = finder(Key.MOVIE_TYPE).text.lower()
-            pocket[Key.NO_LIVE_PLAY]    = int(finder(Key.NO_LIVE_PLAY).text)
-            pocket[Key.SIZE_HIGH]       = int(finder(Key.SIZE_HIGH).text)
-            pocket[Key.SIZE_LOW]        = int(finder(Key.SIZE_LOW).text)
-            pocket[Key.TAGS]            = html.unescape(", ".join(tag_list))  # type: str
-            pocket[Key.TAGS_LIST]       = tag_list  # type: list
-            pocket[Key.THUMBNAIL_URL]   = finder(Key.THUMBNAIL_URL).text
-            pocket[Key.TITLE]           = html.unescape(finder(Key.TITLE).text)
-            pocket[Key.VIDEO_ID]        = video_id
-            pocket[Key.VIEW_COUNTER]    = int(finder(Key.VIEW_COUNTER).text)
-            pocket[Key.WATCH_URL]       = finder(Key.WATCH_URL).text
-            pocket[Key.V_OR_T_ID]       = finder(Key.WATCH_URL).text.split("/")[-1]
+            pocket[KeyGTI.COMMENT_NUM]     = int(finder(KeyGTI.COMMENT_NUM).text)
+            pocket[KeyGTI.DESCRIPTION]     = html.unescape(finder(KeyGTI.DESCRIPTION).text)
+            pocket[KeyGTI.EMBEDDABLE]      = int(finder(KeyGTI.EMBEDDABLE).text)
+            pocket[KeyGTI.FILE_NAME]       = utils.t2filename(finder(KeyGTI.TITLE).text)
+            pocket[KeyGTI.FIRST_RETRIEVE]  = finder(KeyGTI.FIRST_RETRIEVE).text[:10]
+            pocket[KeyGTI.LAST_RES_BODY]   = finder(KeyGTI.LAST_RES_BODY).text
+            pocket[KeyGTI.LENGTH]          = "{}:{}".format(minute, second)
+            pocket[KeyGTI.LENGTH_SECONDS]  = int(minute) * 60 + int(second)
+            pocket[KeyGTI.MYLIST_COUNTER]  = int(finder(KeyGTI.MYLIST_COUNTER).text)
+            pocket[KeyGTI.MOVIE_TYPE]      = finder(KeyGTI.MOVIE_TYPE).text.lower()
+            pocket[KeyGTI.NO_LIVE_PLAY]    = int(finder(KeyGTI.NO_LIVE_PLAY).text)
+            pocket[KeyGTI.SIZE_HIGH]       = int(finder(KeyGTI.SIZE_HIGH).text)
+            pocket[KeyGTI.SIZE_LOW]        = int(finder(KeyGTI.SIZE_LOW).text)
+            pocket[KeyGTI.TAGS]            = html.unescape(", ".join(tag_list))  # type: str
+            pocket[KeyGTI.TAGS_LIST]       = tag_list  # type: list
+            pocket[KeyGTI.THUMBNAIL_URL]   = finder(KeyGTI.THUMBNAIL_URL).text
+            pocket[KeyGTI.TITLE]           = html.unescape(finder(KeyGTI.TITLE).text)
+            pocket[KeyGTI.VIDEO_ID]        = video_id
+            pocket[KeyGTI.VIEW_COUNTER]    = int(finder(KeyGTI.VIEW_COUNTER).text)
+            pocket[KeyGTI.WATCH_URL]       = finder(KeyGTI.WATCH_URL).text
+            pocket[KeyGTI.V_OR_T_ID]       = finder(KeyGTI.WATCH_URL).text.split("/")[-1]
             if video_id.startswith(("sm", "nm")):
-                pocket[Key.USER_ID]         = int(finder(Key.USER_ID).text)
-                pocket[Key.USER_NAME]       = html.unescape(finder(Key.USER_NAME).text)
-                pocket[Key.USER_ICON_URL]   = finder(Key.USER_ICON_URL).text
+                pocket[KeyGTI.USER_ID]         = int(finder(KeyGTI.USER_ID).text)
+                pocket[KeyGTI.USER_NAME]       = html.unescape(finder(KeyGTI.USER_NAME).text)
+                pocket[KeyGTI.USER_ICON_URL]   = finder(KeyGTI.USER_ICON_URL).text
             else:  # so1234 または 123456 の形式
-                pocket[Key.CH_ID]           = int(finder(Key.CH_ID).text)
-                pocket[Key.CH_NAME]         = html.unescape(finder(Key.CH_NAME).text)
-                pocket[Key.CH_ICON_URL]     = finder(Key.CH_ICON_URL).text
-            lexikon[video_id]               = pocket
+                pocket[KeyGTI.CH_ID]           = int(finder(KeyGTI.CH_ID).text)
+                pocket[KeyGTI.CH_NAME]         = html.unescape(finder(KeyGTI.CH_NAME).text)
+                pocket[KeyGTI.CH_ICON_URL]     = finder(KeyGTI.CH_ICON_URL).text
+            lexikon[video_id]                  = pocket
     return lexikon
 
 
-def t2filename(text):
-    """
-    ファイル名に使えない文字を全角文字に置き換える。
-
-    :param str text: ファイル名
-    :rtype: str
-    """
-    mydic = {
-        r"\/": "／", "/": "／", "'": "’", "\"": "”",
-        "<": "＜", ">": "＞", "|": "｜", ":": "：",
-        "*": "＊", "?": "？", "~": "～", "\\": "＼"
-    }
-    for item in mydic.keys():
-        text = text.replace(item, mydic[item])
-    # 置き換えるペアが増えたらこっちを使うと楽かもしれない
-    # pattern = re.compile("|".join(re.escape(key) for key in mydic.keys()))
-    # return pattern.sub(lambda x: mydic[x.group()], text)
-    return text
-
-
-class GetVideos(utils.LogIn):
+class Video(utils.Canopy):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         動画をダウンロードする。
@@ -178,73 +140,77 @@ class GetVideos(utils.LogIn):
         :param NTLogger logger:
         :param requests.Session session:
         """
-        super().__init__(mail=mail, password=password, logger=logger, session=session)
+        super().__init__(logger=logger)
+        self.session = session or utils.LogIn(mail=mail, password=password).session
 
-    def start(self, database, save_dir):
+    def start(self, glossary, save_dir, chunk_size=1024*50):
         """
 
-        :param dict[str, dict[str, int | str]] database:
+        :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
+        :param int chunk_size: 一度にサーバーに要求するファイルサイズ
         :rtype: bool
         """
         utils.check_arg(locals())
         self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(database))
+        self.logger.debug("Dictionary of Videos: {}".format(glossary))
         self.save_dir = utils.make_dir(save_dir)
-        self.database = database
-        self.logger.info(Msg.nd_start_dl_video.format(len(self.database)))
+        if isinstance(glossary, list):
+            glossary = get_infos(glossary, self.logger)
+        self.glossary = glossary
+        self.logger.info(Msg.nd_start_dl_video.format(len(self.glossary)))
 
-        for index, video_id in enumerate(self.database.keys()):
+        for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_video.format(
-                    index + 1, len(database), video_id,
-                    self.database[video_id][Key.TITLE]))
-            self.download(video_id)
-            if len(database) > 1:
+                    index + 1, len(glossary), video_id,
+                    self.glossary[video_id][KeyGTI.TITLE]))
+            self._download(video_id, chunk_size)
+            if len(glossary) > 1:
                 time.sleep(1)
         return True
 
-    def download(self, video_id, chunk_size=1024 * 50):
+    def _download(self, video_id, chunk_size=1024 * 50):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param int chunk_size: 一度にサーバーに要求するファイルサイズ
         :rtype: bool
         """
         utils.check_arg(locals())
-        db = self.database[video_id]
+        db = self.glossary[video_id]
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
-            db[Key.V_OR_T_ID] = redirected
+            db[KeyGTI.V_OR_T_ID] = redirected
         self.logger.debug("Video ID and its Thread ID (of officials):"
-                          " {}".format(video_id, db[Key.V_OR_T_ID]))
+                          " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = self.get_from_getflv(db[Key.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
 
         vid_url = response[KeyGetFlv.VIDEO_URL]
         is_premium = response[KeyGetFlv.IS_PREMIUM]
 
         # 動画視聴ページに行ってCookieをもらってくる
-        self.session.get(URL.URL_Watch + video_id)
+        self.session.head(URL.URL_Watch + video_id)
         # connect timeoutを10秒, read timeoutを30秒に設定
         # ↓この時点ではダウンロードは始まらず、ヘッダーだけが来ている
         video_data = self.session.get(url=vid_url, stream=True, timeout=(10.0, 30.0))
-        file_size = int(video_data.headers["content-length"])
+        db[KeyGTI.FILE_SIZE] = int(video_data.headers["content-length"])
         self.logger.debug("File Size: {} (Premium: {})".format(
-            file_size, [False, True][int(is_premium)]))
+            db[KeyGTI.FILE_SIZE], [False, True][int(is_premium)]))
 
-        return self._saver(video_id, video_data, file_size, chunk_size)
+        return self._saver(video_id, video_data, chunk_size)
 
-    def _saver(self, video_id, video_data, file_size, chunk_size):
+    def _saver(self, video_id, video_data, chunk_size):
         """
 
         :param str video_id:
         :param requests.Response video_data: 動画ファイルのURL
-        :param int file_size: ファイルサイズ
         :param int chunk_size: 一度にサーバーに要求するファイルサイズ
         :rtype: bool
         """
-        file_path = self.make_name(video_id, self.database[video_id][Key.MOVIE_TYPE])
+        file_path = self.make_name(video_id, self.glossary[video_id][KeyGTI.MOVIE_TYPE])
         self.logger.debug("File Path: {}".format(file_path))
+        db = self.glossary[video_id]
 
         if progressbar is None:
             with file_path.open("wb") as f:
@@ -254,11 +220,11 @@ class GetVideos(utils.LogIn):
             widgets = [
                 progressbar.Percentage(),
                 ' ', progressbar.Bar(),
-                ' ', utils.sizeof_fmt(file_size),
+                ' ', utils.sizeof_fmt(db[KeyGTI.FILE_SIZE]),
                 ' ', progressbar.ETA(),
                 ' ', progressbar.AdaptiveTransferSpeed(),
             ]
-            pbar = progressbar.ProgressBar(widgets=widgets, max_value=file_size)
+            pbar = progressbar.ProgressBar(widgets=widgets, max_value=db[KeyGTI.FILE_SIZE])
             pbar.start()
             with file_path.open("wb") as f:
                 downloaded_size = 0
@@ -271,43 +237,45 @@ class GetVideos(utils.LogIn):
         return True
 
 
-class GetThumbnails(utils.Canopy):
+class Thumbnail(utils.Canopy):
     def __init__(self, logger=None):
         """
         :param NTLogger logger:
         """
         super().__init__(logger=logger)
 
-    def start(self, database, save_dir, is_large=True):
+    def start(self, glossary, save_dir, is_large=True):
         """
 
-        :param dict[str, dict[str, int | str]] database:
+        :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool
         """
         utils.check_arg(locals())
         self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(database))
-        self.database = database
+        self.logger.debug("Dictionary of Videos: {}".format(glossary))
+        if isinstance(glossary, list):
+            glossary = get_infos(glossary, self.logger)
+        self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.info(Msg.nd_start_dl_pict.format(len(self.database)))
-        for index, video_id in enumerate(self.database.keys()):
+        self.logger.info(Msg.nd_start_dl_pict.format(len(self.glossary)))
+        for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_pict.format(
-                    index + 1, len(database), video_id,
-                    self.database[video_id][Key.TITLE]))
-            self.download(video_id, is_large)
+                    index + 1, len(glossary), video_id,
+                    self.glossary[video_id][KeyGTI.TITLE]))
+            self._download(video_id, is_large)
         return True
 
-    def download(self, video_id, is_large=True):
+    def _download(self, video_id, is_large=True):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool
         """
         utils.check_arg(locals())
-        url = self.database[video_id][Key.THUMBNAIL_URL]
+        url = self.glossary[video_id][KeyGTI.THUMBNAIL_URL]
         if is_large:
             url += ".L"
         image_data = self._worker(video_id, url, is_large)
@@ -325,6 +293,7 @@ class GetThumbnails(utils.Canopy):
         :rtype: bool | requests.Response
         """
         utils.check_arg(locals())
+        db = self.glossary[video_id]
         with requests.Session() as session:
             try:
                 # connect timeoutを5秒, read timeoutを10秒に設定
@@ -337,7 +306,7 @@ class GetThumbnails(utils.Canopy):
                         return self._worker(video_id, url[:-2], is_large=False)
                     else:
                         self.logger.error(Err.connection_404.format(
-                            video_id, self.database[video_id][Key.TITLE]))
+                            video_id, db[KeyGTI.TITLE]))
                         return False
             except (TypeError, ConnectionError,
                     socket.timeout, Timeout, TimeoutError, RequestError) as e:
@@ -345,11 +314,17 @@ class GetThumbnails(utils.Canopy):
                 if is_large and url.endswith(".L"):
                     return self._worker(video_id, url[:-2], is_large=False)
                 else:
-                    self.logger.error(Err.connection_timeout.format(
-                        video_id, self.database[video_id][Key.TITLE]))
+                    self.logger.error(Err.connection_timeout.format(video_id)
+                                      + " (タイトル: {})".format(db[KeyGTI.TITLE]))
                     return False
 
-    def _saver(self, video_id, image_data):
+    def _saver(self, video_id, image_data, _=None):
+        """
+
+        :param str video_id: 動画ID (e.g. sm1234)
+        :param requests.Response image_data: 画像のデータ
+        :return:
+        """
         file_path = self.make_name(video_id, "jpg")
         self.logger.debug("File Path: {}".format(file_path))
 
@@ -359,7 +334,7 @@ class GetThumbnails(utils.Canopy):
         return True
 
 
-class GetComments(utils.LogIn):
+class Comment(utils.Canopy):
     def __init__(self, mail=None, password=None, logger=None, session=None):
         """
         :param str | None mail:
@@ -367,53 +342,56 @@ class GetComments(utils.LogIn):
         :param NTLogger logger:
         :param requests.Session session:
         """
-        super().__init__(mail=mail, password=password, logger=logger, session=session)
+        super().__init__(logger=logger)
+        self.session = session or utils.LogIn(mail=mail, password=password).session
 
-    def start(self, database, save_dir, xml=False):
+    def start(self, glossary, save_dir, xml=False):
         """
 
-        :param dict[str, dict[str, int | str]] database:
+        :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
         :param bool xml:
         """
         utils.check_arg(locals())
         self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(database))
+        self.logger.debug("Dictionary of Videos: {}".format(glossary))
         self.logger.debug("Download XML? : {}".format(xml))
-        self.database = database
+        if isinstance(glossary, list):
+            glossary = get_infos(glossary, self.logger)
+        self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.info(Msg.nd_start_dl_comment.format(len(self.database)))
-        for index, video_id in enumerate(self.database.keys()):
+        self.logger.info(Msg.nd_start_dl_comment.format(len(self.glossary)))
+        for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_comment.format(
-                    index + 1, len(database), video_id,
-                    self.database[video_id][Key.TITLE]))
-            self.download(video_id, xml)
-            if len(self.database) > 1:
+                    index + 1, len(glossary), video_id,
+                    self.glossary[video_id][KeyGTI.TITLE]))
+            self._download(video_id, xml)
+            if len(self.glossary) > 1:
                 time.sleep(1.5)
         return True
 
-    def download(self, video_id, xml=False):
+    def _download(self, video_id, xml=False):
         """
         :param str video_id: 動画ID (e.g. sm1234)
         :param bool xml:
         :rtype: bool
         """
         utils.check_arg(locals())
-        db = self.database[video_id]
+        db = self.glossary[video_id]
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
-            db[Key.V_OR_T_ID] = redirected
+            db[KeyGTI.V_OR_T_ID] = redirected
         self.logger.debug("Video ID and its Thread ID (of officials):"
-                          " {}".format(video_id, db[Key.V_OR_T_ID]))
+                          " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = self.get_from_getflv(db[Key.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
 
         if response is None:
             time.sleep(4)
             print(Err.waiting_for_permission)
             time.sleep(4)
-            return self.download(video_id, xml)
+            return self._download(video_id, xml)
 
         thread_id = response[KeyGetFlv.THREAD_ID]
         msg_server = response[KeyGetFlv.MSG_SERVER]
@@ -434,7 +412,7 @@ class GetComments(utils.LogIn):
                 req_param = self.make_param_json(
                     False, user_id, user_key, thread_id)
             else:
-                thread_key, force_184 = self.get_thread_key(db[Key.V_OR_T_ID],
+                thread_key, force_184 = self.get_thread_key(db[KeyGTI.V_OR_T_ID],
                                                             needs_key)
                 req_param = self.make_param_json(
                     True, user_id, user_key, thread_id,
@@ -442,7 +420,7 @@ class GetComments(utils.LogIn):
 
             self.logger.debug("Posting Parameters: {}".format(req_param))
             res_com = self.session.post(
-                url=URL.URL_Message_New,
+                url=URL.URL_Msg_JSON,
                 json=req_param)
             comment_data = res_com.text.replace("}, ", "},\n")
 
@@ -470,20 +448,20 @@ class GetComments(utils.LogIn):
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
-    def get_thread_key(self, video_id, needs_key):
+    def get_thread_key(self, thread_id, needs_key):
         """
         専用のAPIにアクセスして thread_key を取得する。
 
+        :param str thread_id:
         :param str needs_key:
-        :param str video_id:
         :rtype: tuple[str, str]
         """
         utils.check_arg(locals())
         if not needs_key == "1":
             self.logger.debug("Video ID (or Thread ID): {},"
-                              " needs_key: {}".format(video_id, needs_key))
+                              " needs_key: {}".format(thread_id, needs_key))
             return "", "0"
-        response = self.session.get(URL.URL_GetThreadKey, params={"thread": video_id})
+        response = self.session.get(URL.URL_GetThreadKey, params={"thread": thread_id})
         self.logger.debug("Response from GetThreadKey API: {}".format(response.text))
         parameters = parse_qs(response.text)
         threadkey = parameters["threadkey"][0]  # type: str
@@ -528,6 +506,7 @@ class GetComments(utils.LogIn):
         :param str | None optional_thread_id:
         :param str | None thread_key:
         :param str | None force_184:
+        :rtype: list[dict]
         """
         utils.check_arg({"official_video": official_video, "user_id": user_id,
                          "user_key": user_key, "thread_id": thread_id})
@@ -618,7 +597,7 @@ def main(args):
 
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
-        return print_info(videoid, file_name)
+        return utils.print_info(videoid, file_name)
 
     """ 本筋 """
     log_level = "DEBUG" if IS_DEBUG else args.loglevel
@@ -628,19 +607,19 @@ def main(args):
 
     res_t = False
     if args.thumbnail:
-        res_t = GetThumbnails(logger=logger).start(database, destination)
+        res_t = Thumbnail(logger=logger).start(database, destination)
         if not (args.comment or args.video):
             # サムネイルのダウンロードだけならここで終える。
             return res_t
 
-    session = utils.LogIn(mail=mailadrs, password=password, logger=logger).session
+    session = utils.LogIn(mail=mailadrs, password=password).session
 
     res_c = False
     if args.comment:
-        res_c = GetComments(logger=logger, session=session).start(database, destination, args.xml)
+        res_c = Comment(logger=logger, session=session).start(database, destination, args.xml)
 
     res_v = False
     if args.video:
-        res_v = GetVideos(logger=logger, session=session).start(database, destination)
+        res_v = Video(logger=logger, session=session).start(database, destination)
 
     return res_c | res_v | res_t

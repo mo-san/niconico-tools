@@ -13,20 +13,21 @@ def main(arguments=None):
     :param arguments: 引数の文字列
     :rtype: bool
     """
+    choices = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
     parser = InheritedParser(fromfile_prefix_chars="+")
     parser.add_argument("-l", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD", dest="password")
     parser.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    parser.add_argument("--loglevel", type=str.upper, default="INFO",
-                        help=Msg.nd_help_loglevel,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+    parser.add_argument("--loglevel", type=str.upper, default="INFO", help=Msg.nd_help_loglevel, choices=choices)
     subparsers = parser.add_subparsers()
+
 
     parser_nd = subparsers.add_parser("download", aliases=["d"], help=Msg.nd_description)
     parser_nd.set_defaults(func=nicodown.main)
     parser_nd.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
     parser_nd.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
-    # nargs があるとリストに値が入る。
+    # nargs があると値はリストに入る。
     parser_nd.add_argument("-l", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser_nd.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="WORD", dest="password")
     parser_nd.add_argument("-d", "--dest", nargs=1, type=str, default=[os.getcwd()], help=Msg.nd_help_destination)
@@ -36,9 +37,8 @@ def main(arguments=None):
     parser_nd.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
     parser_nd.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
     parser_nd.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="FILE")
-    parser_nd.add_argument("--loglevel", type=str.upper, default="INFO",
-                        help=Msg.nd_help_loglevel,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+    parser_nd.add_argument("--loglevel", type=str.upper, default="INFO", help=Msg.nd_help_loglevel, choices=choices)
+
 
     parser_ml = subparsers.add_parser("mylist", aliases=["m"], help=Msg.ml_description)
     parser_ml.set_defaults(func=nicoml.main)
@@ -49,15 +49,15 @@ def main(arguments=None):
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
     parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="FILE")
     parser_ml.add_argument("--yes", action="store_true", help=Msg.ml_help_yes)
-    parser_ml.add_argument("--loglevel", type=str.upper, default="INFO",
-                        help=Msg.nd_help_loglevel,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+    parser_ml.add_argument("--loglevel", type=str.upper, default="INFO", help=Msg.nd_help_loglevel, choices=choices)
+
     group_one = parser_ml.add_argument_group(Msg.ml_help_group_a)
     group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")
     group_one.add_argument("-a", "--add", nargs="+", help=Msg.ml_help_add, metavar="sm...")
     group_one.add_argument("-d", "--delete", nargs="+", help=Msg.ml_help_delete, metavar="sm...")
     group_one.add_argument("-m", "--move", nargs="+", help=Msg.ml_help_move, metavar="sm...")
     group_one.add_argument("-c", "--copy", nargs="+", help=Msg.ml_help_copy, metavar="sm...")
+
     group_two = parser_ml.add_argument_group(Msg.ml_help_group_b)
     group_two.add_argument("-r", "--create", action="store_true", help=Msg.ml_help_create)
     group_two.add_argument("--purge", action="store_true", help=Msg.ml_help_purge)

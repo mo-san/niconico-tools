@@ -41,9 +41,27 @@ def get_encoding():
     return sys.stdout.encoding or "UTF-8"
 
 
+def print_info(queue, file_name=None):
+    """
+    GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
+
+    :param list queue:
+    :param str | Path | None file_name:
+    :return: bool
+    """
+    text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
+    if file_name:
+        file_name = make_dir(file_name)
+        with file_name.open(encoding="utf-8", mode="w") as fd:
+            fd.write(text + "\n")
+    else:
+        print(text.encode(get_encoding(), BACKSLASH).decode(get_encoding()))
+    return True
+
+
 def validator(input_list):
     """
-    動画IDが適切なものか確認する。
+    動画IDが適切なものか確認する。元のリスト内の順番は保持されない。
 
     受け入れるのは以下の形式:
         * "*"
@@ -58,7 +76,7 @@ def validator(input_list):
         * 123456
         * watch/123456
 
-    :param list[str] input_list:
+    :param list[str] | tuple[str] | set[str] input_list:
     :rtype: list[str]
     """
     check_arg(locals())
@@ -69,8 +87,11 @@ def validator(input_list):
             (?:(?:h?t?tp://)?www\.nicovideo\.jp/)?watch/  # 通常URL
            |(?:h?t?tp://)?nico\.ms/  # 短縮URL
         )?
-            ((?:sm|nm|so)?[0-9]+)  # ID本体
+            ((?:sm|nm|so)?\d+)  # ID本体
         )\s?""".format(re.escape(ALL_ITEM)), re.I + re.X).match
+
+    if not isinstance(input_list, (list, tuple, set)):
+        raise MylistArgumentError(Err.invalid_argument.format(input_list))
 
     if "\t" in input_list[0]:
         for line in input_list[1:]:
@@ -78,7 +99,7 @@ def validator(input_list):
                 return []
         input_list = [item.split("\t")[0] for item in input_list]
     else:
-        if input_list == [ALL_ITEM]:
+        if len(input_list) == 1 and input_list[0] == ALL_ITEM:
             return input_list
         for item in input_list:
             if not matcher(item):
@@ -86,7 +107,7 @@ def validator(input_list):
 
     # ................................↓"*" が入っていたときの対策
     return [matcher(item).group(1) or item.strip()
-            for item in input_list if matcher(item) or ALL_ITEM in item]
+            for item in set(input_list) if matcher(item) or ALL_ITEM in item]
 
 
 def make_dir(directory):
@@ -105,8 +126,41 @@ def make_dir(directory):
         if not directory.is_dir():
             directory.mkdir(parents=True)
         return directory.resolve()
-    except (OSError, FileNotFoundError, NotADirectoryError, PermissionError):
+    except (
+            # [WinError 87] パラメーターが間違っています。
+            # (con とか nul とか)(Python 3.5以下で起こる。)
+            OSError,
+            # [WinError 2] 指定されたファイルが見つかりません。(Python 3.5以下で起こる。)
+            FileNotFoundError,
+            # [WinError 267] ディレクトリ名が無効です。(con とか nul とか)
+            NotADirectoryError,
+            # [WinError 5] アクセスが拒否されました。(C:/ とか D:/ とか)
+            # [Errno 13] Permission denied (同名のフォルダーがあってそこに書き込もうとした場合)
+            PermissionError,
+            # [WinError 183] 既に存在するファイルを作成することはできません。
+            FileExistsError
+    ):
         raise NameError(Err.invalid_dirname.format(directory))
+
+
+def t2filename(text):
+    """
+    ファイル名に使えない文字を全角文字に置き換える。
+
+    :param str text: ファイル名
+    :rtype: str
+    """
+    mydic = {
+        r"\/": "／", "/": "／", "'": "’", "\"": "”",
+        "<"  : "＜", ">": "＞", "|": "｜", ":": "：",
+        "*"  : "＊", "?": "？", "~": "～", "\\": "＼"
+    }
+    for item in mydic.keys():
+        text = text.replace(item, mydic[item])
+    # 置き換えるペアが増えたらこっちを使うと楽かもしれない
+    # pattern = re.compile("|".join(re.escape(key) for key in mydic.keys()))
+    # return pattern.sub(lambda x: mydic[x.group()], text)
+    return text
 
 
 def check_arg(parameters):
@@ -118,7 +172,7 @@ def check_arg(parameters):
     """
     for _name, _value in parameters.items():
         if _value is None:
-            raise ValueError(Err.not_specified.format(_name))
+            raise MylistArgumentError(Err.not_specified.format(_name))
 
 
 def sizeof_fmt(num):
@@ -137,19 +191,93 @@ def sizeof_fmt(num):
     return "{:.2f}Gb".format(num)
 
 
+def get_from_getflv(video_id, session):
+    """
+    GetFlv APIから情報を得る。
+
+    * GetFlvのサンプル:
+
+    thread_id=1406370428
+    &l=314
+    &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
+    &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
+    &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
+    &user_id=<ユーザーIDの数字>
+    &is_premium=1
+    &nickname=<URLエンコードされたユーザー名の文字列>
+    &time=1475176067845
+    &done=true
+    &ng_rv=220
+    &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
+
+    * 但しアクセス制限がかかったときには:
+
+    error=access_locked&done=true
+
+    :param str video_id:
+    :param requests.Session session:
+    :rtype: dict[str, str] | None
+    """
+    check_arg(locals())
+    suffix = {"as3": 1} if video_id.startswith("nm") else None
+    response = session.get(URL.URL_GetFlv + video_id, params=suffix)
+    # self.logger.debug("GetFLV Response: {}".format(response.text))
+    return extract_getflv(response.text)
+
+
+def extract_getflv(content):
+    """
+
+    :param str content: GetFLV の返事
+    :rtype: dict[str, str] | None
+    """
+    parameters = parse_qs(content)
+    if parameters.get("error") is not None:
+        return None
+    result = {
+        KeyGetFlv.THREAD_ID    : int(parameters[KeyGetFlv.THREAD_ID][0]),
+        KeyGetFlv.LENGTH       : int(parameters[KeyGetFlv.LENGTH][0]),
+        KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
+        KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
+        KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
+        KeyGetFlv.USER_ID      : int(parameters[KeyGetFlv.USER_ID][0]),
+        KeyGetFlv.IS_PREMIUM   : int(parameters[KeyGetFlv.IS_PREMIUM][0]),
+        KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
+        KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
+
+        # 以下は公式動画にだけあるもの。通常の動画ではNone
+        KeyGetFlv.OPT_THREAD_ID: None,
+        KeyGetFlv.NEEDS_KEY    : None,
+    }
+
+    opt_thread_id   = parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0]
+    needs_key       = parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0]
+    if opt_thread_id is not None:
+        result.update({
+            KeyGetFlv.OPT_THREAD_ID : int(opt_thread_id),
+            KeyGetFlv.NEEDS_KEY     : int(needs_key),
+        })
+    return result
+
+
 class MylistError(Exception):
     """ マイリスト操作で誤りがあったときに発生させるエラー """
     pass
 
 
 class MylistNotFoundError(MylistError):
-    """ マイリスが見つからなかったときに発生させるエラー """
+    """ マイリストが見つからなかったときに発生させるエラー """
+    pass
+
+
+class MylistArgumentError(MylistError):
+    """ 引数が誤っていたときに発生させるエラー """
     pass
 
 
 class Canopy:
     def __init__(self, logger=None):
-        self.database = None
+        self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
 
@@ -163,7 +291,7 @@ class Canopy:
         """
         check_arg(locals())
         file_name =  Msg.nd_file_name.format(
-            video_id, self.database[video_id][Key.FILE_NAME], ext)
+            video_id, self.glossary[video_id][KeyGTI.FILE_NAME], ext)
         return Path(self.save_dir).resolve() / file_name
 
     def get_logger(self, logger):
@@ -180,77 +308,33 @@ class Canopy:
         else:
             return logger
 
-    @classmethod
-    def get_from_getflv(cls, video_id, session):
-        """
-        GetFlv APIから情報を得る。
 
-        * GetFlvのサンプル:
-
-        thread_id=1406370428
-        &l=314
-        &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
-        &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
-        &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
-        &user_id=<ユーザーIDの数字>
-        &is_premium=1
-        &nickname=<URLエンコードされたユーザー名の文字列>
-        &time=1475176067845
-        &done=true
-        &ng_rv=220
-        &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
-
-        * 但しアクセス制限がかかったときには:
-
-        error=access_locked&done=true
-
-        :param str video_id:
-        :param requests.Session session:
-        :rtype: dict[str, str] | None
-        """
-        check_arg(locals())
-        suffix = {"as3": 1} if video_id.startswith("nm") else None
-        response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-        # self.logger.debug("GetFLV Response: {}".format(response.text))
-        return cls.extract_getflv(response.text)
+class LogIn:
+    __singleton__ = None
+    is_login = False
+    cookie = {}
 
     @classmethod
-    def extract_getflv(cls, content):
+    def __new__(cls, *more, **kwargs):
+        """
+        ログイン処理が一度だけなのを保障するためにシングルトンとして振る舞わせる。
+
+        参考:
+            デザインパターン（Design Pattern）#Singleton - Qiita
+            http://qiita.com/nirperm/items/af1f83925ba43dbf22eb
         """
 
-        :param str content: GetFLV の返事
-        :rtype: dict[str, str] | None
-        """
-        parameters = parse_qs(content)
-        if parameters.get("error") is not None:
-            return None
-        return {
-            KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
-            KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
-            KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
-            KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
-            KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
-            KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
-            KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
-            KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
-            KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
+        if cls.__singleton__ is None:
+            cls.__singleton__ = super().__new__(cls)
+        return cls.__singleton__
 
-            # 以下は公式動画にだけあるもの。通常の動画ではNone
-            KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
-            KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
-        }
-
-
-class LogIn(Canopy):
-    def __init__(self, mail=None, password=None, logger=None, session=None):
+    def __init__(self, mail=None, password=None, session=None):
         """
         :param str | None mail: メールアドレス
         :param str | None password: パスワード
         :param requests.Session | None session: セッションオブジェクト
         """
-        super().__init__(logger=logger)
-        self.is_login = False
-        self._auth = None
+        self._auth = {}
         if not (session or mail or password):
             self.session = self.get_session()
         elif session and not (mail or password):
@@ -286,6 +370,7 @@ class LogIn(Canopy):
 
     def _we_have_logged_in(self, response):
         """
+        ログインできたかどうかをHTMLの文面から推測する
 
         :param str response:
         :rtype: bool
@@ -323,8 +408,8 @@ class LogIn(Canopy):
         """
         メールアドレスとパスワードをユーザーに求める。
 
-        :param str mail: メールアドレス。
-        :param str password: パスワード
+        :param str | None mail: メールアドレス。
+        :param str | None password: パスワード
         :rtype: dict[str, str]
         """
         un, pw = mail, password
@@ -420,7 +505,7 @@ class NTLogger(logging.Logger):
 
     def get_formatter(self):
         if self._is_debug:
-            fmt = logging.Formatter("[{levelname: ^7}|{message}", style="{")
+            fmt = logging.Formatter("[{asctime}|{levelname: ^7}|{message}", style="{")
         else:
             fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
         return fmt
@@ -428,13 +513,18 @@ class NTLogger(logging.Logger):
     def forwarding(self, level, msg, *args, **kwargs):
         _enco = get_encoding()
         if self._is_debug:
-            # ログを呼び出した関数の名前をつなげる
-            funcs = " from ".join(["<{}>".format(item[3]) for item in inspect.stack()[2:5]])
+            history = inspect.stack()
+            funcs = "line:{}|{}".format(
+                # ログを呼び出した場所の行数
+                history[2][2],
+                # ログを呼び出した関数の名前をつなげる
+                " from ".join(["<{}>".format(item[3]) for item in history[2:5]])
+            )
             if level <= logging.DEBUG:
-                msg = funcs + "]\t" + msg
+                msg = funcs + "]\t" + str(msg)
             else:
-                msg = funcs + "]\t\t" + msg
-        _msg = msg.encode(_enco, BACKSLASH).decode(_enco)
+                msg = funcs + "]\t\t" + str(msg)
+        _msg = str(msg).encode(_enco, BACKSLASH).decode(_enco)
         _args = tuple([item.encode(_enco, BACKSLASH).decode(_enco)
                        if isinstance(item, str) else item for item in args[0]])
         self._log(level, _msg, _args, **kwargs)
@@ -457,7 +547,8 @@ class URL:
     URL_Info   = "http://ext.nicovideo.jp/api/getthumbinfo/"
     URL_Pict   = "http://tn-skr1.smilevideo.jp/smile"
     URL_GetThreadKey = "http://flapi.nicovideo.jp/api/getthreadkey"
-    URL_Message_New = "http://nmsg.nicovideo.jp/api.json/"
+    URL_Msg_JSON = "http://nmsg.nicovideo.jp/api.json/"
+    URL_Msg_XML = "http://nmsg.nicovideo.jp/api/"
 
     # 一般のマイリストを扱うためのAPI
     URL_MyListTop  = "http://www.nicovideo.jp/my/mylist"
@@ -486,38 +577,39 @@ class Msg:
     ''' マイリスト編集コマンドのヘルプメッセージ '''
     ml_default_name = "とりあえずマイリスト"
     ml_default_id = 0
-    ml_description = "マイリストを扱います。 add, delete, move, copy の引数には " \
-                     "テキストファイルも指定できます。 その場合はファイル名の " \
-                     "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    ml_description = ("マイリストを扱います。 add, delete, move, copy の引数には"
+                      "テキストファイルも指定できます。 その場合はファイル名の"
+                      "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
     ml_help_group_b = "マイリスト自体を操作する"
     ml_help_group_a = "リスト中の項目を操作する"
     ml_help_add = "指定したIDの動画を マイリストに追加します。"
-    ml_help_delete = "そのマイリストから 指定したIDの動画を削除します。" \
-                     "動画IDの代わりに * を指定すると、 マイリストを空にします。"
+    ml_help_delete = ("そのマイリストから 指定したIDの動画を削除します。"
+                      "動画IDの代わりに * を指定すると、 マイリストを空にします。")
     ml_help_move = "移動元から移動先へと 動画を移動します。"
-    ml_help_copy = "コピー元からコピー先へと 動画をコピーします。 " \
-                   "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。"
-    ml_help_export = "登録された動画IDのみを改行で区切り、 出力します。" \
-                     "名前の代わりに * を指定すると 全マイリストを一覧にします。"
-    ml_help_show = "登録された動画の情報をタブ区切り形式で出力します。" \
-                   "名前の代わりに * を指定すると マイリスト全体のメタデータを出力します。" \
-                   "-ss のように2回指定すると表形式で表示します。"
+    ml_help_copy = ("コピー元からコピー先へと 動画をコピーします。 "
+                    "動画IDの代わりに * を指定すると、 マイリスト全体をコピーします。")
+    ml_help_export = ("登録された動画IDのみを改行で区切り、出力します。"
+                      "名前の代わりに * を指定すると 全マイリストを一覧にします。")
+    ml_help_show = ("登録された動画の情報をタブ区切り形式で出力します。"
+                    "名前の代わりに * を指定すると マイリスト全体のメタデータを出力します。"
+                    "-ss のように2回指定すると表形式で表示します。")
     ml_help_outfile = "そのファイル名で テキストファイルに出力します。"
     ml_help_purge = "そのマイリスト自体を削除します。 取り消しはできません。"
     ml_help_create = "指定した名前で 新しくマイリストを作成します。"
     ml_help_src = "移動(コピー)元、 あるいは各種の操作対象の、マイリストの名前"
     ml_help_to = "移動(コピー)先のマイリストの名前"
     ml_help_id = "マイリストの指定に、 名前の代わりにそのIDを使います。"
-    ml_help_everything = "show や export と同時に指定すると、" \
-                         "全てのマイリストの情報をまとめて取得します。"
-    ml_help_yes = "これを指定すると、マイリスト自体の削除や" \
-                  "マイリスト内の全項目の削除の時に確認しません。"
+    ml_help_everything = ("show や export と同時に指定すると、"
+                          "全てのマイリストの情報をまとめて取得します。")
+    ml_help_yes = ("これを指定すると、マイリスト自体の削除や"
+                   "マイリスト内の全項目の削除の時に確認しません。")
+    ml_help_each = "指定すると、登録や削除を、まとめずに一つずつ行います。"
 
     ''' 動画ダウンロードコマンドのヘルプメッセージ '''
-    nd_description = "ニコニコ動画のデータを ダウンロードします。"
-    nd_help_video_id = "ダウンロードしたい動画ID。 例: sm12345678 " \
-                       "テキストファイルも指定できます。 その場合はファイル名の " \
-                       "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\""
+    nd_description = "動画のいろいろをダウンロードします。"
+    nd_help_video_id = ("ダウンロードしたい動画ID。 例: sm12345678 "
+                        "テキストファイルも指定できます。 その場合はファイル名の "
+                        "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
     nd_help_password = "パスワード"
     nd_help_mail = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
@@ -525,11 +617,16 @@ class Msg:
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
     nd_help_video = "指定すると、 動画をダウンロードします。"
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
-    nd_help_xml = "コメントをXML形式でダウンロードしたい場合に指定します。" \
-                  "チャンネル動画の場合は無視されます。"
+    nd_help_xml = ("指定すると、コメントをXML形式でダウンロードします。"
+                   "チャンネル動画の場合は無視されます。")
     nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
+    nd_help_nomulti = "指定すると、プログレスバーを複数行で表示しません。"
+    nd_help_limit = ("サムネイルとコメントについては同時ダウンロードを、"
+                     "動画については1つあたりの分割数をこの数に制限します。標準は 4 です。")
+    nd_help_dmc = "動画をDMCサーバー(いわゆる新サーバー)からダウンロードします。標準はこちらです。"
+    nd_help_smile = "動画をsmileサーバー(いわゆる従来サーバー)からダウンロードします。"
 
     input_mail = "メールアドレスを入力してください。"
     input_pass = "パスワードを入力してください(画面には表示されません)。"
@@ -539,6 +636,7 @@ class Msg:
     nd_download_done = "{0} に保存しました。"
     nd_download_video = "({0}/{1}) ID: {2} (タイトル:{3}) の動画をダウンロードします。"
     nd_download_pict = "({0}/{1}) ID: {2} (タイトル:{3}) のサムネイルをダウンロードします。"
+    nd_download_pict_async = "ID: {0} (タイトル:{1}) のサムネイルをダウンロードします。"
     nd_download_comment = "({0}/{1}) ID: {2} (タイトル:{3}) のコメントをダウンロードします。"
     nd_start_dl_video = "{0} 件の動画をダウンロードします。"
     nd_start_dl_pict = "{0} 件のサムネイルをダウンロードします。"
@@ -561,12 +659,13 @@ class Msg:
     ml_answer_invalid = "Y または N を入力してください。"
     ml_deleted_or_private = "{0[video_id]} {0[title]} は削除されているか非公開です。"
 
-    ml_done_add = "[完了:追加] ({0}/{1}) 動画: {2}"
-    ml_done_delete = "[完了:削除] ({0}/{1}) 動画: {2}"
-    ml_done_copy = "[完了:コピー] ({0}/{1}) 動画ID: {2}"
-    ml_done_move = "[完了:移動] ({0}/{1}) 動画ID: {2}"
-    ml_done_purge = "[完了:マイリスト削除] 名前: {0}"
-    ml_done_create = "[完了:マイリスト作成] ID: {0}, 名前: {1} (公開: {2}), 説明文: {3}"
+    ml_done_add = "[完了:追加] ({now}/{all}) 動画: {video_id}"
+    ml_done_delete = "[完了:削除] ({now}/{all}) 動画: {video_id}"
+    ml_done_copy = "[完了:コピー] ({now}/{all}) 動画ID: {video_id}"
+    ml_done_move = "[完了:移動] ({now}/{all}) 動画ID: {video_id}"
+    ml_done_purge = "[完了:マイリスト削除] 名前: {name}"
+    ml_done_create = ("[完了:マイリスト作成] ID: {_id}, 名前:"
+                      " {name} (公開: {pub}), 説明文: {desc}")
 
     ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
     ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
@@ -578,19 +677,21 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    failed_operation = "以下の理由により操作は失敗しました: {desc}"
     waiting_for_permission = "アクセス制限が解除されるのを待っています…"
-    name_replaced = "作成しようとした名前「{0}」は特殊文字を含むため、" \
-                    "「{1}」に置き換わっています。"
+    name_replaced = ("作成しようとした名前「{0}」は特殊文字を含むため、"
+                     "「{1}」に置き換わっています。")
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
     not_installed = "{0} がインストールされていないため実行できません。"
+    invalid_argument = "引数の型が間違っています。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
-    invalid_videoid = "[エラー] 指定できる動画IDの形式は以下の通りです。" \
-                      "http://www.nicovideo.jp/watch/sm1234," \
-                      " sm1234, nm1234, so1234, 123456, watch/123456"
+    invalid_videoid = ("[エラー] 指定できる動画IDの形式は以下の通りです。"
+                       "http://www.nicovideo.jp/watch/sm1234, "
+                       "sm1234, nm1234, so1234,  123456, watch/123456")
     connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
-    connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
+    connection_timeout = "接続が時間切れになりました。 ID: {0}"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"
     videoids_contain_all = "通常の動画IDと * を混ぜないでください。"
@@ -599,10 +700,10 @@ class Err:
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
     no_commands = "[エラー] コマンドを指定してください。"
     item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
-    name_ambiguous = "同名のマイリストが {0}件あります。名前の代わりに" \
-                     "IDで(--id を使って)指定し直してください。"
-    name_ambiguous_detail = "ID: {id}, 名前: {name}, {publicity}," \
-                            " 作成日: {since}, 説明文: {description}"
+    name_ambiguous = ("同名のマイリストが {0}件あります。名前の代わりに"
+                      "IDで(--id を使って)指定し直してください。")
+    name_ambiguous_detail = ("ID: {id}, 名前: {name}, {publicity},"
+                             " 作成日: {since}, 説明文: {description}")
     mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
     mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
     over_load = "[エラー] {0} にはこれ以上追加できません。"
@@ -613,8 +714,8 @@ class Err:
     unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
-    invalid_spec = "[エラー] {0} は不正です。マイリストの名前またはIDは" \
-                   "文字列か整数で入力してください。"
+    invalid_spec = ("[エラー] {0} は不正です。マイリストの名前"
+                    "またはIDは文字列か整数で入力してください。")
     no_items = "[エラー] 指定した動画はいずれもこのマイリストには登録されていません。"
 
     '''
@@ -649,7 +750,7 @@ class Err:
     INTERNAL = "INTERNAL"
 
 
-class Key:
+class KeyGTI:
     """
     getthumbinfo から取ってきたデータのキーとなる文字列たち。
 
@@ -672,7 +773,8 @@ class Key:
     DELETED         = "deleted"
     DESCRIPTION     = "description"
     EMBEDDABLE      = "embeddable"      # int; 0 or 1
-    FILE_NAME       = "file_name"
+    FILE_NAME       = "file_name"       # 元データには無い
+    FILE_SIZE       = "file_size"       # 元データには無い
     LAST_RES_BODY   = "last_res_body"
     LENGTH          = "length"          # str
     LENGTH_SECONDS  = "length_seconds"  # int
@@ -695,42 +797,77 @@ class Key:
     WATCH_URL       = "watch_url"
 
 
-class KeyGetFlv:
-    """
-    GetFLV を解釈するときのURLパラメーターのキー
-    """
-    THREAD_ID       = "thread_id"
-    LENGTH          = "l"
-    VIDEO_URL       = "url"
-    MSG_SERVER      = "ms"
-    MSG_SUB         = "ms_sub"
+class KeyDmc:
+    FILE_NAME       = "file_name"
+    FILE_SIZE       = "file_size"
+
+    VIDEO_ID        = "video_id"
+    VIDEO_URL_SM    = "video_url"       # Smile サーバーのほう
+    TITLE           = "title"
+    THUMBNAIL_URL   = "thumbnail_url"
+    ECO             = "eco"             # int
+    MOVIE_TYPE      = "movie_type"
+    # IS_DMC          = "is_dmc"          # int or None
+    DELETED         = "deleted"         # int
+    IS_DELETED      = "is_deleted"      # bool
+    IS_PUBLIC       = "is_public"       # bool
+    IS_OFFICIAL     = "is_official"     # bool
+    IS_PREMIUM      = "is_premium"      # bool
     USER_ID         = "user_id"
-    IS_PREMIUM      = "is_premium"
-    NICKNAME        = "nickname"
-    USER_KEY        = "userkey"
+    USER_KEY        = "user_key"
+    MSG_SERVER      = "ms"
+    THREAD_ID       = "thread_id"
+    THREAD_KEY      = "thread_key"
+
+    API_URL         = "api_url"
+    RECIPE_ID       = "recipe_id"
+    CONTENT_ID      = "content_id"
+    VIDEO_SRC_IDS   = "video_src_ids"   # list
+    AUDIO_SRC_IDS   = "audio_src_ids"   # list
+    HEARTBEAT       = "heartbeat"       # int
+    TOKEN           = "token"
+    SIGNATURE       = "signature"
+    AUTH_TYPE       = "auth_type"
+    C_K_TIMEOUT     = "content_key_timeout"     # int
+    SVC_USER_ID     = "service_user_id"     # USER_ID とたぶん同じ
+    PLAYER_ID       = "player_id"
+    PRIORITY        = "priority"
 
     # ↓公式動画にだけある情報
     OPT_THREAD_ID   = "optional_thread_id"
     NEEDS_KEY       = "needs_key"
 
 
+class KeyGetFlv:
+    """ GetFLV を解釈するときのURLパラメーターのキー """
+    THREAD_ID       = "thread_id"           # int
+    LENGTH          = "l"                   # int
+    VIDEO_URL       = "url"                 # str
+    MSG_SERVER      = "ms"                  # str
+    MSG_SUB         = "ms_sub"              # str
+    USER_ID         = "user_id"             # int
+    IS_PREMIUM      = "is_premium"          # int
+    NICKNAME        = "nickname"            # str
+    USER_KEY        = "userkey"             # str
+
+    # ↓公式動画にだけある情報
+    OPT_THREAD_ID   = "optional_thread_id"  # int
+    NEEDS_KEY       = "needs_key"           # int
+
+
 class MKey:
-    """
-    マイリスト情報を読み取るときのJSONのキー
-    """
-    ID = "id"
-    NAME = "name"
-    IS_PUBLIC = "is_public"
-    PUBLICITY = "publicity"
-    SINCE = "since"
+    """ マイリスト情報を読み取るときのJSONのキー """
+    ID          = "id"
+    NAME        = "name"
+    IS_PUBLIC   = "is_public"
+    PUBLICITY   = "publicity"
+    SINCE       = "since"
     DESCRIPTION = "description"
-    ITEM_DATA = "item_data"
+    ITEM_DATA   = "item_data"
 
 
 class InheritedParser(ArgumentParser):
-    """
-    文字コードで問題を起こさないために ArgumentParser を上書きするクラス
-    """
+    """ 文字コードで問題を起こさないために ArgumentParser を上書きするクラス """
     def _read_args_from_files(self, arg_strings):
         # expand arguments referencing files
         new_arg_strings = []

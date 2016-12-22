@@ -6,8 +6,8 @@ import shutil
 import pytest
 
 import nicotools
-from nicotools.nicodown import GetVideos, GetComments, GetThumbnails, get_infos
-from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir
+from nicotools.nicodown import Video, Comment, Thumbnail, get_infos
+from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir, MylistArgumentError
 
 SAVE_DIR_1 = "tests/downloads/"
 SAVE_DIR_2 = "tests/aaaaa"
@@ -38,17 +38,17 @@ class TestUtils:
 
     def test_validator(self):
         assert validator(["*", "sm9", "-d"]) == []
-        assert (validator(
+        assert (set(validator(
             ["*", " http://www.nicovideo.jp/watch/1341499584",
              " sm1234 ", "watch/sm123456",
              " nm1234 ", "watch/nm123456",
              " so1234 ", "watch/so123456",
-             " 123456 ", "watch/1278053154"]) ==
-            ["*", "1341499584",
+             " 123456 ", "watch/1278053154"])) ==
+            {"*", "1341499584",
              "sm1234", "sm123456",
              "nm1234", "nm123456",
              "so1234", "so123456",
-             "123456", "1278053154"])
+             "123456", "1278053154"})
 
     def test_make_dir(self):
         save_dir = ["test", "foo", "foo/bar", "some/thing/text.txt"]
@@ -175,47 +175,43 @@ class TestNicodownError:
 class TestComment:
     def test_comment_single(self):
         db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
-        assert GetComments(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
+        assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
 
     def test_comment_multi(self):
         db = get_infos(VIDEO_ID.split(" "), LOGGER)
-        assert GetComments(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1, xml=True)
+        assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1, xml=True)
 
     def test_comment_without_directory(self):
         db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
-        with pytest.raises(ValueError):
+        with pytest.raises(MylistArgumentError):
             # noinspection PyTypeChecker
-            GetComments(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
+            Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
 
 
 class TestThumb:
     def test_thumbnail_single(self):
         db = get_infos([VIDEO_ID.split(" ")[0]])
-        assert GetThumbnails(LOGGER).start(db, SAVE_DIR_1)
+        assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
 
     def test_thumbnail_multi(self):
         db = get_infos(VIDEO_ID.split(" "))
-        assert GetThumbnails(LOGGER).start(db, SAVE_DIR_1)
+        assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
 
     def test_thumbnail_without_logger(self):
         db = get_infos(VIDEO_ID.split(" "))
-        assert GetThumbnails().start(db, SAVE_DIR_1)
+        assert Thumbnail().start(db, SAVE_DIR_1)
 
 
 class TestVideo:
     def test_video_normal_single(self):
         db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
-        assert GetVideos(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
+        assert Video(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
 
     def test_video_premium_multi(self):
         db = get_infos(VIDEO_ID.split(" ")[0:2], LOGGER)
-        assert GetVideos(AUTH_P[0], AUTH_P[1], LOGGER).start(db, SAVE_DIR_1)
+        assert Video(AUTH_P[0], AUTH_P[1], LOGGER).start(db, SAVE_DIR_1)
 
 
 def test_okatadsuke():
     for _parh in (SAVE_DIR_1, SAVE_DIR_2):
         shutil.rmtree(str(make_dir(_parh)))
-
-# test_video()
-# test_comment()
-# test_thumbnail()

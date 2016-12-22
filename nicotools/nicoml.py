@@ -13,14 +13,14 @@ except ImportError:
     PrettyTable = False
 
 from . import utils
-from .utils import Msg, Err, URL, Key, MKey, MylistNotFoundError
+from .utils import Msg, Err, URL, KeyGTI, MKey, MylistNotFoundError
 
 
 # TODO: purifyコマンド
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
-class NicoMyList(utils.LogIn):
+class NicoMyList(utils.Canopy):
     WHY_DELETED = {
         "0": "公開",
         "1": "削除",
@@ -29,7 +29,7 @@ class NicoMyList(utils.LogIn):
         "8": "非公開",
     }
 
-    def __init__(self, mail=None, password=None, logger=None, session=None):
+    def __init__(self, mail=None, password=None, logger=None):
         """
         使い方:
 
@@ -77,7 +77,7 @@ class NicoMyList(utils.LogIn):
 
         他のコマンド:
             それぞれにはログインに必要な情報を与えられる:
-                mylist MYLIST --add sm9 --user <メールアドレス> --pass <パスワード>
+                mylist MYLIST --add sm9 --mail <メールアドレス> --pass <パスワード>
 
             引数がどの様に解釈されるかを確認したいとき (確認するだけで、プログラムは実行しません):
                 mylist --export --id 12345678 --out ../file.txt --what
@@ -92,10 +92,12 @@ class NicoMyList(utils.LogIn):
         :param str | None mail: メールアドレス
         :param str | None password: パスワードの組
         :param NTLogger logger:
-        :param requests.Session | None session: requests モジュールのセッション
         :rtype: None
         """
-        super().__init__(mail=mail, password=password, logger=logger, session=session)
+        super().__init__(logger=logger)
+        __login = utils.LogIn(mail=mail, password=password)
+        self.session = __login.session
+        self.token = __login.token
         self.mylists = self.get_mylists_info()
 
     @classmethod
@@ -292,7 +294,8 @@ class NicoMyList(utils.LogIn):
                 # 同じ名前のマイリストが複数あったとき
                 self.logger.error(result.get("err_msg"))
                 for single in result.get("err_dic").values():
-                    sys.exit(Err.name_ambiguous_detail.format(**single))
+                    print(Err.name_ambiguous_detail.format(**single), file=sys.stderr)
+                sys.exit()
             else:
                 # 存在しなかったとき
                 raise MylistNotFoundError(result.get("err_msg"))
@@ -408,19 +411,12 @@ class NicoMyList(utils.LogIn):
         icon_id = kwargs.get("icon_id", 0)  # type: int
 
         if "move" == mode and to_def:
-            payload = {
-                "item_type"      : 0,
-                "item_id"        : video_id,
-                "description"    : description,
-                "token"          : self.token
-            }
-            url = URL.URL_AddDef
-            payload = {
-                "id_list[0][]": item_id,
-                "token"       : self.token
-            }
-            url = URL.URL_DeleteDef
-        elif "add" == mode or ("copy" == mode and to_def):
+            # とりあえずマイリストには直接移動できないので、追加と削除を別でやる。
+            self.get_response("add", to_def=True, video_id=video_id,
+                              description=description)
+            return self.get_response("delete", from_def=True, item_id=item_id)
+
+        if "add" == mode or ("copy" == mode and to_def):
             payload = {
                 "item_type"      : 0,
                 "item_id"        : video_id,
@@ -509,8 +505,8 @@ class NicoMyList(utils.LogIn):
             self.mylists = self.get_mylists_info()
             item = self.mylists[res[MKey.ID]]
             self.logger.info(Msg.ml_done_create.format(
-                res[MKey.ID], item[MKey.NAME],
-                item[MKey.PUBLICITY], item[MKey.DESCRIPTION]))
+                _id=res[MKey.ID], name=item[MKey.NAME],
+                pub=item[MKey.PUBLICITY], desc=item[MKey.DESCRIPTION]))
             if mylist_name != item[MKey.NAME]:
                 self.logger.info(Err.name_replaced.format(mylist_name, item[MKey.NAME]))
             return True
@@ -539,7 +535,7 @@ class NicoMyList(utils.LogIn):
             self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
             return False
         else:
-            self.logger.info(Msg.ml_done_purge.format(list_name))
+            self.logger.info(Msg.ml_done_purge.format(name=list_name))
             del self.mylists[list_id]
             return True
 
@@ -570,7 +566,8 @@ class NicoMyList(utils.LogIn):
                 self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
             elif res["status"] == "ok":
-                self.logger.info(Msg.ml_done_add.format(_counter, len(videoids), vd_id))
+                self.logger.info(Msg.ml_done_add.format(
+                    now=_counter, all=len(videoids), video_id=vd_id))
             _done.append(vd_id)
             time.sleep(0.5)
         return True
@@ -622,7 +619,8 @@ class NicoMyList(utils.LogIn):
                 # エラーが起きた場合
                 self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
-            self.logger.info(Msg.ml_done_copy.format(_counter, len(item_ids), vd_id))
+            self.logger.info(Msg.ml_done_copy.format(
+                now=_counter, all=len(item_ids), video_id=vd_id))
             _done.append(vd_id)
         return True
 
@@ -684,7 +682,8 @@ class NicoMyList(utils.LogIn):
                 self.logger.error(Err.remaining.format(
                     [i for i in videoids if i not in _done]))
                 return False
-            self.logger.info(Msg.ml_done_move.format(_counter, len(item_ids), vd_id))
+            self.logger.info(Msg.ml_done_move.format(
+                now=_counter, all=len(item_ids), video_id=vd_id))
             _done.append(vd_id)
         return True
 
@@ -738,7 +737,8 @@ class NicoMyList(utils.LogIn):
                 self.logger.error(Err.remaining.format([i for i in videoids if i not in _done]))
                 return False
             elif res["status"] == "ok":
-                self.logger.info(Msg.ml_done_delete.format(_counter, len(item_ids), vd_id))
+                self.logger.info(Msg.ml_done_delete.format(
+                    now=_counter, all=len(item_ids), video_id=vd_id))
             _done.append(vd_id)
         return True
 
@@ -812,21 +812,21 @@ class NicoMyList(utils.LogIn):
         for item in jtext["mylistitem"]:
             data = item[MKey.ITEM_DATA]
             desc = html.unescape(item[MKey.DESCRIPTION])
-            duration = int(data[Key.LENGTH_SECONDS])
+            duration = int(data[KeyGTI.LENGTH_SECONDS])
             container.append([
-                data[Key.VIDEO_ID],
-                html.unescape(data[Key.TITLE]).replace(r"\/", "/"),
-                self._get_jst_from_utime(data[Key.FIRST_RETRIEVE]),
-                data[Key.VIEW_COUNTER],
-                data[Key.NUM_RES],
-                data[Key.MYLIST_COUNTER],
+                data[KeyGTI.VIDEO_ID],
+                html.unescape(data[KeyGTI.TITLE]).replace(r"\/", "/"),
+                self._get_jst_from_utime(data[KeyGTI.FIRST_RETRIEVE]),
+                data[KeyGTI.VIEW_COUNTER],
+                data[KeyGTI.NUM_RES],
+                data[KeyGTI.MYLIST_COUNTER],
                 "{}:{}".format(duration // 60, duration % 60),
-                self.WHY_DELETED.get(data[Key.DELETED], "不明"),
+                self.WHY_DELETED.get(data[KeyGTI.DELETED], "不明"),
                 desc.strip().replace("\r", "").replace("\n", " ").replace(r"\/", "/"),
                 list_name,
-                # data[Key.LAST_RES_BODY],
+                # data[KeyGTI.LAST_RES_BODY],
             ])
-        self.logger.debug("Mylists infos:\t{}".format(container))
+        self.logger.debug("Mylists info:\t{}".format(container))
         return container
 
     def fetch_all(self, with_info=True):
