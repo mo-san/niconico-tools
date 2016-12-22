@@ -10,7 +10,7 @@ os:
 
 # command to install dependencies
 install:
-  - pip install requests progressbar2 prettytable pytest pytest-catchlog codecov pytest-cov
+  - pip install requests prettytable pytest pytest-catchlog codecov pytest-cov
   - pip install -e .
 
 env:

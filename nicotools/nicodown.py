@@ -11,11 +11,7 @@ from xml.etree import ElementTree
 import requests
 from requests.exceptions import Timeout
 from requests.packages.urllib3.exceptions import TimeoutError, RequestError
-
-try:
-    import progressbar
-except ImportError:
-    progressbar = None
+from tqdm import tqdm
 
 from nicotools import utils
 from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
@@ -212,27 +208,17 @@ class Video(utils.Canopy):
         self.logger.debug("File Path: {}".format(file_path))
         db = self.glossary[video_id]
 
-        if progressbar is None:
+        if tqdm is None:
             with file_path.open("wb") as f:
                 [f.write(chunk) for chunk in
                  video_data.iter_content(chunk_size=chunk_size) if chunk]
         else:
-            widgets = [
-                progressbar.Percentage(),
-                ' ', progressbar.Bar(),
-                ' ', utils.sizeof_fmt(db[KeyGTI.FILE_SIZE]),
-                ' ', progressbar.ETA(),
-                ' ', progressbar.AdaptiveTransferSpeed(),
-            ]
-            pbar = progressbar.ProgressBar(widgets=widgets, max_value=db[KeyGTI.FILE_SIZE])
-            pbar.start()
-            with file_path.open("wb") as f:
-                downloaded_size = 0
-                for chunk in video_data.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        downloaded_size += f.write(chunk)
-                        pbar.update(downloaded_size)
-            pbar.finish()
+            with tqdm(total=db[KeyGTI.FILE_SIZE], leave=False,
+                      unit="B", unit_scale=True, file=sys.stdout) as pbar:
+                with file_path.open("wb") as f:
+                    for chunk in video_data.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            pbar.update(f.write(chunk))
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
