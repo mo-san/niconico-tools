@@ -234,21 +234,30 @@ def extract_getflv(content):
     parameters = parse_qs(content)
     if parameters.get("error") is not None:
         return None
-    return {
-        KeyGetFlv.THREAD_ID    : parameters[KeyGetFlv.THREAD_ID][0],
-        KeyGetFlv.LENGTH       : parameters[KeyGetFlv.LENGTH][0],
+    result = {
+        KeyGetFlv.THREAD_ID    : int(parameters[KeyGetFlv.THREAD_ID][0]),
+        KeyGetFlv.LENGTH       : int(parameters[KeyGetFlv.LENGTH][0]),
         KeyGetFlv.VIDEO_URL    : parameters[KeyGetFlv.VIDEO_URL][0],
         KeyGetFlv.MSG_SERVER   : parameters[KeyGetFlv.MSG_SERVER][0],
         KeyGetFlv.MSG_SUB      : parameters[KeyGetFlv.MSG_SUB][0],
-        KeyGetFlv.USER_ID      : parameters[KeyGetFlv.USER_ID][0],
-        KeyGetFlv.IS_PREMIUM   : parameters[KeyGetFlv.IS_PREMIUM][0],
+        KeyGetFlv.USER_ID      : int(parameters[KeyGetFlv.USER_ID][0]),
+        KeyGetFlv.IS_PREMIUM   : int(parameters[KeyGetFlv.IS_PREMIUM][0]),
         KeyGetFlv.NICKNAME     : parameters[KeyGetFlv.NICKNAME][0],
         KeyGetFlv.USER_KEY     : parameters[KeyGetFlv.USER_KEY][0],
 
         # 以下は公式動画にだけあるもの。通常の動画ではNone
-        KeyGetFlv.OPT_THREAD_ID: parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0],
-        KeyGetFlv.NEEDS_KEY    : parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0],
+        KeyGetFlv.OPT_THREAD_ID: None,
+        KeyGetFlv.NEEDS_KEY    : None,
     }
+
+    opt_thread_id   = parameters.get(KeyGetFlv.OPT_THREAD_ID, [None])[0]
+    needs_key       = parameters.get(KeyGetFlv.NEEDS_KEY, [None])[0]
+    if opt_thread_id is not None:
+        result.update({
+            KeyGetFlv.OPT_THREAD_ID : int(opt_thread_id),
+            KeyGetFlv.NEEDS_KEY     : int(needs_key),
+        })
+    return result
 
 
 class MylistError(Exception):
@@ -298,15 +307,6 @@ class Canopy:
             return NTLogger()
         else:
             return logger
-
-    def start(self, glossary, save_dir, option):
-        raise NotImplementedError
-
-    def download(self, video_id, flag):
-        raise NotImplementedError
-
-    def _saver(self, video_id, data, option):
-        raise NotImplementedError
 
 
 class LogIn:
@@ -547,8 +547,8 @@ class URL:
     URL_Info   = "http://ext.nicovideo.jp/api/getthumbinfo/"
     URL_Pict   = "http://tn-skr1.smilevideo.jp/smile"
     URL_GetThreadKey = "http://flapi.nicovideo.jp/api/getthreadkey"
-    URL_Message_New_JSON = "http://nmsg.nicovideo.jp/api.json/"
-    URL_Message_New_XML = "http://nmsg.nicovideo.jp/api/"
+    URL_Msg_JSON = "http://nmsg.nicovideo.jp/api.json/"
+    URL_Msg_XML = "http://nmsg.nicovideo.jp/api/"
 
     # 一般のマイリストを扱うためのAPI
     URL_MyListTop  = "http://www.nicovideo.jp/my/mylist"
@@ -691,7 +691,7 @@ class Err:
                        "http://www.nicovideo.jp/watch/sm1234, "
                        "sm1234, nm1234, so1234,  123456, watch/123456")
     connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
-    connection_timeout = "接続が時間切れになりました。 ID: {0} (タイトル: {1})"
+    connection_timeout = "接続が時間切れになりました。 ID: {0}"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"
     videoids_contain_all = "通常の動画IDと * を混ぜないでください。"
@@ -817,6 +817,7 @@ class KeyDmc:
     USER_KEY        = "user_key"
     MSG_SERVER      = "ms"
     THREAD_ID       = "thread_id"
+    THREAD_KEY      = "thread_key"
 
     API_URL         = "api_url"
     RECIPE_ID       = "recipe_id"
@@ -839,19 +840,19 @@ class KeyDmc:
 
 class KeyGetFlv:
     """ GetFLV を解釈するときのURLパラメーターのキー """
-    THREAD_ID       = "thread_id"
-    LENGTH          = "l"
-    VIDEO_URL       = "url"
-    MSG_SERVER      = "ms"
-    MSG_SUB         = "ms_sub"
-    USER_ID         = "user_id"
-    IS_PREMIUM      = "is_premium"
-    NICKNAME        = "nickname"
-    USER_KEY        = "userkey"
+    THREAD_ID       = "thread_id"           # int
+    LENGTH          = "l"                   # int
+    VIDEO_URL       = "url"                 # str
+    MSG_SERVER      = "ms"                  # str
+    MSG_SUB         = "ms_sub"              # str
+    USER_ID         = "user_id"             # int
+    IS_PREMIUM      = "is_premium"          # int
+    NICKNAME        = "nickname"            # str
+    USER_KEY        = "userkey"             # str
 
     # ↓公式動画にだけある情報
-    OPT_THREAD_ID   = "optional_thread_id"
-    NEEDS_KEY       = "needs_key"
+    OPT_THREAD_ID   = "optional_thread_id"  # int
+    NEEDS_KEY       = "needs_key"           # int
 
 
 class MKey:

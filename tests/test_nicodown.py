@@ -215,7 +215,3 @@ class TestVideo:
 def test_okatadsuke():
     for _parh in (SAVE_DIR_1, SAVE_DIR_2):
         shutil.rmtree(str(make_dir(_parh)))
-
-# test_video()
-# test_comment()
-# test_thumbnail()

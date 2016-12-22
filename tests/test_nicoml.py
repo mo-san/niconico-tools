@@ -16,7 +16,7 @@ TEST_LIST_TO = "TEST_LIST_TO" + str(datetime.now()).replace(" ", "_").replace(":
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 
 # "sm9 sm8628149 ... sm500873" のようにただの文字列
-VIDEO_IDS = " ".join(sorted({
+VIDEO_ID = " ".join(sorted({
     "watch/sm9": "新・豪血寺一族 -煩悩解放 - レッツゴー！陰陽師",
     "watch/sm8628149": "【東方】Bad Apple!!　ＰＶ【影絵】",
     "watch/sm2057168": "M.C.ドナルドはダンスに夢中なのか？最終鬼畜道化師ドナルド・Ｍ",
@@ -70,12 +70,12 @@ class TestMla:
 
     def nicoml_add_1(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --add {}".format(LIST_NAME, VIDEO_IDS)
+        c = "{} --add {}".format(LIST_NAME, VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_add_2(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --id --add {}".format(LIST_ID, VIDEO_IDS)
+        c = "{} --id --add {}".format(LIST_ID, VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_add_3(self, caplog):
@@ -85,7 +85,7 @@ class TestMla:
 
     def nicoml_del_1(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --delete {}".format(LIST_NAME, VIDEO_IDS)
+        c = "{} --delete {}".format(LIST_NAME, VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_del_2(self, caplog):
@@ -95,7 +95,7 @@ class TestMla:
 
     def nicoml_move_1(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --move {}".format(LIST_NAME, LIST_NAME_TO, VIDEO_IDS)
+        c = "{} --to {} --move {}".format(LIST_NAME, LIST_NAME_TO, VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_move_2(self, caplog):
@@ -105,7 +105,7 @@ class TestMla:
 
     def nicoml_copy_1(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --copy {}".format(LIST_NAME_TO, LIST_NAME, VIDEO_IDS)
+        c = "{} --to {} --copy {}".format(LIST_NAME_TO, LIST_NAME, VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_copy_2(self, caplog):
@@ -133,22 +133,22 @@ class TestMla:
 
     def nicoml_add_to_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --add {}".format("とりあえずマイリスト", VIDEO_IDS)
+        c = "{} --add {}".format("とりあえずマイリスト", VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_move_from_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --move {}".format("とりあえずマイリスト", LIST_NAME_TO, VIDEO_IDS)
+        c = "{} --to {} --move {}".format("とりあえずマイリスト", LIST_NAME_TO, VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_copy_to_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --copy {}".format(LIST_NAME_TO, "とりあえずマイリスト", VIDEO_IDS)
+        c = "{} --to {} --copy {}".format(LIST_NAME_TO, "とりあえずマイリスト", VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def nicoml_del_from_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
-        c = "{} --delete {}".format("とりあえずマイリスト", VIDEO_IDS)
+        c = "{} --delete {}".format("とりあえずマイリスト", VIDEO_ID)
         assert nicotools.main(self.param(c))
 
     def show_everything_tsv(self, caplog):
@@ -253,7 +253,7 @@ class TestErrors:
         INSTANCE = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1], logger=LOGGER)
         LIST_ID, LIST_NAME = self.get_id_name(TEST_LIST)
         LIST_ID_TO, LIST_NAME_TO = self.get_id_name(TEST_LIST_TO)
-        c = "とりあえずマイリスト --add {}".format(VIDEO_IDS)
+        c = "とりあえずマイリスト --add {}".format(VIDEO_ID)
         nicotools.main(self.param(c))
 
     def get_id_name(self, name):
@@ -360,9 +360,9 @@ class TestErrors:
         INSTANCE.purge_mylist(insane_id, confident=True)
 
     def test_item_not_exists(self):
-        c = "とりあえずマイリスト --delete {}".format(VIDEO_IDS)
+        c = "とりあえずマイリスト --delete {}".format(VIDEO_ID)
         assert nicotools.main(self.param(c))
-        c = "とりあえずマイリスト --delete {}".format(VIDEO_IDS)
+        c = "とりあえずマイリスト --delete {}".format(VIDEO_ID)
         assert nicotools.main(self.param(c)) is False
 
     def test_okatadsuke(self, caplog):
