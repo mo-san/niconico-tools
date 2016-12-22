@@ -190,7 +190,7 @@ class Video(utils.Canopy):
         is_premium = response[KeyGetFlv.IS_PREMIUM]
 
         # 動画視聴ページに行ってCookieをもらってくる
-        self.session.get(URL.URL_Watch + video_id)
+        self.session.head(URL.URL_Watch + video_id)
         # connect timeoutを10秒, read timeoutを30秒に設定
         # ↓この時点ではダウンロードは始まらず、ヘッダーだけが来ている
         video_data = self.session.get(url=vid_url, stream=True, timeout=(10.0, 30.0))
