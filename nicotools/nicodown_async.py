@@ -22,7 +22,7 @@ from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
-class InfoAsync(utils.Canopy):
+class InfoAsync(utils.CanopyAsync):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -73,7 +73,7 @@ class InfoAsync(utils.Canopy):
             Dict[str, Union[str, int, List[str], bool]]:
         watch_api = json.loads(content)
         flash_vars = watch_api["flashvars"]
-        flvinfo = utils.Canopy.extract_getflv(unquote(flash_vars["flvInfo"]))
+        flvinfo = utils.extract_getflv(unquote(flash_vars["flvInfo"]))
         if "dmcInfo" in flash_vars:
             dmc_info = json.loads(unquote(flash_vars["dmcInfo"]))
             session_api = dmc_info["session_api"]
@@ -96,10 +96,16 @@ class InfoAsync(utils.Canopy):
             KeyDmc.IS_PUBLIC    : watch_api["videoDetail"]["is_public"],  # type: bool
             KeyDmc.IS_OFFICIAL  : watch_api["videoDetail"]["is_official"],  # type: bool
             KeyDmc.IS_PREMIUM   : watch_api["viewerInfo"]["isPremium"],  # type: bool
+
+            # この6つはコメントのダウンロードに必要
             KeyDmc.USER_ID      : int(flvinfo[KeyGetFlv.USER_ID]),  # type: int
             KeyDmc.USER_KEY     : flvinfo[KeyGetFlv.USER_KEY],  # type: str
             KeyDmc.MSG_SERVER   : flvinfo[KeyGetFlv.MSG_SERVER],  # type: str
             KeyDmc.THREAD_ID    : int(flvinfo[KeyGetFlv.THREAD_ID]),  # type: int
+            KeyDmc.OPT_THREAD_ID: None,
+            KeyDmc.NEEDS_KEY    : None,
+
+            # DMCサーバーからの動画のダウンロードに必要
             KeyDmc.API_URL      : None,
             KeyDmc.RECIPE_ID    : None,
             KeyDmc.CONTENT_ID   : None,
@@ -113,8 +119,6 @@ class InfoAsync(utils.Canopy):
             KeyDmc.SVC_USER_ID  : None,
             KeyDmc.PLAYER_ID    : None,
             KeyDmc.PRIORITY     : None,
-            KeyDmc.OPT_THREAD_ID: None,
-            KeyDmc.NEEDS_KEY    : None,
         }
         if dmc_info:
             info.update({
@@ -161,12 +165,19 @@ class InfoAsync(utils.Canopy):
             KeyDmc.IS_PUBLIC    : _video["isPublic"],  # type: bool
             KeyDmc.IS_OFFICIAL  : _video["isOfficial"],  # type: bool
             KeyDmc.IS_PREMIUM   : j["viewer"]["isPremium"],  # type: bool
+            # KeyDmc.IS_DMC       : None,
+
+            # この6つはコメントのダウンロードに必要
             KeyDmc.USER_ID      : j["viewer"]["id"],  # type: int
             KeyDmc.USER_KEY     : j["context"]["userkey"],  # type: str
-            # KeyDmc.IS_DMC       : None,
-            # この2つは dmcInfo にしかない。watchAPI版との整合性のために初期化しておく。
+            KeyDmc.OPT_THREAD_ID: None,
+            KeyDmc.NEEDS_KEY    : None,
+            # ただしこの2つは dmcInfo にしかない。
+            # watchAPI版との整合性のために初期化しておく。
             KeyDmc.MSG_SERVER   : None,
             KeyDmc.THREAD_ID    : None,
+
+            # DMCサーバーからの動画のダウンロードに必要
             KeyDmc.API_URL      : None,
             KeyDmc.RECIPE_ID    : None,
             KeyDmc.CONTENT_ID   : None,
@@ -180,8 +191,6 @@ class InfoAsync(utils.Canopy):
             KeyDmc.SVC_USER_ID  : None,
             KeyDmc.PLAYER_ID    : None,
             KeyDmc.PRIORITY     : None,
-            KeyDmc.OPT_THREAD_ID: None,
-            KeyDmc.NEEDS_KEY    : None,
         }
 
         if dmc_info:
@@ -207,6 +216,14 @@ class InfoAsync(utils.Canopy):
         return info
 
     def _junction(self, content: str) -> Dict[str, Union[str, int, List[str], bool]]:
+        """
+        動画視聴ページのHTMLから必要な情報を取り出す。
+
+        HTML構造は複数あり、ものによって内容が異なる。適切な担当者へ振り向ける。
+
+        :param str content:
+        :rtype: Dict
+        """
         soup = BeautifulSoup(content, "html.parser")
         _not_login = soup.select("#Login_nico")
         if _not_login:
@@ -222,7 +239,7 @@ class InfoAsync(utils.Canopy):
             raise AttributeError("Unknown HTML")
 
 
-class Thumbnail(utils.Canopy):
+class Thumbnail(utils.CanopyAsync):
     def __init__(self,
                  logger: utils.NTLogger=None,
                  limit: int=8,
@@ -355,7 +372,7 @@ class Thumbnail(utils.Canopy):
             }
 
 
-class VideoSmile(utils.Canopy):
+class VideoSmile(utils.CanopyAsync):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -387,7 +404,9 @@ class VideoSmile(utils.Canopy):
 
     def start(self,
               glossary: Union[list, dict],
-              save_dir: Union[str, Path]) -> bool:
+              save_dir: Union[str, Path],
+              is_economy: bool=False) -> bool:
+        # TODO Downloading in Economy mode
         self.save_dir = utils.make_dir(save_dir)
         self.__downloaded_size = [0] * self.__division
 
@@ -502,7 +521,7 @@ class VideoSmile(utils.Canopy):
                     os.remove(name)
 
 
-class VideoDmc(utils.Canopy):
+class VideoDmc(utils.CanopyAsync):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,

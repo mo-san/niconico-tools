@@ -6,6 +6,9 @@ from typing import List
 from urllib.parse import parse_qs
 
 import aiohttp
+
+from nicotools.nicodown_async import InfoAsync
+
 try:
     import progressbar
 except ImportError:
@@ -13,10 +16,9 @@ except ImportError:
 
 from nicotools import utils
 from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
-from nicotools.nicodown import get_infos
 
 
-class Comment(utils.Canopy):
+class Comment(utils.CanopyAsync):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -40,26 +42,27 @@ class Comment(utils.Canopy):
             cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
             return aiohttp.ClientSession(cookies=cook)
 
-    def start(self, database, save_dir, xml=False):
+    def start(self, glossary, save_dir, xml=False):
         """
 
-        :param dict[str, dict[str, int | str]] | list[str] database:
+        :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
         :param bool xml:
         """
         utils.check_arg(locals())
-        self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(database))
-        self.logger.debug("Download XML? : {}".format(xml))
-        if isinstance(database, list):
-            database = get_infos(database, self.logger)
-        self.glossary = database
         self.save_dir = utils.make_dir(save_dir)
+
+        if isinstance(glossary, list):
+            glossary, self.session = InfoAsync(
+                mail=self.__mail, password=self.__password,
+                session=self.session, return_session=True).get_data(glossary)
+        self.glossary = glossary
+
         self.logger.info(Msg.nd_start_dl_comment.format(len(self.glossary)))
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_comment.format(
-                    index + 1, len(database), video_id,
+                    index + 1, len(glossary), video_id,
                     self.glossary[video_id][KeyGTI.TITLE]))
             self.download(video_id, xml)
             if len(self.glossary) > 1:
@@ -80,7 +83,7 @@ class Comment(utils.Canopy):
         self.logger.debug("Video ID and its Thread ID (of officials):"
                           " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = self.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
 
         if response is None:
             time.sleep(4)

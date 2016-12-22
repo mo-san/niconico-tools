@@ -25,7 +25,7 @@ from nicotools.utils import Msg, Err, URL, KeyGTI, MKey, MylistNotFoundError
 IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
-class NicoMyList(utils.Canopy):
+class NicoMyList(utils.CanopyAsync):
     WHY_DELETED = {
         "0": "公開",
         "1": "削除",

@@ -268,8 +268,7 @@ class MylistArgumentError(MylistError):
 
 
 class Canopy:
-    def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
-        self.loop = loop or asyncio.get_event_loop()
+    def __init__(self, logger=None):
         self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
@@ -309,6 +308,24 @@ class Canopy:
 
     def _saver(self, video_id, data, option):
         raise NotImplementedError
+
+
+class CanopyAsync(Canopy):
+    def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
+        super().__init__(logger=logger)
+        self.loop = loop or asyncio.get_event_loop()
+        self.glossary = None
+        self.save_dir = None  # type: Path
+        self.logger = self.get_logger(logger)  # type: NTLogger
+
+    def start(self, glossary, save_dir, option):
+        pass
+
+    def download(self, video_id, flag):
+        pass
+
+    def _saver(self, video_id, data, option):
+        pass
 
 
 class LogIn:
