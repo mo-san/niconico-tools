@@ -222,7 +222,7 @@ class InfoAsync(utils.Canopy):
             raise AttributeError("Unknown HTML")
 
 
-class ThumbnailAsync(utils.Canopy):
+class Thumbnail(utils.Canopy):
     def __init__(self,
                  logger: utils.NTLogger=None,
                  limit: int=8,
@@ -355,7 +355,7 @@ class ThumbnailAsync(utils.Canopy):
             }
 
 
-class VideoAsyncSmile(utils.Canopy):
+class VideoSmile(utils.Canopy):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -373,10 +373,17 @@ class VideoAsyncSmile(utils.Canopy):
         self.__downloaded_size = None  # type: List[int]
         self.__multiline = multiline
         self.__division = division
-        self.session = session
+        self.session = session or self.loop.run_until_complete(self.get_session())
         self.__return_session = return_session
         self.__parallel_limit = limit
         self.__chunk_size = chunk_size
+
+    async def get_session(self) -> aiohttp.ClientSession:
+        if self.session:
+            return self.session
+        else:
+            cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
+            return aiohttp.ClientSession(cookies=cook)
 
     def start(self,
               glossary: Union[list, dict],
@@ -388,8 +395,6 @@ class VideoAsyncSmile(utils.Canopy):
             glossary, self.session = InfoAsync(
                 mail=self.__mail, password=self.__password,
                 session=self.session, return_session=True).get_data(glossary)
-        else:
-            self.session = self.loop.run_until_complete(self.get_session())
         self.glossary = glossary
 
         sem = asyncio.Semaphore(self.__parallel_limit)
@@ -398,13 +403,6 @@ class VideoAsyncSmile(utils.Canopy):
         if not self.__return_session:
             self.session.close()
         return True
-
-    async def get_session(self) -> aiohttp.ClientSession:
-        if self.session:
-            return self.session
-        else:
-            cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
-            return aiohttp.ClientSession(cookies=cook)
 
     async def _push_file_size(self, semaphore: asyncio.Semaphore):
         video_ids = sorted(self.glossary)
@@ -504,7 +502,7 @@ class VideoAsyncSmile(utils.Canopy):
                     os.remove(name)
 
 
-class VideoAsyncDmc(utils.Canopy):
+class VideoDmc(utils.Canopy):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -522,10 +520,17 @@ class VideoAsyncDmc(utils.Canopy):
         self.__downloaded_size = None  # type: List[int]
         self.__multiline = multiline
         self.__division = division
-        self.session = session
+        self.session = session or self.loop.run_until_complete(self.get_session())
         self.__return_session = return_session
         self.__parallel_limit = limit
         self.__chunk_size = chunk_size
+
+    async def get_session(self) -> aiohttp.ClientSession:
+        if self.session:
+            return self.session
+        else:
+            cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
+            return aiohttp.ClientSession(cookies=cook)
 
     def start(self,
               glossary: Union[list, dict],
@@ -538,8 +543,6 @@ class VideoAsyncDmc(utils.Canopy):
             glossary, self.session = InfoAsync(
                 mail=self.__mail, password=self.__password,
                 session=self.session, return_session=True).get_data(glossary)
-        else:
-            self.session = self.loop.run_until_complete(self.get_session())
         self.glossary = glossary
 
         self.loop.run_until_complete(self._broker(xml))
@@ -567,13 +570,6 @@ class VideoAsyncDmc(utils.Canopy):
             coro_download.add_done_callback(functools.partial(self._combiner, video_id))
             tasks = [coro_download, coro_heartbeat]
             await asyncio.gather(*tasks)
-
-    async def get_session(self) -> aiohttp.ClientSession:
-        if self.session:
-            return self.session
-        else:
-            cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
-            return aiohttp.ClientSession(cookies=cook)
 
     async def first_nego_xml(self, video_id: str) -> str:
         payload = self.make_param_xml(self.glossary[video_id])
@@ -876,7 +872,7 @@ def main(args):
     destination = utils.make_dir(args.dest[0])
 
     if args.thumbnail:
-        res_t = ThumbnailAsync(logger=logger).start(videoid, destination)
+        res_t = Thumbnail(logger=logger).start(videoid, destination)
         if not (args.comment or args.video):
             # サムネイルのダウンロードだけなら
             # ログインする必要がないのでここで終える。
@@ -892,12 +888,12 @@ def main(args):
 
     if args.video:
         if args.smile:
-            res_v = (VideoAsyncSmile(logger=logger, session=session,
-                                     division=args.limit, multiline=args.nomulti)
+            res_v = (VideoSmile(logger=logger, session=session,
+                                division=args.limit, multiline=args.nomulti)
                      .start(database, destination))
         else:
-            res_v = (VideoAsyncDmc(logger=logger, session=session,
-                                   division=args.limit, multiline=args.nomulti)
+            res_v = (VideoDmc(logger=logger, session=session,
+                              division=args.limit, multiline=args.nomulti)
                      .start(database, destination))
 
     return res_c | res_v | res_t
