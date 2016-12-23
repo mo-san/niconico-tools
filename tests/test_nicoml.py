@@ -1,6 +1,8 @@
 # coding: UTF-8
 import logging
 import os
+import tempfile
+
 import pytest
 import sys
 from datetime import datetime
@@ -72,10 +74,11 @@ def id_and_name(instance):
         id = result["list_id"]
         name = result["list_name"]
 
-        def close(self):
+        @classmethod
+        def close(cls):
             # 終わったら片付けるための関数
             try:
-                c = "{} --purge --id --yes".format(self.id)
+                c = "{} --purge --id --yes".format(cls.id)
                 nicotools.main(param(c))
             except utils.MylistNotFoundError:
                 pass
@@ -95,10 +98,11 @@ def id_and_name_to(instance):
         id = result["list_id"]
         name = result["list_name"]
 
-        def close(self):
+        @classmethod
+        def close(cls):
             # 終わったら片付ける
             try:
-                c = "{} --purge --id --yes".format(self.id)
+                c = "{} --purge --id --yes".format(cls.id)
                 nicotools.main(param(c))
             except utils.MylistNotFoundError:
                 pass
@@ -193,17 +197,20 @@ class TestNicomlDeflist:
 
 # noinspection PyShadowingNames
 class TestOtherCommands:
-    def test_create_purge(self, id_and_name, tmpdir):
-        c = "{} --create".format(id_and_name.name)
-        assert nicotools.main(param(c))
-        c = "{} --id --export --out {}_export.txt".format(id_and_name.id, os.path.join(tmpdir, id_and_name.name))
-        assert nicotools.main(param(c))
-        c = "{} --id --show".format(id_and_name.id)
-        assert nicotools.main(param(c))
-        c = "{} --id --show --show --out {}_show.txt".format(id_and_name.id, os.path.join(tmpdir, id_and_name.name))
-        assert nicotools.main(param(c))
-        c = "{} --id --purge --yes".format(id_and_name.id)
-        assert nicotools.main(param(c))
+    def test_create_purge(self, id_and_name):
+        with tempfile.TemporaryDirectory(prefix=__name__) as tmpdirname:
+            c = "{} --create".format(id_and_name.name)
+            assert nicotools.main(param(c))
+            c = "{} --id --export --out {}_export.txt".format(
+                id_and_name.id, os.path.join(tmpdirname, id_and_name.name))
+            assert nicotools.main(param(c))
+            c = "{} --id --show".format(id_and_name.id)
+            assert nicotools.main(param(c))
+            c = "{} --id --show --show --out {}_show.txt".format(
+                id_and_name.id, os.path.join(tmpdirname, id_and_name.name))
+            assert nicotools.main(param(c))
+            c = "{} --id --purge --yes".format(id_and_name.id)
+            assert nicotools.main(param(c))
 
     def test_export_everything(self):
         c = "* --export --everything"

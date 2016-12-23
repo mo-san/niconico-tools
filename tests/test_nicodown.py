@@ -3,6 +3,7 @@ import os
 import random
 import shutil
 import sys
+import tempfile
 import time
 
 import aiohttp
@@ -163,9 +164,10 @@ class TestNicodown:
             assert self.send_param(c, video_id=rand()[0])
 
     else:
-        def test_getthumbinfo_to_file_with_nonexist_id(self, tmpdir):
-            c = "-i -o " + os.path.join(tmpdir, "info.xml") + " sm1 {video_id}"
-            assert self.send_param(c)
+        def test_getthumbinfo_to_file_with_nonexist_id(self):
+            with tempfile.TemporaryDirectory(prefix=__name__) as tmpdirname:
+                c = "-i -o " + os.path.join(tmpdirname, "info.xml") + " sm1 {video_id}"
+                assert self.send_param(c)
 
         def test_getthumbinfo_on_screen(self):
             c = "-i {video_id}"
@@ -187,9 +189,14 @@ class TestNicodown:
             c = "-ct {video_id}"
             assert self.send_param(c)
 
-        def test_comment_thumbnail_2(self, tmpdir):
-            c = "-ct +" + os.path.join(tmpdir, "ids.txt")
-            assert self.send_param(c)
+        def test_comment_thumbnail_2(self):
+            fp = tempfile.TemporaryFile()
+            fp.write(bytes("\n".join(rand(3)), encoding="utf-8"))
+            c = "-ct +'{}'".format(fp.name)
+            try:
+                assert self.send_param(c)
+            finally:
+                fp.close()
 
         def test_comment_in_xml(self):
             c = "-cx {video_id}"
