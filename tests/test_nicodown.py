@@ -2,42 +2,68 @@
 import os
 import random
 import shutil
+import sys
+import time
 
+import aiohttp
 import pytest
 
 import nicotools
 from nicotools.nicodown import Video, Comment, Thumbnail, get_infos
 from nicotools import utils
 
+if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
+    if int(os.getenv("TEST_ASYNC", 0)):
+        is_async = True
+        waiting = 10
+    else:
+        waiting = 1
+        is_async = False
+    from nicotools.nicodown_async import Info, VideoDmc, VideoSmile
+    from nicotools.nicodown_async import Comment as CommentAsync, Thumbnail as ThumbnailAsync
+else:
+    is_async = False
+    waiting = 1
+    Info = None
+    VideoDmc = None
+    VideoSmile = None
+    CommentAsync = None
+    ThumbnailAsync = None
+
 SAVE_DIR_1 = "tests/downloads/"
-SAVE_DIR_2 = "tests/aaaaa"
+SAVE_DIR_2 = "tests/downloads_async"
 OUTPUT = "tests/downloads/info.xml"
 INPUT = "tests/ids.txt"
 
 # "N" は一般会員の認証情報、 "P" はプレミアム会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 AUTH_P = (os.getenv("addr_p"), os.getenv("pass_p"))
-
-# "nm11028783 sm7174241 ... so8999636" のリスト
-VIDEO_ID = list({
-    "nm11028783": "[オリジナル曲] august [初音ミク]",
-    "sm7174241": "【ピアノ楽譜】 Windows 起動音 [Win3.1 ～ Vista]",
-    "sm12169079": "【初音ミク】なでなで【オリジナル】",
-    "sm28492584": "【60fps】ぬるぬるフロッピーに入る ご注文はうさぎですか？OP",
-    "sm30134391": "音声込みで26KBに圧縮されたスズメバチに刺されるゆうさく",
-    "so8999636": "【初音ミク】「Story」 １９’s Sound Factory",
-    "watch/1278053154": "「カラフル×メロディ」　オリジナル曲　vo.初音ミク＆鏡音リン【Project DIVA 2nd】",
-    "http://www.nicovideo.jp/watch/1341499584": "【sasakure.UK×DECO*27】39【Music Video】",
-})
-
 LOGGER = utils.NTLogger(log_level=10)
 
 
-def rand(num: int=1):
+def rand(num=1):
+    """
+    動画IDをランダムに取り出す。0を指定すると全てを返す。
+
+    "nm11028783 sm7174241 ... so8999636" のリスト
+    :param int num:
+    :rtype: list[str]
+    """
+    video_id = list({
+        "nm11028783": "[オリジナル曲] august [初音ミク]",
+        "sm7174241": "【ピアノ楽譜】 Windows 起動音 [Win3.1 ～ Vista]",
+        "sm12169079": "【初音ミク】なでなで【オリジナル】",
+        "sm28492584": "【60fps】ぬるぬるフロッピーに入る ご注文はうさぎですか？OP",
+        "sm30134391": "音声込みで26KBに圧縮されたスズメバチに刺されるゆうさく",
+        "so8999636": "【初音ミク】「Story」 １９’s Sound Factory",
+        "watch/1278053154": "「カラフル×メロディ」　オリジナル曲　vo.初音ミク＆鏡音リン【Project DIVA 2nd】",
+        "http://www.nicovideo.jp/watch/1341499584": "【sasakure.UK×DECO*27】39【Music Video】",
+    })
+
     if num == 0:
-        return VIDEO_ID
+        return video_id
     else:
-        return random.sample(VIDEO_ID, num)
+        return random.sample(video_id, num)
 
 
 class TestUtils:
@@ -106,120 +132,243 @@ class TestLogin:
 
 
 class TestNicodown:
-    def param(self, cond, **kwargs):
-        cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
+    def send_param(self, cond, **kwargs):
+        if is_async:
+            cond = "download --nomulti -l {_mail} -p {_pass} -d {save_dir} " + cond
+            time.sleep(1)
+        else:
+            cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
         params = {"_mail": AUTH_N[0], "_pass": AUTH_N[1],
-                  "save_dir": SAVE_DIR_1, "video_id": " ".join(VIDEO_ID)}
+                  "save_dir": SAVE_DIR_1, "video_id": " ".join(rand(0))}
         params.update(kwargs)
-        return cond.format(**params).split(" ")
+        return nicotools.main(cond.format(**params).split(" "), async_=is_async)
 
-    def test_getthumbinfo_to_file_with_nonexist_id(self):
-        c = "-i -o " + OUTPUT + " sm1 {video_id}"
-        assert nicotools.main(self.param(c))
+    if is_async:
+        def test_video_smile(self):
+            c = "--smile -v {video_id}"
+            assert self.send_param(c, video_id=rand()[0])
 
-    def test_getthumbinfo_on_screen(self):
-        c = "-i {video_id}"
-        assert nicotools.main(self.param(c))
+        def test_video_dmc(self):
+            c = "--dmc -v {video_id}"
+            assert self.send_param(c, video_id=rand()[0])
 
-    def test_video(self):
-        c = "-v {video_id}"
-        nicotools.main(self.param(c, video_id=rand()[0]))
+        def test_sleep_1(self):
+            # アクセス制限回避のためすこし待つ
+            time.sleep(waiting)
 
-    def test_thumbnail(self):
-        c = "-t {video_id}"
-        nicotools.main(self.param(c))
+        def test_video_smile_more(self):
+            c = "--smile --limit 10 -v {video_id}"
+            assert self.send_param(c, video_id=rand()[0])
 
-    def test_other_directory(self):
-        c = "-c {video_id}"
-        nicotools.main(self.param(c, save_dir=SAVE_DIR_2))
+        def test_video_dmc_more(self):
+            c = "--dmc --limit 10 -v {video_id}"
+            assert self.send_param(c, video_id=rand()[0])
 
-    def test_comment_thumbnail_1(self):
-        c = "-ct {video_id}"
-        nicotools.main(self.param(c))
+    else:
+        def test_getthumbinfo_to_file_with_nonexist_id(self):
+            c = "-i -o " + OUTPUT + " sm1 {video_id}"
+            assert self.send_param(c)
 
-    def test_comment_thumbnail_2(self):
-        c = "-ct +" + INPUT
-        nicotools.main(self.param(c))
+        def test_getthumbinfo_on_screen(self):
+            c = "-i {video_id}"
+            assert self.send_param(c)
 
-    def test_comment_in_xml(self):
-        c = "-cx {video_id}"
-        nicotools.main(self.param(c))
+        def test_video(self):
+            c = "-v {video_id}"
+            assert self.send_param(c, video_id=rand()[0])
+
+        def test_thumbnail(self):
+            c = "-t {video_id}"
+            assert self.send_param(c)
+
+        def test_other_directory(self):
+            c = "-c {video_id}"
+            assert self.send_param(c, save_dir=SAVE_DIR_2)
+
+        def test_comment_thumbnail_1(self):
+            c = "-ct {video_id}"
+            assert self.send_param(c)
+
+        def test_comment_thumbnail_2(self):
+            c = "-ct +" + INPUT
+            assert self.send_param(c)
+
+        def test_comment_in_xml(self):
+            c = "-cx {video_id}"
+            assert self.send_param(c)
 
 
 class TestNicodownError:
-    def param(self, cond, **kwargs):
-        cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
-        params = {"_mail"   : AUTH_N[0], "_pass": AUTH_N[1],
-                  "save_dir": SAVE_DIR_1, "video_id": " ".join(VIDEO_ID)}
-        params.update(kwargs)
-        return cond.format(**params).split(" ")
+    def send_param(self, cond, **kwargs):
+        if isinstance(cond, str):
+            cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
+            params = {"_mail"   : AUTH_N[0], "_pass": AUTH_N[1],
+                      "save_dir": SAVE_DIR_1, "video_id": " ".join(rand(0))}
+            params.update(kwargs)
+            arg = cond.format(**params).split(" ")
+        else:
+            arg = cond
+        return nicotools.main(arg, async_=is_async)
 
     def test_without_commands(self):
         with pytest.raises(SystemExit):
             c = "{video_id}"
-            nicotools.main(self.param(c))
+            self.send_param(c)
 
     def test_invalid_directory_on_windows(self):
         if os.name == "nt":
             c = "-c {video_id}"
             with pytest.raises(NameError):
-                nicotools.main(self.param(c, save_dir="nul"))
+                self.send_param(c, save_dir="nul")
 
     def test_no_args(self):
         with pytest.raises(SystemExit):
-            nicotools.main()
+            self.send_param(None)
 
     def test_one_arg(self):
         with pytest.raises(SystemExit):
-            nicotools.main(["download"])
+            self.send_param(["download"])
 
     def test_what_command(self):
         with pytest.raises(SystemExit):
-            nicotools.main(["download", "-c", "sm9", "-w"])
+            self.send_param(["download", "-c", "sm9", "-w"])
 
     def test_invalid_videoid(self):
         with pytest.raises(SystemExit):
-            nicotools.main(["download", "-c", "sm9", "hello"])
+            self.send_param(["download", "-c", "sm9", "hello"])
 
 
-class TestComment:
-    def test_comment_single(self):
-        db = get_infos(rand()[0], LOGGER)
-        assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
+if is_async:
+    class TestCommentAsync:
+        def test_sleep(self):
+            # アクセス制限回避のためすこし待つ
+            time.sleep(waiting)
 
-    def test_comment_multi(self):
-        db = get_infos(rand(0), LOGGER)
-        assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1, xml=True)
+        def test_comment_single(self):
+            try:
+                db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+                assert CommentAsync().start(db, SAVE_DIR_2)
+            except aiohttp.errors.HttpProcessingError:
+                pass
 
-    def test_comment_without_directory(self):
-        db = get_infos(rand()[0], LOGGER)
-        with pytest.raises(utils.MylistArgumentError):
-            # noinspection PyTypeChecker
-            Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
+        def test_comment_multi(self):
+            try:
+                db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+                assert CommentAsync().start(db, SAVE_DIR_2, xml=True)
+            except aiohttp.errors.HttpProcessingError:
+                pass
+
+        def test_comment_without_directory(self):
+            try:
+                db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+                with pytest.raises(utils.MylistArgumentError):
+                    # noinspection PyTypeChecker
+                    CommentAsync().start(db, None)
+            except aiohttp.errors.HttpProcessingError:
+                pass
 
 
-class TestThumb:
-    def test_thumbnail_single(self):
-        db = get_infos(rand())
-        assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
+    class TestThumbAsync:
+        def test_sleep(self):
+            # アクセス制限回避のためすこし待つ
+            time.sleep(waiting)
 
-    def test_thumbnail_multi(self):
-        db = get_infos(rand(0))
-        assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
+        def test_thumbnail_single(self):
+            try:
+                db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+                assert ThumbnailAsync().start(db, SAVE_DIR_2)
+            except aiohttp.errors.HttpProcessingError:
+                pass
 
-    def test_thumbnail_without_logger(self):
-        db = get_infos(rand(0))
-        assert Thumbnail().start(db, SAVE_DIR_1)
+        def test_thumbnail_multi(self):
+            try:
+                db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand(0))
+                assert ThumbnailAsync().start(db, SAVE_DIR_2)
+            except aiohttp.errors.HttpProcessingError:
+                pass
 
 
-class TestVideo:
-    def test_video_normal_single(self):
-        db = get_infos(rand()[0], LOGGER)
-        assert Video(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
+    class TestVideoSmile:
+        def test_sleep(self):
+            # アクセス制限回避のためすこし待つ
+            time.sleep(waiting)
 
-    def test_video_premium_multi(self):
-        db = get_infos(rand(3), LOGGER)
-        assert Video(AUTH_P[0], AUTH_P[1], LOGGER).start(db, SAVE_DIR_1)
+        def test_video_smile_normal_single(self):
+            try:
+                db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+                assert VideoSmile(multiline=False).start(db, SAVE_DIR_2)
+            except aiohttp.errors.HttpProcessingError:
+                pass
+
+        def test_video_smile_premium_multi(self):
+            if AUTH_P[0] is not None:
+                try:
+                    db = Info(AUTH_P[0], AUTH_P[1], LOGGER).get_data(rand(3))
+                    assert VideoSmile(multiline=False).start(db, SAVE_DIR_2)
+                except aiohttp.errors.HttpProcessingError:
+                    pass
+
+
+    class TestVideoDmc:
+        def test_sleep(self):
+            # アクセス制限回避のためすこし待つ
+            time.sleep(waiting)
+
+        def test_video_dmc_normal_single(self):
+            try:
+                db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+                assert VideoDmc(multiline=False).start(db, SAVE_DIR_2)
+            except aiohttp.errors.HttpProcessingError:
+                pass
+
+        def test_video_dmc_premium_multi(self):
+            if AUTH_P[0] is not None:
+                try:
+                    db = Info(AUTH_P[0], AUTH_P[1], LOGGER).get_data(rand(3))
+                    assert VideoDmc(multiline=False).start(db, SAVE_DIR_2)
+                except aiohttp.errors.HttpProcessingError:
+                    pass
+
+else:
+    class TestComment:
+        def test_comment_single(self):
+            db = get_infos(rand()[0], LOGGER)
+            assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_2)
+
+        def test_comment_multi(self):
+            db = get_infos(rand(0), LOGGER)
+            assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_2, xml=True)
+
+        def test_comment_without_directory(self):
+            db = get_infos(rand()[0], LOGGER)
+            with pytest.raises(utils.MylistArgumentError):
+                # noinspection PyTypeChecker
+                Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
+
+
+    class TestThumb:
+        def test_thumbnail_single(self):
+            db = get_infos(rand())
+            assert Thumbnail(LOGGER).start(db, SAVE_DIR_2)
+
+        def test_thumbnail_multi(self):
+            db = get_infos(rand(0))
+            assert Thumbnail(LOGGER).start(db, SAVE_DIR_2)
+
+        def test_thumbnail_without_logger(self):
+            db = get_infos(rand(0))
+            assert Thumbnail().start(db, SAVE_DIR_2)
+
+
+    class TestVideo:
+        def test_video_normal_single(self):
+            db = get_infos(rand()[0], LOGGER)
+            assert Video(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_2)
+
+        def test_video_premium_multi(self):
+            if AUTH_P[0] is not None:
+                db = get_infos(rand(3), LOGGER)
+                assert Video(AUTH_P[0], AUTH_P[1], LOGGER).start(db, SAVE_DIR_2)
 
 
 def test_okatadsuke():

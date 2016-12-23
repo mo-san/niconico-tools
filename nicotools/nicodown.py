@@ -64,7 +64,7 @@ def get_infos(queue, logger=None):
     * v_or_t_id         str
     * watch_url         str
 
-    :param list[str] queue: 動画IDのリスト
+    :param list[str] | str queue: 動画IDのリスト
     :param NTLogger | None logger: ログ出力
     :rtype: dict[str, dict[str, int | str | list]]
     """
@@ -73,6 +73,8 @@ def get_infos(queue, logger=None):
 
     # データベースとして使うための辞書。削除や非公開の動画はここに入る
     lexikon = {}
+    if isinstance(queue, str):
+        queue = [queue]
     for video_id in utils.validator(queue):
         xmldata = requests.get(URL.URL_Info + video_id).text
         root = ElementTree.fromstring(xmldata)
@@ -180,7 +182,8 @@ class Video(utils.Canopy):
         self.logger.debug("Video ID and its Thread ID (of officials):"
                           " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(
+            db[KeyGTI.V_OR_T_ID], self.session, self.logger)
 
         vid_url = response[KeyGetFlv.VIDEO_URL]
         is_premium = response[KeyGetFlv.IS_PREMIUM]
@@ -371,7 +374,8 @@ class Comment(utils.Canopy):
         self.logger.debug("Video ID and its Thread ID (of officials):"
                           " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(
+            db[KeyGTI.V_OR_T_ID], self.session, self.logger)
 
         if response is None:
             time.sleep(4)
@@ -575,6 +579,10 @@ def main(args):
     password = args.password[0] if args.password else None
 
     """ エラーの除外 """
+    if hasattr(args, "dmc"):
+        sys.exit(Err.unexpected_commands.format("--dmc"))
+    if hasattr(args, "smile"):
+        sys.exit(Err.unexpected_commands.format("--smile"))
     videoid = utils.validator(args.VIDEO_ID)
     if not videoid:
         sys.exit(Err.invalid_videoid)

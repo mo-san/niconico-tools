@@ -2,10 +2,28 @@
 import logging
 import os
 import pytest
+import sys
 from datetime import datetime
 
 import nicotools
-from nicotools import nicoml, utils
+
+if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
+    if int(os.getenv("TEST_ASYNC", 0)):
+        is_async = True
+        waiting = 10
+    else:
+        waiting = 1
+        is_async = False
+    from nicotools import nicoml_async as nicoml, utils
+else:
+    is_async = False
+    waiting = 1
+    Info = None
+    VideoDmc = None
+    VideoSmile = None
+    CommentAsync = None
+    ThumbnailAsync = None
+    from nicotools import nicoml, utils
 
 SAVE_DIR = "tests/Downloads/"
 TEST_LIST = "TEST_LIST" + str(datetime.now()).replace(" ", "_").replace(":", "")

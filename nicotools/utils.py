@@ -195,7 +195,7 @@ def sizeof_fmt(num):
     return "{:.2f}Gb".format(num)
 
 
-def get_from_getflv(video_id, session):
+def get_from_getflv(video_id, session, logger=None):
     """
     GetFlv APIから情報を得る。
 
@@ -220,12 +220,13 @@ def get_from_getflv(video_id, session):
 
     :param str video_id:
     :param requests.Session session:
+    :param NTLogger logger:
     :rtype: dict[str, str] | None
     """
     check_arg(locals())
     suffix = {"as3": 1} if video_id.startswith("nm") else None
     response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-    # self.logger.debug("GetFLV Response: {}".format(response.text))
+    if logger: logger.debug("GetFLV Response: {}".format(response.text))
     return extract_getflv(response.text)
 
 
@@ -456,9 +457,12 @@ class LogIn:
         :param str file_name:
         :rtype: dict
         """
-        file_path = make_dir(Path.home() / file_name)
+        # file_path = make_dir(Path.home() / file_name)
+        # file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
+        file_path = join(expanduser("~"), file_name)
         cook = {key: val for key, val in requests_cookiejar.items()}
-        file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
+        with open(file_path, "w") as fd:
+            fd.write("\n".join([k + "\t" + v for k, v in cook.items()]))
         return cook
 
     @classmethod
@@ -469,10 +473,13 @@ class LogIn:
         :param str file_name:
         :rtype: dict | None
         """
-        file = make_dir(Path.home() / file_name)
+        # file_path = make_dir(Path.home() / file_name)
+        #     return {line.split("\t")[0]: line.split("\t")[1]
+        #             for line in file_path.read_text().split("\n")}
         try:
-            return {line.split("\t")[0]: line.split("\t")[1]
-                    for line in file.read_text().split("\n")}
+            file_path = join(expanduser("~"), file_name)
+            with open(file_path, "r") as fd:
+                return {line.split("\t")[0]: line.split("\t")[1].strip() for line in fd.readlines()}
         except (FileNotFoundError, EOFError):
             return None
 
@@ -715,6 +722,7 @@ class Err:
     list_names_are_same = "[エラー] 発信元と受信先の名前が同じです。"
     cant_perform_all = "[エラー] このコマンドに * は指定できません。"
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
+    unexpected_commands = "このコマンドは使用できません。 {0}"
     no_commands = "[エラー] コマンドを指定してください。"
     item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
     name_ambiguous = ("同名のマイリストが {0}件あります。名前の代わりに"
