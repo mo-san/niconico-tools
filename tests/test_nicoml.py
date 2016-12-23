@@ -1,11 +1,11 @@
 # coding: UTF-8
 import logging
 import os
+import random
+import sys
 import tempfile
 
 import pytest
-import sys
-from datetime import datetime
 
 import nicotools
 
@@ -27,8 +27,9 @@ else:
     ThumbnailAsync = None
     from nicotools import nicoml, utils
 
-TEST_LIST = "TEST_LIST" + str(datetime.now()).replace(" ", "_").replace(":", "")
-TEST_LIST_TO = "TEST_LIST_TO" + str(datetime.now()).replace(" ", "_").replace(":", "")
+# ランダムな8桁の数字
+TEST_LIST = "TEST_{}".format(int(random.uniform(10**7, 10**8-1)))
+TEST_LIST_TO = "TEST_TO_".format(int(random.uniform(10**7, 10**8-1)))
 
 # テスト用の一般会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
@@ -114,22 +115,38 @@ class TestNicoml:
     def test_nicoml_add_1(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
         c = "{} --add {}".format(id_and_name.name, VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_nicoml_move_1(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --move {}".format(id_and_name.name, id_and_name_to.name, VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_nicoml_copy_1(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --copy {}".format(id_and_name_to.name, id_and_name.name, VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_nicoml_del_1(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
         c = "{} --delete {}".format(id_and_name.name, VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_close(self, id_and_name, id_and_name_to):
         id_and_name.close()
@@ -141,22 +158,38 @@ class TestNicomlInAnotherWay:
     def test_nicoml_add_2(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
         c = "{} --id --add {}".format(id_and_name.id, VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_nicoml_move_2(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --move *".format(id_and_name.name, id_and_name_to.name)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_nicoml_copy_2(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --copy *".format(id_and_name_to.name, id_and_name.name)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_nicoml_del_2(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
         c = "{} --delete * --yes".format(id_and_name.name)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_close(self, id_and_name, id_and_name_to):
         id_and_name.close()
@@ -168,27 +201,47 @@ class TestNicomlDeflist:
     def test_add_to_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
         c = "{} --add {}".format("とりあえずマイリスト", VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_move_from_deflist(self, caplog, id_and_name_to):
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --move {}".format("とりあえずマイリスト", id_and_name_to.name, VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_copy_to_deflist(self, caplog, id_and_name_to):
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --copy {}".format(id_and_name_to.name, "とりあえずマイリスト", VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_show_everything_tsv(self, caplog):
         caplog.set_level(logging.DEBUG)
         c = "* --show --everything"
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_del_from_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
         c = "{} --delete {}".format("とりあえずマイリスト", VIDEO_ID)
-        assert nicotools.main(param(c))
+        try:
+            assert nicotools.main(param(c))
+        except utils.MylistAPIError as error:
+            if not error.ok:
+                print(error, file=sys.stderr)
 
     def test_close(self, id_and_name, id_and_name_to):
         id_and_name.close()

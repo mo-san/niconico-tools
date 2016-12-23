@@ -280,6 +280,19 @@ class MylistArgumentError(MylistError):
     pass
 
 
+class MylistAPIError(MemoryError):
+    """ APIの操作の結果が好ましくない場合に発生させるエラー """
+    def __init__(self, code=None, msg=None, ok=False):
+        """
+        :param str code: APIのエラーコード(の文字列)
+        :param str msg: 伝えたい文言
+        :param bool ok: 作業を続行してよいかどうか
+        """
+        self.code = code
+        self.msg = msg
+        self.ok = ok
+
+
 class Canopy:
     def __init__(self, logger=None):
         self.glossary = None
