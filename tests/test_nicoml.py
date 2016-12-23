@@ -29,13 +29,13 @@ else:
 
 # ランダムな8桁の数字
 TEST_LIST = "TEST_{}".format(int(random.uniform(10**7, 10**8-1)))
-TEST_LIST_TO = "TEST_TO_".format(int(random.uniform(10**7, 10**8-1)))
+TEST_LIST_TO = "TEST_TO_{}".format(int(random.uniform(10**7, 10**8-1)))
+INSANE_NAME = "🕒🕘🕒🕘"  # 時計の絵文字4つ
 
 # テスト用の一般会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 
-# "sm9 sm8628149 ... sm500873" のようにただの文字列
-VIDEO_ID = " ".join(sorted({
+__ids = {
     "watch/sm9": "新・豪血寺一族 -煩悩解放 - レッツゴー！陰陽師",
     "watch/sm8628149": "【東方】Bad Apple!!　ＰＶ【影絵】",
     "watch/sm2057168": "M.C.ドナルドはダンスに夢中なのか？最終鬼畜道化師ドナルド・Ｍ",
@@ -48,8 +48,12 @@ VIDEO_ID = " ".join(sorted({
     "watch/sm6188097": "【マリオ64実況】　奴が来る　伍【幕末志士】",
     "watch/sm2049295": "【 Silver Forest × U.N.オーエンは彼女なのか？ 】 −sweet little sister−",
     "watch/sm500873": "組曲『ニコニコ動画』 "
-}))
-INSANE_NAME = "🕒🕘🕒🕘"  # 時計の絵文字4つ
+}
+# "sm9 sm8628149 ... sm500873" のようにただの文字列
+if is_async:
+    VIDEO_ID = " ".join(list(__ids))
+else:
+    VIDEO_ID = " ".join(random.sample(list(__ids), 3))
 
 
 def param(cond):

@@ -540,7 +540,8 @@ class NicoMyList(utils.CanopyAsync):
                                 mylist_name=mylist_name, description=description)
         if res["status"] != "ok":
             self.logger.error(Err.failed_to_create.format(mylist_name, res))
-            return False
+            error = res["error"]
+            raise MylistAPIError(code=error["code"], msg=error["description"])
         else:
             self.mylists = await self._get_mylists_info()
             item = self.mylists[res[MKey.ID]]
@@ -576,7 +577,8 @@ class NicoMyList(utils.CanopyAsync):
         res = await self.get_response("purge", list_id=list_id)
         if res["status"] != "ok":
             self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
-            return False
+            error = res["error"]
+            raise MylistAPIError(code=error["code"], msg=error["description"])
         else:
             self.logger.info(Msg.ml_done_purge.format(name=list_name))
             del self.mylists[list_id]

@@ -190,7 +190,7 @@ class TestNicodown:
             assert self.send_param(c)
 
         def test_comment_thumbnail_2(self):
-            fp = tempfile.TemporaryFile()
+            fp = tempfile.NamedTemporaryFile()
             fp.write(bytes("\n".join(rand(3)), encoding="utf-8"))
             c = "-ct +{}".format(fp.name)
             try:

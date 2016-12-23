@@ -750,7 +750,7 @@ class Err:
     known_error = "[エラー] 動画: {0}, コード: {}, 内容: {1}"
     unknown_error_itemid = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
-    failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
+    failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {1}"
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
     invalid_spec = ("[エラー] {0} は不正です。マイリストの名前"
                     "またはIDは文字列か整数で入力してください。")
@@ -759,6 +759,7 @@ class Err:
     '''
     APIから返ってくるエラーメッセージ
     {'error': {'code': 'MAXERROR', 'description': 'このマイリストにはもう登録できません'},'status':'fail'}
+    {'error': {'code': 'MAXERROR', 'description': 'もうマイリストを作成できません', 'status': 'fail'}
     {'error': {'code': 'EXIST', 'description': 'すでに登録されています'}, 'status': 'fail'}
     {'error': {'code': 'NONEXIST', 'description': 'アイテムが存在しません'}, 'status': 'fail'}
 
