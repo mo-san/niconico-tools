@@ -1,13 +1,13 @@
 # coding: UTF-8
-import logging
 import os
+import random
 import shutil
 
 import pytest
 
 import nicotools
 from nicotools.nicodown import Video, Comment, Thumbnail, get_infos
-from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir, MylistArgumentError
+from nicotools import utils
 
 SAVE_DIR_1 = "tests/downloads/"
 SAVE_DIR_2 = "tests/aaaaa"
@@ -18,8 +18,8 @@ INPUT = "tests/ids.txt"
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 AUTH_P = (os.getenv("addr_p"), os.getenv("pass_p"))
 
-# "nm11028783 sm7174241 ... so8999636" のようにただの文字列
-VIDEO_ID = " ".join({
+# "nm11028783 sm7174241 ... so8999636" のリスト
+VIDEO_ID = list({
     "nm11028783": "[オリジナル曲] august [初音ミク]",
     "sm7174241": "【ピアノ楽譜】 Windows 起動音 [Win3.1 ～ Vista]",
     "sm12169079": "【初音ミク】なでなで【オリジナル】",
@@ -29,16 +29,24 @@ VIDEO_ID = " ".join({
     "watch/1278053154": "「カラフル×メロディ」　オリジナル曲　vo.初音ミク＆鏡音リン【Project DIVA 2nd】",
     "http://www.nicovideo.jp/watch/1341499584": "【sasakure.UK×DECO*27】39【Music Video】",
 })
-LOGGER = NTLogger(log_level=logging.DEBUG)
+
+LOGGER = utils.NTLogger(log_level=10)
+
+
+def rand(num: int=1):
+    if num == 0:
+        return VIDEO_ID
+    else:
+        return random.sample(VIDEO_ID, num)
 
 
 class TestUtils:
     def test_get_encoding(self):
-        assert get_encoding()
+        assert utils.get_encoding()
 
     def test_validator(self):
-        assert validator(["*", "sm9", "-d"]) == []
-        assert (set(validator(
+        assert utils.validator(["*", "sm9", "-d"]) == []
+        assert (set(utils.validator(
             ["*", " http://www.nicovideo.jp/watch/1341499584",
              " sm1234 ", "watch/sm123456",
              " nm1234 ", "watch/nm123456",
@@ -52,7 +60,7 @@ class TestUtils:
 
     def test_make_dir(self):
         save_dir = ["test", "foo", "foo/bar", "some/thing/text.txt"]
-        paths = [make_dir(name) for name in save_dir]
+        paths = [utils.make_dir(name) for name in save_dir]
         try:
             for participant, result in zip(save_dir, paths):
                 assert str(result).replace("\\", "/").replace("//", "/").endswith(participant)
@@ -68,38 +76,40 @@ class TestUtilsError:
     def test_logger(self):
         with pytest.raises(ValueError):
             # noinspection PyTypeChecker
-            NTLogger(log_level=None)
+            utils.NTLogger(log_level=None)
 
     def test_make_dir(self):
         if os.name == "nt":
             save_dir = ["con", ":"]
             for name in save_dir:
                 with pytest.raises(NameError):
-                    make_dir(name)
+                    utils.make_dir(name)
         else:
             with pytest.raises(NameError):
-                make_dir("/{}/downloads".format(__name__))
+                utils.make_dir("/{}/downloads".format(__name__))
 
 
 class TestLogin:
     def test_login_1(self):
-        _ = LogIn(*AUTH_P).session
-        sess = LogIn().session
-        assert LogIn(*AUTH_N, session=sess).is_login is True
+        if AUTH_P[0] is not None:
+            _ = utils.LogIn(*AUTH_P).session
+            sess = utils.LogIn().session
+            assert utils.LogIn(*AUTH_N, session=sess).is_login is True
 
     def test_login_2(self):
-        sess = LogIn(*AUTH_P).session
-        assert "-" in LogIn(None, None, session=sess).token
+        if AUTH_P[0] is not None:
+            sess = utils.LogIn(*AUTH_P).session
+            assert "-" in utils.LogIn(None, None, session=sess).token
 
     def test_login_3(self):
-        assert "-" in LogIn(*AUTH_N).token
+        assert "-" in utils.LogIn(*AUTH_N).token
 
 
 class TestNicodown:
     def param(self, cond, **kwargs):
         cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
         params = {"_mail": AUTH_N[0], "_pass": AUTH_N[1],
-                  "save_dir": SAVE_DIR_1, "video_id": VIDEO_ID}
+                  "save_dir": SAVE_DIR_1, "video_id": " ".join(VIDEO_ID)}
         params.update(kwargs)
         return cond.format(**params).split(" ")
 
@@ -113,7 +123,7 @@ class TestNicodown:
 
     def test_video(self):
         c = "-v {video_id}"
-        nicotools.main(self.param(c, video_id=VIDEO_ID.split(" ")[0]))
+        nicotools.main(self.param(c, video_id=rand()[0]))
 
     def test_thumbnail(self):
         c = "-t {video_id}"
@@ -140,7 +150,7 @@ class TestNicodownError:
     def param(self, cond, **kwargs):
         cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
         params = {"_mail"   : AUTH_N[0], "_pass": AUTH_N[1],
-                  "save_dir": SAVE_DIR_1, "video_id": VIDEO_ID}
+                  "save_dir": SAVE_DIR_1, "video_id": " ".join(VIDEO_ID)}
         params.update(kwargs)
         return cond.format(**params).split(" ")
 
@@ -174,44 +184,44 @@ class TestNicodownError:
 
 class TestComment:
     def test_comment_single(self):
-        db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
+        db = get_infos(rand()[0], LOGGER)
         assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
 
     def test_comment_multi(self):
-        db = get_infos(VIDEO_ID.split(" "), LOGGER)
+        db = get_infos(rand(0), LOGGER)
         assert Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1, xml=True)
 
     def test_comment_without_directory(self):
-        db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
-        with pytest.raises(MylistArgumentError):
+        db = get_infos(rand()[0], LOGGER)
+        with pytest.raises(utils.MylistArgumentError):
             # noinspection PyTypeChecker
             Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
 
 
 class TestThumb:
     def test_thumbnail_single(self):
-        db = get_infos([VIDEO_ID.split(" ")[0]])
+        db = get_infos(rand())
         assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
 
     def test_thumbnail_multi(self):
-        db = get_infos(VIDEO_ID.split(" "))
+        db = get_infos(rand(0))
         assert Thumbnail(LOGGER).start(db, SAVE_DIR_1)
 
     def test_thumbnail_without_logger(self):
-        db = get_infos(VIDEO_ID.split(" "))
+        db = get_infos(rand(0))
         assert Thumbnail().start(db, SAVE_DIR_1)
 
 
 class TestVideo:
     def test_video_normal_single(self):
-        db = get_infos([VIDEO_ID.split(" ")[0]], LOGGER)
+        db = get_infos(rand()[0], LOGGER)
         assert Video(AUTH_N[0], AUTH_N[1], LOGGER).start(db, SAVE_DIR_1)
 
     def test_video_premium_multi(self):
-        db = get_infos(VIDEO_ID.split(" ")[0:2], LOGGER)
+        db = get_infos(rand(3), LOGGER)
         assert Video(AUTH_P[0], AUTH_P[1], LOGGER).start(db, SAVE_DIR_1)
 
 
 def test_okatadsuke():
     for _parh in (SAVE_DIR_1, SAVE_DIR_2):
-        shutil.rmtree(str(make_dir(_parh)))
+        shutil.rmtree(str(utils.make_dir(_parh)))

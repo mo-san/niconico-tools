@@ -91,6 +91,8 @@ def validator(input_list):
         )?
             ((?:sm|nm|so)?\d+)  # ID本体
         )\s?""".format(re.escape(ALL_ITEM)), re.I + re.X).match
+    if isinstance(input_list, str):
+        input_list = [input_list]
 
     if not isinstance(input_list, (list, tuple, set)):
         raise MylistArgumentError(Err.invalid_argument.format(input_list))

@@ -9,17 +9,17 @@ import pytest
 
 import nicotools
 from nicotools.nicodown_async import VideoDmc, VideoSmile, Comment, Thumbnail, Info
-from nicotools.utils import get_encoding, validator, LogIn, NTLogger, make_dir, MylistArgumentError
+from nicotools import utils
 
 SAVE_DIR_1 = "tests/downloads/"
 SAVE_DIR_2 = "tests/aaaaa"
 OUTPUT = "tests/downloads/info.xml"
-INPUT = "ids.txt"
+INPUT = "tests/ids.txt"
 
 # "N" は一般会員の認証情報、 "P" はプレミアム会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
 AUTH_P = (os.getenv("addr_p"), os.getenv("pass_p"))
-LOGGER = NTLogger(log_level=logging.DEBUG)
+LOGGER = utils.NTLogger(log_level=10)
 
 # "nm11028783 sm7174241 ... so8999636" のリスト
 VIDEO_ID = list({
@@ -43,25 +43,25 @@ def rand(num: int=1):
 
 class TestUtils:
     def test_get_encoding(self):
-        assert get_encoding()
+        assert utils.get_encoding()
 
     def test_validator(self):
-        assert validator(["*", "sm9", "-d"]) == []
-        assert (set(validator(
+        assert utils.validator(["*", "sm9", "-d"]) == []
+        assert (set(utils.validator(
             ["*", " http://www.nicovideo.jp/watch/1341499584",
              " sm1234 ", "watch/sm123456",
              " nm1234 ", "watch/nm123456",
              " so1234 ", "watch/so123456",
              " 123456 ", "watch/1278053154"])) ==
-                {"*", "1341499584",
-                 "sm1234", "sm123456",
-                 "nm1234", "nm123456",
-                 "so1234", "so123456",
-                 "123456", "1278053154"})
+            {"*", "1341499584",
+             "sm1234", "sm123456",
+             "nm1234", "nm123456",
+             "so1234", "so123456",
+             "123456", "1278053154"})
 
     def test_make_dir(self):
         save_dir = ["test", "foo", "foo/bar", "some/thing/text.txt"]
-        paths = [make_dir(name) for name in save_dir]
+        paths = [utils.make_dir(name) for name in save_dir]
         try:
             for participant, result in zip(save_dir, paths):
                 assert str(result).replace("\\", "/").replace("//", "/").endswith(participant)
@@ -77,33 +77,33 @@ class TestUtilsError:
     def test_logger(self):
         with pytest.raises(ValueError):
             # noinspection PyTypeChecker
-            NTLogger(log_level=None)
+            utils.NTLogger(log_level=None)
 
     def test_make_dir(self):
         if os.name == "nt":
             save_dir = ["con", ":"]
             for name in save_dir:
                 with pytest.raises(NameError):
-                    make_dir(name)
+                    utils.make_dir(name)
         else:
             with pytest.raises(NameError):
-                make_dir("/{}/downloads".format(__name__))
+                utils.make_dir("/{}/downloads".format(__name__))
 
 
 class TestLogin:
     def test_login_1(self):
         if AUTH_P[0] is not None:
-            _ = LogIn(*AUTH_P).session
-            sess = LogIn().session
-            assert LogIn(*AUTH_N, session=sess).is_login is True
+            _ = utils.LogIn(*AUTH_P).session
+            sess = utils.LogIn().session
+            assert utils.LogIn(*AUTH_N, session=sess).is_login is True
 
     def test_login_2(self):
         if AUTH_P[0] is not None:
-            sess = LogIn(*AUTH_P).session
-            assert "-" in LogIn(None, None, session=sess).token
+            sess = utils.LogIn(*AUTH_P).session
+            assert "-" in utils.LogIn(None, None, session=sess).token
 
     def test_login_3(self):
-        assert "-" in LogIn(*AUTH_N).token
+        assert "-" in utils.LogIn(*AUTH_N).token
 
 
 class TestNicodown:
@@ -218,7 +218,7 @@ class TestComment:
 
     def test_comment_without_directory(self):
         db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-        with pytest.raises(MylistArgumentError):
+        with pytest.raises(utils.MylistArgumentError):
             # noinspection PyTypeChecker
             Comment().start(db, None)
 
@@ -273,4 +273,4 @@ class TestVideoDmc:
 
 def test_okatadsuke():
     for _parh in (SAVE_DIR_1, SAVE_DIR_2):
-        shutil.rmtree(str(make_dir(_parh)))
+        shutil.rmtree(str(utils.make_dir(_parh)))

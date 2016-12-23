@@ -29,347 +29,267 @@ VIDEO_ID = " ".join(sorted({
     "watch/sm2049295": "【 Silver Forest × U.N.オーエンは彼女なのか？ 】 −sweet little sister−",
     "watch/sm500873": "組曲『ニコニコ動画』 "
 }))
-LIST_ID = 0
-LIST_NAME = ""
-LIST_ID_TO = 0
-LIST_NAME_TO = ""
 INSANE_NAME = "🕒🕘🕒🕘"  # 時計の絵文字4つ
-INSTANCE = None  # type: nicoml.NicoMyList
-LOGGER = utils.NTLogger(file_name=utils.LOG_FILE_ML, log_level=logging.DEBUG)
 
 
-class TestMla:
-    def initialize(self):
-        global INSTANCE, LIST_ID, LIST_NAME, LIST_ID_TO, LIST_NAME_TO
-        INSTANCE = self.get_instance()
-        LIST_ID, LIST_NAME = self.get_id_name(TEST_LIST)
-        LIST_ID_TO, LIST_NAME_TO = self.get_id_name(TEST_LIST_TO)
+def param(cond):
+    cond = "mylist -l {_mail} -p {_pass} " + cond
+    return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
 
-    def get_id_name(self, name):
-        result = INSTANCE.get_list_id(name)
-        if result.get("error"):
-            self.create(name)
-            return self.get_id_name(name)
-        return result["list_id"], result["list_name"]
 
-    def get_instance(self):
-        return nicoml.NicoMyList(AUTH_N[0], AUTH_N[1], logger=LOGGER)
+@pytest.fixture(scope="class")
+def instance():
+    logger = utils.NTLogger(file_name=utils.LOG_FILE_ML, log_level=logging.DEBUG)
+    return nicoml.NicoMyList(AUTH_N[0], AUTH_N[1], logger=logger)
 
-    def create(self, name):
-        INSTANCE.create_mylist(name)
 
-    def purge_by_id(self, list_id, caplog):
+# noinspection PyShadowingNames
+@pytest.fixture(scope="class")
+def id_and_name(instance):
+    result = instance.get_list_id(TEST_LIST)
+    if result.get("error"):
+        instance.create_mylist(TEST_LIST)
+        result = instance.get_list_id(TEST_LIST)
+
+    class O:
+        id = result["list_id"]
+        name = result["list_name"]
+    yield O
+    # 終わったら片付ける
+    try:
+        c = "{} --purge --id --yes".format(O.id)
+        nicotools.main(param(c))
+    except utils.MylistNotFoundError:
+        pass
+
+
+# noinspection PyShadowingNames
+@pytest.fixture(scope="class")
+def id_and_name_to(instance):
+    result = instance.get_list_id(TEST_LIST_TO)
+    if result.get("error"):
+        instance.create_mylist(TEST_LIST_TO)
+        result = instance.get_list_id(TEST_LIST_TO)
+
+    class O:
+        id = result["list_id"]
+        name = result["list_name"]
+    yield O
+    # 終わったら片付ける
+    try:
+        c = "{} --purge --id --yes".format(O.id)
+        nicotools.main(param(c))
+    except utils.MylistNotFoundError:
+        pass
+
+
+# noinspection PyShadowingNames
+class TestNicoml:
+    def test_nicoml_add_1(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
-        c = "{} --purge --id --yes".format(list_id)
-        assert nicotools.main(self.param(c))
+        c = "{} --add {}".format(id_and_name.name, VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def param(self, cond):
-        cond = "mylist -l {_mail} -p {_pass} " + cond
-        return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
-
-    def nicoml_add_1(self, caplog):
+    def test_nicoml_move_1(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
-        c = "{} --add {}".format(LIST_NAME, VIDEO_ID)
-        assert nicotools.main(self.param(c))
+        c = "{} --to {} --move {}".format(id_and_name.name, id_and_name_to.name, VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def nicoml_add_2(self, caplog):
+    def test_nicoml_copy_1(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
-        c = "{} --id --add {}".format(LIST_ID, VIDEO_ID)
-        assert nicotools.main(self.param(c))
+        c = "{} --to {} --copy {}".format(id_and_name_to.name, id_and_name.name, VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def nicoml_add_3(self, caplog):
+    def test_nicoml_del_1(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
-        c = "{} --add +ids.txt".format(LIST_NAME)
-        assert nicotools.main(self.param(c))
+        c = "{} --delete {}".format(id_and_name.name, VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def nicoml_del_1(self, caplog):
+
+# noinspection PyShadowingNames
+class TestNicomlInAnotherWay:
+    def test_nicoml_add_2(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
-        c = "{} --delete {}".format(LIST_NAME, VIDEO_ID)
-        assert nicotools.main(self.param(c))
+        c = "{} --id --add {}".format(id_and_name.id, VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def nicoml_del_2(self, caplog):
+    def test_nicoml_move_2(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
-        c = "{} --delete * --yes".format(LIST_NAME)
-        assert nicotools.main(self.param(c))
+        c = "{} --to {} --move *".format(id_and_name.name, id_and_name_to.name)
+        assert nicotools.main(param(c))
 
-    def nicoml_move_1(self, caplog):
+    def test_nicoml_copy_2(self, caplog, id_and_name, id_and_name_to):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --move {}".format(LIST_NAME, LIST_NAME_TO, VIDEO_ID)
-        assert nicotools.main(self.param(c))
+        c = "{} --to {} --copy *".format(id_and_name_to.name, id_and_name.name)
+        assert nicotools.main(param(c))
 
-    def nicoml_move_2(self, caplog):
+    def test_nicoml_del_2(self, caplog, id_and_name):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --move *".format(LIST_NAME, LIST_NAME_TO)
-        assert nicotools.main(self.param(c))
+        c = "{} --delete * --yes".format(id_and_name.name)
+        assert nicotools.main(param(c))
 
-    def nicoml_copy_1(self, caplog):
-        caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --copy {}".format(LIST_NAME_TO, LIST_NAME, VIDEO_ID)
-        assert nicotools.main(self.param(c))
 
-    def nicoml_copy_2(self, caplog):
-        caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --copy *".format(LIST_NAME_TO, LIST_NAME)
-        assert nicotools.main(self.param(c))
-
-    def test_amcdpr_1(self, caplog):
-        caplog.set_level(logging.DEBUG)
-        self.initialize()
-        self.nicoml_add_1(caplog)
-        self.nicoml_move_1(caplog)
-        self.nicoml_copy_1(caplog)
-        self.nicoml_del_1(caplog)
-        self.test_okatadsuke(caplog)
-
-    def test_amcdpr_2(self, caplog):
-        caplog.set_level(logging.DEBUG)
-        self.initialize()
-        self.nicoml_add_2(caplog)
-        self.nicoml_move_2(caplog)
-        self.nicoml_copy_2(caplog)
-        self.nicoml_del_2(caplog)
-        self.test_okatadsuke(caplog)
-
-    def nicoml_add_to_deflist(self, caplog):
+# noinspection PyShadowingNames
+class TestNicomlDeflist:
+    def test_add_to_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
         c = "{} --add {}".format("とりあえずマイリスト", VIDEO_ID)
-        assert nicotools.main(self.param(c))
+        assert nicotools.main(param(c))
 
-    def nicoml_move_from_deflist(self, caplog):
+    def test_move_from_deflist(self, caplog, id_and_name_to):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --move {}".format("とりあえずマイリスト", LIST_NAME_TO, VIDEO_ID)
-        assert nicotools.main(self.param(c))
+        c = "{} --to {} --move {}".format("とりあえずマイリスト", id_and_name_to.name, VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def nicoml_copy_to_deflist(self, caplog):
+    def test_copy_to_deflist(self, caplog, id_and_name_to):
         caplog.set_level(logging.DEBUG)
-        c = "{} --to {} --copy {}".format(LIST_NAME_TO, "とりあえずマイリスト", VIDEO_ID)
-        assert nicotools.main(self.param(c))
+        c = "{} --to {} --copy {}".format(id_and_name_to.name, "とりあえずマイリスト", VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def nicoml_del_from_deflist(self, caplog):
-        caplog.set_level(logging.DEBUG)
-        c = "{} --delete {}".format("とりあえずマイリスト", VIDEO_ID)
-        assert nicotools.main(self.param(c))
-
-    def show_everything_tsv(self, caplog):
+    def test_show_everything_tsv(self, caplog):
         caplog.set_level(logging.DEBUG)
         c = "* --show --everything"
-        assert nicotools.main(self.param(c))
+        assert nicotools.main(param(c))
 
-    def test_amcdpr_deflist(self, caplog):
+    def test_del_from_deflist(self, caplog):
         caplog.set_level(logging.DEBUG)
-        self.initialize()
-        self.nicoml_add_to_deflist(caplog)
-        self.nicoml_move_from_deflist(caplog)
-        self.nicoml_copy_to_deflist(caplog)
-        self.show_everything_tsv(caplog)
-        self.nicoml_del_from_deflist(caplog)
-        self.test_okatadsuke(caplog)
-
-    def test_okatadsuke(self, caplog):
-        try:
-            self.purge_by_id(LIST_ID, caplog)
-        except utils.MylistNotFoundError:
-            pass
-        try:
-            self.purge_by_id(LIST_ID_TO, caplog)
-        except utils.MylistNotFoundError:
-            pass
+        c = "{} --delete {}".format("とりあえずマイリスト", VIDEO_ID)
+        assert nicotools.main(param(c))
 
 
-class TestMlb:
-    def get_id_name(self, name):
-        result = INSTANCE.get_list_id(name)
-        if result.get("error"):
-            INSTANCE.create_mylist(name)
-            return self.get_id_name(name)
-        return result["list_id"], result["list_name"]
-
-    def param(self, cond):
-        cond = "mylist -l {_mail} -p {_pass} " + cond
-        return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
-
-    def purge_by_id(self, list_id, caplog):
-        caplog.set_level(logging.DEBUG)
-        c = "{} --purge --id --yes".format(list_id)
-        assert nicotools.main(self.param(c))
-
-    def test_initialize(self):
-        global INSTANCE, LIST_ID, LIST_NAME, LIST_ID_TO, LIST_NAME_TO
-        INSTANCE = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1], logger=LOGGER)
-        LIST_ID, LIST_NAME = self.get_id_name(TEST_LIST)
-        LIST_ID_TO, LIST_NAME_TO = self.get_id_name(TEST_LIST_TO)
-
-    def test_create_purge(self):
-        c = "{} --create".format(LIST_NAME)
-        assert nicotools.main(self.param(c))
-        c = "{} --id --export --out {}{}_export.txt".format(LIST_ID, SAVE_DIR, LIST_NAME)
-        assert nicotools.main(self.param(c))
-        c = "{} --id --show".format(LIST_ID)
-        assert nicotools.main(self.param(c))
-        c = "{} --id --show --show --out {}{}_show.txt".format(LIST_ID, SAVE_DIR, LIST_NAME)
-        assert nicotools.main(self.param(c))
-        c = "{} --id --purge --yes".format(LIST_ID)
-        assert nicotools.main(self.param(c))
+# noinspection PyShadowingNames
+class TestOtherCommands:
+    def test_create_purge(self, id_and_name):
+        c = "{} --create".format(id_and_name.name)
+        assert nicotools.main(param(c))
+        c = "{} --id --export --out {}{}_export.txt".format(id_and_name.id, SAVE_DIR, id_and_name.name)
+        assert nicotools.main(param(c))
+        c = "{} --id --show".format(id_and_name.id)
+        assert nicotools.main(param(c))
+        c = "{} --id --show --show --out {}{}_show.txt".format(id_and_name.id, SAVE_DIR, id_and_name.name)
+        assert nicotools.main(param(c))
+        c = "{} --id --purge --yes".format(id_and_name.id)
+        assert nicotools.main(param(c))
 
     def test_export_everything(self):
         c = "* --export --everything"
-        assert nicotools.main(self.param(c))
+        assert nicotools.main(param(c))
 
     def test_export_meta(self):
         c = "* --export"
-        assert nicotools.main(self.param(c))
+        assert nicotools.main(param(c))
 
     def test_show_meta_tsv(self):
         c = "* --show"
-        assert nicotools.main(self.param(c))
+        assert nicotools.main(param(c))
 
     def test_show_meta_table(self):
         c = "* --show --show"
-        assert nicotools.main(self.param(c))
+        assert nicotools.main(param(c))
 
     def test_show_everything_tsv(self):
         c = "* --show --everything"
-        assert nicotools.main(self.param(c))
+        assert nicotools.main(param(c))
 
     def test_show_everything_table(self):
         c = "* --show --show --everything"
-        assert nicotools.main(self.param(c))
-
-    def test_okatadsuke(self, caplog):
-        try:
-            self.purge_by_id(LIST_ID, caplog)
-        except utils.MylistNotFoundError:
-            pass
-        try:
-            self.purge_by_id(LIST_ID_TO, caplog)
-        except utils.MylistNotFoundError:
-            pass
+        assert nicotools.main(param(c))
 
 
+# noinspection PyShadowingNames
 class TestErrors:
-    def test_initialize(self):
-        global INSTANCE, LIST_ID, LIST_NAME, LIST_ID_TO, LIST_NAME_TO
-        INSTANCE = nicoml.NicoMyList(AUTH_N[0], AUTH_N[1], logger=LOGGER)
-        LIST_ID, LIST_NAME = self.get_id_name(TEST_LIST)
-        LIST_ID_TO, LIST_NAME_TO = self.get_id_name(TEST_LIST_TO)
-        c = "とりあえずマイリスト --add {}".format(VIDEO_ID)
-        nicotools.main(self.param(c))
-
-    def get_id_name(self, name):
-        result = INSTANCE.get_list_id(name)
-        if result.get("error"):
-            INSTANCE.create_mylist(name)
-            return self.get_id_name(name)
-        return result["list_id"], result["list_name"]
-
-    def param(self, cond):
-        cond = "mylist -l {_mail} -p {_pass} " + cond
-        return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
-
-    def purge_by_id(self, list_id, caplog):
-        caplog.set_level(logging.DEBUG)
-        c = "{} --purge --id --yes".format(list_id)
-        assert nicotools.main(self.param(c))
-
     def test_add_all(self):
         with pytest.raises(SystemExit):
             c = "とりあえずマイリスト --add *"
-            nicotools.main(self.param(c))
+            nicotools.main(param(c))
 
     def test_create_deflist(self):
         with pytest.raises(SystemExit):
             c = "とりあえずマイリスト --create"
-            nicotools.main(self.param(c))
+            nicotools.main(param(c))
 
     def test_purge_deflist(self):
         with pytest.raises(SystemExit):
             c = "とりあえずマイリスト --purge"
-            nicotools.main(self.param(c))
+            nicotools.main(param(c))
 
     def test_copy_to_same(self):
         with pytest.raises(SystemExit):
-            c = "{} --copy * --to {}".format(LIST_NAME, LIST_NAME)
-            nicotools.main(self.param(c))
+            c = "{} --copy * --to {}".format("なまえ", "なまえ")
+            nicotools.main(param(c))
 
     def test_move_without_to(self):
         with pytest.raises(SystemExit):
             c = "とりあえずマイリスト --move *"
-            nicotools.main(self.param(c))
+            nicotools.main(param(c))
 
     def test_copy_without_to(self):
         with pytest.raises(SystemExit):
             c = "とりあえずマイリスト --copy *"
-            nicotools.main(self.param(c))
+            nicotools.main(param(c))
 
     def test_delete_ambiguous(self):
         with pytest.raises(SystemExit):
             c = "とりあえずマイリスト --delete sm9 *"
-            nicotools.main(self.param(c))
+            nicotools.main(param(c))
 
-    def test_add_all_internal(self):
+    def test_add_all_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.add(utils.ALL_ITEM, "sm9")
+            instance.add(utils.ALL_ITEM, "sm9")
         with pytest.raises(utils.MylistError):
-            INSTANCE.add(utils.Msg.ml_default_id, utils.ALL_ITEM)
+            instance.add(utils.Msg.ml_default_id, utils.ALL_ITEM)
 
-    def test_delete_ambiguous_internal(self):
+    def test_delete_ambiguous_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.delete(utils.Msg.ml_default_id, utils.ALL_ITEM, "sm9")
+            instance.delete(utils.Msg.ml_default_id, utils.ALL_ITEM, "sm9")
 
-    def test_copy_same_internal(self):
+    def test_copy_same_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.copy(1, 1, utils.ALL_ITEM)
+            instance.copy(1, 1, utils.ALL_ITEM)
 
-    def test_copy_ambiguous_internal(self):
+    def test_copy_ambiguous_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.copy(utils.Msg.ml_default_id, 1, utils.ALL_ITEM, "sm9")
+            instance.copy(utils.Msg.ml_default_id, 1, utils.ALL_ITEM, "sm9")
 
-    def test_create_allname_internal(self):
+    def test_create_allname_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.create_mylist(utils.Msg.ml_default_name)
+            instance.create_mylist(utils.Msg.ml_default_name)
 
-    def test_create_null_internal(self):
+    def test_create_null_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.create_mylist("")
+            instance.create_mylist("")
 
-    def test_purge_def_internal(self):
+    def test_purge_def_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.purge_mylist(utils.Msg.ml_default_name)
+            instance.purge_mylist(utils.Msg.ml_default_name)
 
-    def test_purge_all_internal(self):
+    def test_purge_all_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.create_mylist(utils.ALL_ITEM)
+            instance.create_mylist(utils.ALL_ITEM)
 
-    def test_purge_null_internal(self):
+    def test_purge_null_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            INSTANCE.create_mylist("")
+            instance.create_mylist("")
 
     def test_no_commands(self):
         with pytest.raises(SystemExit):
             c = "とりあえずマイリスト"
-            nicotools.main(self.param(c))
+            nicotools.main(param(c))
 
-    def test_list_not_exists_and_create_special_characters_name(self):
+    def test_list_not_exists_and_create_special_characters_name(self, instance):
         c = "{} --show".format(INSANE_NAME)
         with pytest.raises(utils.MylistNotFoundError):
-            nicotools.main(self.param(c))
-        INSTANCE.create_mylist(INSANE_NAME)
+            nicotools.main(param(c))
+        instance.create_mylist(INSANE_NAME)
         # 作ったばかりなのでマイリストIDは、手持ちの中で最大。
-        insane_id = max(INSTANCE.mylists)
-        INSTANCE.purge_mylist(insane_id, confident=True)
+        insane_id = max(instance.mylists)
+        instance.purge_mylist(insane_id, confident=True)
 
-    def test_item_not_exists(self):
-        c = "とりあえずマイリスト --delete {}".format(VIDEO_ID)
-        assert nicotools.main(self.param(c))
-        c = "とりあえずマイリスト --delete {}".format(VIDEO_ID)
-        assert nicotools.main(self.param(c)) is False
+    def test_delete_not_existing_items(self):
+        c = "とりあえずマイリスト --add {}".format(VIDEO_ID)
+        assert nicotools.main(param(c))
 
-    def test_okatadsuke(self, caplog):
-        try:
-            self.purge_by_id(LIST_ID, caplog)
-        except utils.MylistNotFoundError:
-            pass
-        try:
-            self.purge_by_id(LIST_ID_TO, caplog)
-        except utils.MylistNotFoundError:
-            pass
+        c = "とりあえずマイリスト --delete {}".format(VIDEO_ID)
+        assert nicotools.main(param(c))
+        c = "とりあえずマイリスト --delete {}".format(VIDEO_ID)
+        assert nicotools.main(param(c)) is False
