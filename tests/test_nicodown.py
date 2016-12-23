@@ -13,7 +13,7 @@ import nicotools
 from nicotools.nicodown import Video, Comment, Thumbnail, get_infos
 from nicotools import utils
 
-if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
+if sys.version_info >= (3, 5):
     if int(os.getenv("TEST_ASYNC", 0)):
         is_async = True
         waiting = 10
