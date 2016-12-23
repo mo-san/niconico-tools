@@ -11,8 +11,6 @@ env:
 
 matrix:
   exclude:
-  - python: "3.5"
-    env: TEST_ASYNC=0
   - python: "3.4"
     env: TEST_ASYNC=1
 

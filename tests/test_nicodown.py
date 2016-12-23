@@ -189,15 +189,6 @@ class TestNicodown:
             c = "-ct {video_id}"
             assert self.send_param(c)
 
-        def test_comment_thumbnail_2(self):
-            fp = tempfile.NamedTemporaryFile()
-            fp.write(bytes("\n".join(rand(3)), encoding="utf-8"))
-            c = "-ct +{}".format(fp.name)
-            try:
-                assert self.send_param(c)
-            finally:
-                fp.close()
-
         def test_comment_in_xml(self):
             c = "-cx {video_id}"
             assert self.send_param(c)
