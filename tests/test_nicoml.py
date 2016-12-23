@@ -25,7 +25,6 @@ else:
     ThumbnailAsync = None
     from nicotools import nicoml, utils
 
-SAVE_DIR = "tests/Downloads/"
 TEST_LIST = "TEST_LIST" + str(datetime.now()).replace(" ", "_").replace(":", "")
 TEST_LIST_TO = "TEST_LIST_TO" + str(datetime.now()).replace(" ", "_").replace(":", "")
 
@@ -51,7 +50,7 @@ INSANE_NAME = "🕒🕘🕒🕘"  # 時計の絵文字4つ
 
 
 def param(cond):
-    cond = "mylist -l {_mail} -p {_pass} " + cond
+    cond = "mylist -l {_mail} -p {_pass} --loglevel DEBUG " + cond
     return cond.format(_mail=AUTH_N[0], _pass=AUTH_N[1]).split(" ")
 
 
@@ -72,13 +71,16 @@ def id_and_name(instance):
     class O:
         id = result["list_id"]
         name = result["list_name"]
-    yield O
-    # 終わったら片付ける
-    try:
-        c = "{} --purge --id --yes".format(O.id)
-        nicotools.main(param(c))
-    except utils.MylistNotFoundError:
-        pass
+
+        def close(self):
+            # 終わったら片付けるための関数
+            try:
+                c = "{} --purge --id --yes".format(self.id)
+                nicotools.main(param(c))
+            except utils.MylistNotFoundError:
+                pass
+
+    return O
 
 
 # noinspection PyShadowingNames
@@ -92,13 +94,15 @@ def id_and_name_to(instance):
     class O:
         id = result["list_id"]
         name = result["list_name"]
-    yield O
-    # 終わったら片付ける
-    try:
-        c = "{} --purge --id --yes".format(O.id)
-        nicotools.main(param(c))
-    except utils.MylistNotFoundError:
-        pass
+
+        def close(self):
+            # 終わったら片付ける
+            try:
+                c = "{} --purge --id --yes".format(self.id)
+                nicotools.main(param(c))
+            except utils.MylistNotFoundError:
+                pass
+    return O
 
 
 # noinspection PyShadowingNames
@@ -123,6 +127,10 @@ class TestNicoml:
         c = "{} --delete {}".format(id_and_name.name, VIDEO_ID)
         assert nicotools.main(param(c))
 
+    def test_close(self, id_and_name, id_and_name_to):
+        id_and_name.close()
+        id_and_name_to.close()
+
 
 # noinspection PyShadowingNames
 class TestNicomlInAnotherWay:
@@ -145,6 +153,10 @@ class TestNicomlInAnotherWay:
         caplog.set_level(logging.DEBUG)
         c = "{} --delete * --yes".format(id_and_name.name)
         assert nicotools.main(param(c))
+
+    def test_close(self, id_and_name, id_and_name_to):
+        id_and_name.close()
+        id_and_name_to.close()
 
 
 # noinspection PyShadowingNames
@@ -174,17 +186,21 @@ class TestNicomlDeflist:
         c = "{} --delete {}".format("とりあえずマイリスト", VIDEO_ID)
         assert nicotools.main(param(c))
 
+    def test_close(self, id_and_name, id_and_name_to):
+        id_and_name.close()
+        id_and_name_to.close()
+
 
 # noinspection PyShadowingNames
 class TestOtherCommands:
-    def test_create_purge(self, id_and_name):
+    def test_create_purge(self, id_and_name, tmpdir):
         c = "{} --create".format(id_and_name.name)
         assert nicotools.main(param(c))
-        c = "{} --id --export --out {}{}_export.txt".format(id_and_name.id, SAVE_DIR, id_and_name.name)
+        c = "{} --id --export --out {}_export.txt".format(id_and_name.id, os.path.join(tmpdir, id_and_name.name))
         assert nicotools.main(param(c))
         c = "{} --id --show".format(id_and_name.id)
         assert nicotools.main(param(c))
-        c = "{} --id --show --show --out {}{}_show.txt".format(id_and_name.id, SAVE_DIR, id_and_name.name)
+        c = "{} --id --show --show --out {}_show.txt".format(id_and_name.id, os.path.join(tmpdir, id_and_name.name))
         assert nicotools.main(param(c))
         c = "{} --id --purge --yes".format(id_and_name.id)
         assert nicotools.main(param(c))
@@ -212,6 +228,10 @@ class TestOtherCommands:
     def test_show_everything_table(self):
         c = "* --show --show --everything"
         assert nicotools.main(param(c))
+
+    def test_close(self, id_and_name, id_and_name_to):
+        id_and_name.close()
+        id_and_name_to.close()
 
 
 # noinspection PyShadowingNames

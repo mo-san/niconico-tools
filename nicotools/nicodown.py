@@ -32,8 +32,6 @@ from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
         nicodown --loglevel WARNING  # エラー以外表示しない
 """
 
-IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
-
 
 def get_infos(queue, logger=None):
     """
@@ -575,6 +573,7 @@ def main(args):
     :param args: ArgumentParser.parse_args() によって解釈された引数
     :rtype: bool
     """
+    is_debug = int(os.getenv("PYTHON_TEST", 0))
     mailadrs = args.mail[0] if args.mail else None
     password = args.password[0] if args.password else None
 
@@ -594,7 +593,7 @@ def main(args):
         return utils.print_info(videoid, file_name)
 
     """ 本筋 """
-    log_level = "DEBUG" if IS_DEBUG else args.loglevel
+    log_level = "DEBUG" if is_debug else args.loglevel
     logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
     destination = utils.make_dir(args.dest[0])
     database = get_infos(videoid, logger=logger)

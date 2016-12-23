@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-suffix=`date "+%Y%m%d"`_${TRAVIS_PYTHON_VERSION}
+suffix=`$ date "+%Y%m%d_%H%M"`_${TRAVIS_PYTHON_VERSION}
 log_nd=nicotools_download.log
 log_ml=nicotools_mylist.log
 

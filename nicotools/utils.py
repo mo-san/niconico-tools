@@ -16,17 +16,17 @@ import requests
 from requests import cookies
 
 ALL_ITEM = "*"
-LOG_FILE_ND = "async_nicotools_download.log"
-LOG_FILE_ML = "async_nicotools_mylist.log"
-IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
+LOG_FILE_ND = "nicotools_download.log"
+LOG_FILE_ML = "nicotools_mylist.log"
+IS_DEBUG = int(os.getenv("PYTHON_TEST", 0))
 if IS_DEBUG:
-    os_name = os.getenv("TRAVIS_OS_NAME", os.name)
-    version = (os.getenv("TRAVIS_PYTHON_VERSION") or
+    __os_name = os.getenv("TRAVIS_OS_NAME", os.name)
+    __version = (os.getenv("TRAVIS_PYTHON_VERSION") or
                os.getenv("PYTHON_VERSION") or
                "_" .join(map(str, sys.version_info[0:3])))
-    COOKIE_FILE_NAME = "async_nicotools_cokkie_{0}_{1}.txt".format(os_name, version)
+    COOKIE_FILE_NAME = "nicotools_cokkie_{0}_{1}.txt".format(__os_name, __version)
 else:
-    COOKIE_FILE_NAME = "async_nicotools_cookie.txt"
+    COOKIE_FILE_NAME = "nicotools_cookie.txt"
 
 # 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか
 BACKSLASH = "backslashreplace"

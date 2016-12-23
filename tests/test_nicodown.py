@@ -32,8 +32,6 @@ else:
 
 SAVE_DIR_1 = "tests/downloads/"
 SAVE_DIR_2 = "tests/downloads_async"
-OUTPUT = "tests/downloads/info.xml"
-INPUT = "tests/ids.txt"
 
 # "N" は一般会員の認証情報、 "P" はプレミアム会員の認証情報
 AUTH_N = (os.getenv("addr_n"), os.getenv("pass_n"))
@@ -134,10 +132,10 @@ class TestLogin:
 class TestNicodown:
     def send_param(self, cond, **kwargs):
         if is_async:
-            cond = "download --nomulti -l {_mail} -p {_pass} -d {save_dir} " + cond
+            cond = "download --nomulti -l {_mail} -p {_pass} -d {save_dir} --loglevel DEBUG " + cond
             time.sleep(1)
         else:
-            cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
+            cond = "download -l {_mail} -p {_pass} -d {save_dir} --loglevel DEBUG " + cond
         params = {"_mail": AUTH_N[0], "_pass": AUTH_N[1],
                   "save_dir": SAVE_DIR_1, "video_id": " ".join(rand(0))}
         params.update(kwargs)
@@ -165,8 +163,8 @@ class TestNicodown:
             assert self.send_param(c, video_id=rand()[0])
 
     else:
-        def test_getthumbinfo_to_file_with_nonexist_id(self):
-            c = "-i -o " + OUTPUT + " sm1 {video_id}"
+        def test_getthumbinfo_to_file_with_nonexist_id(self, tmpdir):
+            c = "-i -o " + os.path.join(tmpdir, "info.xml") + " sm1 {video_id}"
             assert self.send_param(c)
 
         def test_getthumbinfo_on_screen(self):
@@ -189,8 +187,8 @@ class TestNicodown:
             c = "-ct {video_id}"
             assert self.send_param(c)
 
-        def test_comment_thumbnail_2(self):
-            c = "-ct +" + INPUT
+        def test_comment_thumbnail_2(self, tmpdir):
+            c = "-ct +" + os.path.join(tmpdir, "ids.txt")
             assert self.send_param(c)
 
         def test_comment_in_xml(self):
@@ -201,7 +199,7 @@ class TestNicodown:
 class TestNicodownError:
     def send_param(self, cond, **kwargs):
         if isinstance(cond, str):
-            cond = "download -l {_mail} -p {_pass} -d {save_dir} " + cond
+            cond = "download -l {_mail} -p {_pass} -d {save_dir} --loglevel DEBUG " + cond
             params = {"_mail"   : AUTH_N[0], "_pass": AUTH_N[1],
                       "save_dir": SAVE_DIR_1, "video_id": " ".join(rand(0))}
             params.update(kwargs)

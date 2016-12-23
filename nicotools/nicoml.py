@@ -15,9 +15,7 @@ except ImportError:
 from . import utils
 from .utils import Msg, Err, URL, KeyGTI, MKey, MylistNotFoundError
 
-
 # TODO: purifyコマンド
-IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
 class NicoMyList(utils.Canopy):
@@ -1026,7 +1024,8 @@ def main(args):
     :param args: ArgumentParser.parse_args() によって解釈された引数。
     :rtype: bool
     """
-    log_level = "DEBUG" if IS_DEBUG else args.loglevel
+    is_debug = int(os.getenv("PYTHON_TEST", 0))
+    log_level = "DEBUG" if is_debug else args.loglevel
     logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ML)
 
     mailadrs = args.mail[0] if args.mail else None
