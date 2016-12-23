@@ -16,15 +16,15 @@ import requests
 ALL_ITEM = "*"
 LOG_FILE_ND = "nicotools_download.log"
 LOG_FILE_ML = "nicotools_mylist.log"
-IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
+IS_DEBUG = int(os.getenv("PYTHON_TEST", 0))
 if IS_DEBUG:
-    os_name = os.getenv("TRAVIS_OS_NAME", os.name)
-    version = (os.getenv("TRAVIS_PYTHON_VERSION") or
+    __os_name = os.getenv("TRAVIS_OS_NAME", os.name)
+    __version = (os.getenv("TRAVIS_PYTHON_VERSION") or
                os.getenv("PYTHON_VERSION") or
                "_" .join(map(str, sys.version_info[0:3])))
-    COOKIE_FILE_NAME = "nicotools_cokkie_{0}_{1}".format(os_name, version)
+    COOKIE_FILE_NAME = "nicotools_cokkie_{0}_{1}.txt".format(__os_name, __version)
 else:
-    COOKIE_FILE_NAME = "nicotools_cookie.pickle"
+    COOKIE_FILE_NAME = "nicotools_cookie.txt"
 
 # 文字列をUTF-8以外にエンコードするとき、変換不可能な文字をどう扱うか
 BACKSLASH = "backslashreplace"
@@ -89,6 +89,8 @@ def validator(input_list):
         )?
             ((?:sm|nm|so)?\d+)  # ID本体
         )\s?""".format(re.escape(ALL_ITEM)), re.I + re.X).match
+    if isinstance(input_list, str):
+        input_list = [input_list]
 
     if not isinstance(input_list, (list, tuple, set)):
         raise MylistArgumentError(Err.invalid_argument.format(input_list))
@@ -191,7 +193,7 @@ def sizeof_fmt(num):
     return "{:.2f}Gb".format(num)
 
 
-def get_from_getflv(video_id, session):
+def get_from_getflv(video_id, session, logger=None):
     """
     GetFlv APIから情報を得る。
 
@@ -216,12 +218,13 @@ def get_from_getflv(video_id, session):
 
     :param str video_id:
     :param requests.Session session:
+    :param NTLogger logger:
     :rtype: dict[str, str] | None
     """
     check_arg(locals())
     suffix = {"as3": 1} if video_id.startswith("nm") else None
     response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-    # self.logger.debug("GetFLV Response: {}".format(response.text))
+    if logger: logger.debug("GetFLV Response: {}".format(response.text))
     return extract_getflv(response.text)
 
 
@@ -273,6 +276,19 @@ class MylistNotFoundError(MylistError):
 class MylistArgumentError(MylistError):
     """ 引数が誤っていたときに発生させるエラー """
     pass
+
+
+class MylistAPIError(MemoryError):
+    """ APIの操作の結果が好ましくない場合に発生させるエラー """
+    def __init__(self, code=None, msg=None, ok=False):
+        """
+        :param str code: APIのエラーコード(の文字列)
+        :param str msg: 伝えたい文言
+        :param bool ok: 作業を続行してよいかどうか
+        """
+        self.code = code
+        self.msg = msg
+        self.ok = ok
 
 
 class Canopy:
@@ -698,6 +714,7 @@ class Err:
     list_names_are_same = "[エラー] 発信元と受信先の名前が同じです。"
     cant_perform_all = "[エラー] このコマンドに * は指定できません。"
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
+    unexpected_commands = "このコマンドは使用できません。 {0}"
     no_commands = "[エラー] コマンドを指定してください。"
     item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
     name_ambiguous = ("同名のマイリストが {0}件あります。名前の代わりに"
@@ -712,7 +729,7 @@ class Err:
     known_error = "[エラー] 動画: {0}, コード: {}, 内容: {1}"
     unknown_error_itemid = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
     unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
-    failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {0}"
+    failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {1}"
     failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
     invalid_spec = ("[エラー] {0} は不正です。マイリストの名前"
                     "またはIDは文字列か整数で入力してください。")
@@ -721,6 +738,7 @@ class Err:
     '''
     APIから返ってくるエラーメッセージ
     {'error': {'code': 'MAXERROR', 'description': 'このマイリストにはもう登録できません'},'status':'fail'}
+    {'error': {'code': 'MAXERROR', 'description': 'もうマイリストを作成できません', 'status': 'fail'}
     {'error': {'code': 'EXIST', 'description': 'すでに登録されています'}, 'status': 'fail'}
     {'error': {'code': 'NONEXIST', 'description': 'アイテムが存在しません'}, 'status': 'fail'}
 

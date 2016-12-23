@@ -11,11 +11,7 @@ from xml.etree import ElementTree
 import requests
 from requests.exceptions import Timeout
 from requests.packages.urllib3.exceptions import TimeoutError, RequestError
-
-try:
-    import progressbar
-except ImportError:
-    progressbar = None
+from tqdm import tqdm
 
 from nicotools import utils
 from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
@@ -35,8 +31,6 @@ from nicotools.utils import Msg, Err, URL, KeyGTI, KeyGetFlv
     ログ出力の詳細さを変える:
         nicodown --loglevel WARNING  # エラー以外表示しない
 """
-
-IS_DEBUG = int(os.getenv("PYTHON_TEST", "0"))
 
 
 def get_infos(queue, logger=None):
@@ -68,7 +62,7 @@ def get_infos(queue, logger=None):
     * v_or_t_id         str
     * watch_url         str
 
-    :param list[str] queue: 動画IDのリスト
+    :param list[str] | str queue: 動画IDのリスト
     :param NTLogger | None logger: ログ出力
     :rtype: dict[str, dict[str, int | str | list]]
     """
@@ -77,6 +71,8 @@ def get_infos(queue, logger=None):
 
     # データベースとして使うための辞書。削除や非公開の動画はここに入る
     lexikon = {}
+    if isinstance(queue, str):
+        queue = [queue]
     for video_id in utils.validator(queue):
         xmldata = requests.get(URL.URL_Info + video_id).text
         root = ElementTree.fromstring(xmldata)
@@ -184,7 +180,8 @@ class Video(utils.Canopy):
         self.logger.debug("Video ID and its Thread ID (of officials):"
                           " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(
+            db[KeyGTI.V_OR_T_ID], self.session, self.logger)
 
         vid_url = response[KeyGetFlv.VIDEO_URL]
         is_premium = response[KeyGetFlv.IS_PREMIUM]
@@ -212,27 +209,17 @@ class Video(utils.Canopy):
         self.logger.debug("File Path: {}".format(file_path))
         db = self.glossary[video_id]
 
-        if progressbar is None:
+        if tqdm is None:
             with file_path.open("wb") as f:
                 [f.write(chunk) for chunk in
                  video_data.iter_content(chunk_size=chunk_size) if chunk]
         else:
-            widgets = [
-                progressbar.Percentage(),
-                ' ', progressbar.Bar(),
-                ' ', utils.sizeof_fmt(db[KeyGTI.FILE_SIZE]),
-                ' ', progressbar.ETA(),
-                ' ', progressbar.AdaptiveTransferSpeed(),
-            ]
-            pbar = progressbar.ProgressBar(widgets=widgets, max_value=db[KeyGTI.FILE_SIZE])
-            pbar.start()
-            with file_path.open("wb") as f:
-                downloaded_size = 0
-                for chunk in video_data.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        downloaded_size += f.write(chunk)
-                        pbar.update(downloaded_size)
-            pbar.finish()
+            with tqdm(total=db[KeyGTI.FILE_SIZE], leave=False,
+                      unit="B", unit_scale=True, file=sys.stdout) as pbar:
+                with file_path.open("wb") as f:
+                    for chunk in video_data.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            pbar.update(f.write(chunk))
         self.logger.info(Msg.nd_download_done.format(file_path))
         return True
 
@@ -385,7 +372,8 @@ class Comment(utils.Canopy):
         self.logger.debug("Video ID and its Thread ID (of officials):"
                           " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
 
-        response = utils.get_from_getflv(db[KeyGTI.V_OR_T_ID], self.session)
+        response = utils.get_from_getflv(
+            db[KeyGTI.V_OR_T_ID], self.session, self.logger)
 
         if response is None:
             time.sleep(4)
@@ -585,10 +573,15 @@ def main(args):
     :param args: ArgumentParser.parse_args() によって解釈された引数
     :rtype: bool
     """
+    is_debug = int(os.getenv("PYTHON_TEST", 0))
     mailadrs = args.mail[0] if args.mail else None
     password = args.password[0] if args.password else None
 
     """ エラーの除外 """
+    if hasattr(args, "dmc"):
+        sys.exit(Err.unexpected_commands.format("--dmc"))
+    if hasattr(args, "smile"):
+        sys.exit(Err.unexpected_commands.format("--smile"))
     videoid = utils.validator(args.VIDEO_ID)
     if not videoid:
         sys.exit(Err.invalid_videoid)
@@ -600,7 +593,7 @@ def main(args):
         return utils.print_info(videoid, file_name)
 
     """ 本筋 """
-    log_level = "DEBUG" if IS_DEBUG else args.loglevel
+    log_level = "DEBUG" if is_debug else args.loglevel
     logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
     destination = utils.make_dir(args.dest[0])
     database = get_infos(videoid, logger=logger)
