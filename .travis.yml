@@ -1,22 +1,21 @@
 language: python
 
 python:
-  - "3.4"
-  - "3.5"
-  - "3.6-dev"
+ - "3.6-dev"
+ - "3.5"
+ - "3.4"
 
-os:
-  - linux
+env:
+ - TEST_ASYNC=0
+ - TEST_ASYNC=1
 
-# command to install dependencies
 install:
-  - pip install requests prettytable pytest pytest-catchlog codecov pytest-cov
+  - pip install pytest pytest-catchlog codecov pytest-cov
   - pip install -e .
 
 env:
  - PYTHON_TEST=1
 
-# command to run tests
 script:
   - py.test --cov=./
 
