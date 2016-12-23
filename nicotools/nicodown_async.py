@@ -51,6 +51,9 @@ class Info(utils.CanopyAsync):
 
     def get_data(self, video_ids: list) -> Dict:
         glossary = utils.validator(video_ids)
+
+        self.logger.info(Msg.nd_start_download.format(len(glossary)))
+
         result = self.loop.run_until_complete(self._retrieve_info(glossary))
         if not self.__return_session:
             self.session.close()
@@ -258,8 +261,7 @@ class Info(utils.CanopyAsync):
         elif _watch_api:
             return self._pick_info_from_watch_api(_watch_api[0].text)
         else:
-            self.logger.debug(content)
-            raise AttributeError("Unknown HTML")
+            raise AttributeError("Unknown HTML: {}".format(content))
 
 
 class Thumbnail(utils.CanopyAsync):
@@ -293,17 +295,19 @@ class Thumbnail(utils.CanopyAsync):
         :rtype: bool | aiohttp.ClientSession
         """
         utils.check_arg(locals())
-        self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(glossary))
 
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
             glossary = self.loop.run_until_complete(self._get_infos(glossary))
         self.glossary = glossary
+        self.logger.debug("Dictionary of Videos: {}".format(self.glossary))
         del self.__bucket
 
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.info(Msg.nd_start_dl_pict.format(len(self.glossary)))
+        self.logger.debug("Directory to save in: {}".format(self.save_dir))
+
+        self.logger.info(Msg.nd_start_dl_pict.format(
+            count=len(self.glossary), ids=list(self.glossary)))
 
         self.loop.run_until_complete(self._download(list(self.glossary)))
         while len(self.undone) > 0:
@@ -316,21 +320,23 @@ class Thumbnail(utils.CanopyAsync):
 
     async def _download(self, video_ids: list, islarge: bool=True) -> None:
         urls = self._make_urls(video_ids, islarge)
-        sem = asyncio.Semaphore(self.__parallel_limit)
 
         futures = []
-        for video_id, _url in zip(video_ids, urls):
-            coro = self._worker(sem, video_id, _url)
+        for idx, video_id, _url in zip(range(len(video_ids)), video_ids, urls):
+            coro = self._worker(idx, video_id, _url)
             f = asyncio.ensure_future(coro)
             f.add_done_callback(functools.partial(self._saver, video_id))
             futures.append(f)
         await asyncio.wait(futures, loop=self.loop)
 
-    async def _worker(self, semaphore: asyncio.Semaphore, video_id: str, url: str) -> Optional[bytes]:
-        async with semaphore:
-            self.logger.debug(
-                Msg.nd_download_pict_async.format(
-                    video_id, self.glossary[video_id][KeyGTI.TITLE]))
+    async def _worker(self, idx: int, video_id: str, url: str) -> Optional[bytes]:
+        async with asyncio.Semaphore(self.__parallel_limit):
+
+            self.logger.info(
+                Msg.nd_download_pict.format(
+                    idx + 1, len(self.glossary), video_id,
+                    self.glossary[video_id][KeyGTI.TITLE]))
+
             try:
                 async with self.session.get(url, timeout=10) as response:
                     self.logger.debug("Video ID: {}, Status Code: {}".format(video_id, response.status))
@@ -355,7 +361,7 @@ class Thumbnail(utils.CanopyAsync):
 
             with file_path.open('wb') as f:
                 f.write(image_data)
-            self.logger.info(Msg.nd_download_done.format(file_path))
+            self.logger.info(Msg.nd_download_done.format(path=file_path))
 
     def _make_urls(self, video_ids: List[str], is_large: bool=True) -> List[str]:
         if is_large:
@@ -433,6 +439,7 @@ class VideoSmile(utils.CanopyAsync):
               save_dir: Union[str, Path]):
         # TODO Downloading in Economy mode
         self.save_dir = utils.make_dir(save_dir)
+        self.logger.debug("Directory to save in: {}".format(self.save_dir))
         self.__downloaded_size = [0] * self.__division
 
         if isinstance(glossary, list):
@@ -443,6 +450,9 @@ class VideoSmile(utils.CanopyAsync):
             glossary = info.get_data(glossary)
             self.session = info.session
         self.glossary = glossary
+        self.logger.debug("Dictionary of Videos: {}".format(self.glossary))
+        self.logger.info(Msg.nd_start_dl_video.format(
+            count=len(self.glossary), ids=list(self.glossary)))
 
         self.loop.run_until_complete(self._push_file_size())
         self.loop.run_until_complete(self._broker())
@@ -468,16 +478,21 @@ class VideoSmile(utils.CanopyAsync):
 
     async def _broker(self):
         futures = []
-        for video_id in self.glossary:
-            coro = self._download(video_id)
+        for idx, video_id in enumerate(self.glossary):
+            coro = self._download(idx, video_id)
             f = asyncio.ensure_future(coro)
             f.add_done_callback(functools.partial(self._combiner, video_id))
             futures.append(f)
         await asyncio.wait(futures, loop=self.loop)
 
-    async def _download(self, video_id: str):
+    async def _download(self, idx: int, video_id: str):
         division = self.__division
         file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
+
+        self.logger.info(
+            Msg.nd_download_video.format(
+                idx + 1, len(self.glossary), video_id,
+                self.glossary[video_id][KeyDmc.TITLE]))
 
         video_url = self.glossary[video_id][KeyDmc.VIDEO_URL_SM]
         file_size = self.glossary[video_id][KeyDmc.FILE_SIZE]
@@ -547,6 +562,7 @@ class VideoSmile(utils.CanopyAsync):
                     with open(name, "rb") as file:
                         fd.write(file.read())
                     os.remove(name)
+            self.logger.info(Msg.nd_download_done.format(path=file_path))
 
 
 class VideoDmc(utils.CanopyAsync):
@@ -588,6 +604,7 @@ class VideoDmc(utils.CanopyAsync):
               xml: bool=True):
         self.save_dir = utils.make_dir(save_dir)
         self.__downloaded_size = [0] * self.__division
+        self.logger.debug("Directory to save in: {}".format(self.save_dir))
 
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
@@ -597,6 +614,9 @@ class VideoDmc(utils.CanopyAsync):
             glossary = info.get_data(glossary)
             self.session = info.session
         self.glossary = glossary
+        self.logger.debug("Dictionary of Videos: {}".format(self.glossary))
+        self.logger.info(Msg.nd_start_dl_video.format(
+            count=len(self.glossary), ids=list(self.glossary)))
 
         self.loop.run_until_complete(self._broker(xml))
         if not self.__return_session:
@@ -604,9 +624,11 @@ class VideoDmc(utils.CanopyAsync):
         return self
 
     async def _broker(self, xml: bool=True) -> None:
-        for video_id in self.glossary:
+        for idx, video_id in enumerate(self.glossary):
             if self.glossary[video_id][KeyDmc.API_URL] is None:
-                self.logger.warning("{} はDMC動画ではありません。".format(video_id))
+                self.logger.warning("{} はDMC動画ではありません。従来サーバーの動画を"
+                                    "ダウンロードする場合は --smile をコマンドに"
+                                    "指定してください。".format(video_id))
                 continue
             if xml:
                 res_xml = await self._first_nego_xml(video_id)
@@ -618,7 +640,7 @@ class VideoDmc(utils.CanopyAsync):
                 coro_heartbeat = asyncio.ensure_future(self._heartbeat(video_id, res_json))
 
             self.logger.debug("動画URL: {}".format(video_url))
-            coro_download = asyncio.ensure_future(self._download(video_id, video_url))
+            coro_download = asyncio.ensure_future(self._download(idx, video_id, video_url))
             coro_download.add_done_callback(functools.partial(self._canceler, coro_heartbeat))
             coro_download.add_done_callback(functools.partial(self._combiner, video_id))
             tasks = [coro_download, coro_heartbeat]
@@ -626,6 +648,8 @@ class VideoDmc(utils.CanopyAsync):
 
     async def _first_nego_xml(self, video_id: str) -> str:
         payload = self._make_param_xml(self.glossary[video_id])
+        self.logger.debug("Attempting to first negotiation of {}".format(video_id))
+        self.logger.debug("This is the posting XML: {}".format(payload))
         async with self.session.post(
                 url=self.glossary[video_id][KeyDmc.API_URL],
                 params={"_format": "xml"},
@@ -635,6 +659,8 @@ class VideoDmc(utils.CanopyAsync):
 
     async def _first_nego_json(self, video_id: str) -> str:
         payload = self._make_param_json(self.glossary[video_id])
+        self.logger.debug("Attempting to first negotiation of {}".format(video_id))
+        self.logger.debug("This is the posting JSON: {}".format(payload))
         async with self.session.post(
                 url=self.glossary[video_id][KeyDmc.API_URL],
                 params={"_format": "json"},
@@ -762,16 +788,16 @@ class VideoDmc(utils.CanopyAsync):
             }
         }
         result = json.dumps(param)
-        self.logger.debug("送信するパラメーター: {}".format(result))
         return result
 
     def _extract_video_url_xml(self, text: str) -> str:
+        self.logger.debug("Returned XML data: {}".format(text))
         soup = BeautifulSoup(text, "html.parser")
         url_tag = soup.content_uri  # type: Tag
         return url_tag.text
 
     def _extract_video_url_json(self, text: str) -> str:
-        print(text)
+        self.logger.debug("Returned JSON data: {}".format(text))
         soup = json.loads(text)
         url_tag = soup["data"]["session"]["content_uri"]
         return url_tag
@@ -819,9 +845,14 @@ class VideoDmc(utils.CanopyAsync):
             self.logger.debug(str(headers))
             return int(headers["content-length"])
 
-    async def _download(self, video_id: str, video_url: str):
+    async def _download(self, idx: int, video_id: str, video_url: str):
         division = self.__division
         file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
+
+        self.logger.info(
+            Msg.nd_download_video.format(
+                idx + 1, len(self.glossary), video_id,
+                self.glossary[video_id][KeyDmc.TITLE]))
 
         file_size = await self._get_file_size(video_id, video_url)
         headers = [
@@ -894,6 +925,7 @@ class VideoDmc(utils.CanopyAsync):
                     with open(name, "rb") as file:
                         fd.write(file.read())
                     os.remove(name)
+            self.logger.info(Msg.nd_download_done.format(path=file_path))
 
 
 class Comment(utils.CanopyAsync):
@@ -932,6 +964,7 @@ class Comment(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         self.save_dir = utils.make_dir(save_dir)
+        self.logger.debug("Directory to save in: {}".format(self.save_dir))
 
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
@@ -942,11 +975,12 @@ class Comment(utils.CanopyAsync):
             self.session = info.session
         self.glossary = glossary
 
-        self.logger.info(Msg.nd_start_dl_comment.format(len(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_comment.format(
+            count=len(self.glossary), ids=list(self.glossary)))
 
         futures = []
-        for video_id in self.glossary:
-            coro = self._download(self.glossary[video_id], xml)
+        for idx, video_id in enumerate(self.glossary):
+            coro = self._download(idx, self.glossary[video_id], xml)
             f = asyncio.ensure_future(coro)
             f.add_done_callback(functools.partial(self.saver, video_id, xml))
             futures.append(f)
@@ -954,9 +988,10 @@ class Comment(utils.CanopyAsync):
         self.loop.run_until_complete(asyncio.wait(futures, loop=self.loop))
         return self
 
-    async def _download(self, info: dict, is_xml: bool) -> str:
+    async def _download(self, idx: int, info: dict, is_xml: bool) -> str:
         utils.check_arg(locals())
 
+        video_id        = info[KeyDmc.VIDEO_ID]
         thread_id       = info[KeyDmc.THREAD_ID]
         msg_server      = info[KeyDmc.MSG_SERVER]
         user_id         = info[KeyDmc.USER_ID]
@@ -967,6 +1002,12 @@ class Comment(utils.CanopyAsync):
         needs_key       = info[KeyDmc.NEEDS_KEY]        # int なければ None
         thread_key      = None
         force_184       = None
+
+        self.logger.info(
+            Msg.nd_download_comment.format(
+                idx + 1, len(self.glossary), video_id,
+                info[KeyGTI.TITLE]))
+
 
         is_official = re.match("^(?:so|\d)", info[KeyDmc.VIDEO_ID]) is not None
 
@@ -1008,7 +1049,7 @@ class Comment(utils.CanopyAsync):
         self.logger.debug("File Path: {}".format(file_path))
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
-        self.logger.info(Msg.nd_download_done.format(file_path))
+        self.logger.info(Msg.nd_download_done.format(path=file_path))
         return True
 
     async def get_thread_key(self, thread_id, needs_key):

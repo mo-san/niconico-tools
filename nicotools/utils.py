@@ -309,7 +309,8 @@ class Canopy:
         """
         check_arg(locals())
         file_name =  Msg.nd_file_name.format(
-            video_id, self.glossary[video_id][KeyGTI.FILE_NAME], ext)
+            vid=video_id, ext=ext,
+            name=self.glossary[video_id][KeyGTI.FILE_NAME])
         return Path(self.save_dir).resolve() / file_name
 
     def get_logger(self, logger):
@@ -669,17 +670,15 @@ class Msg:
     input_pass = "パスワードを入力してください(画面には表示されません)。"
 
     ''' ログに書くメッセージ '''
-    nd_start_download = "{0} 件の動画の情報を取りに行きます。"
-    nd_download_done = "{0} に保存しました。"
+    nd_start_download = "{0} 件の情報を取りに行きます。"
+    nd_download_done = "{path} に保存しました。"
     nd_download_video = "({0}/{1}) ID: {2} (タイトル:{3}) の動画をダウンロードします。"
     nd_download_pict = "({0}/{1}) ID: {2} (タイトル:{3}) のサムネイルをダウンロードします。"
-    nd_download_pict_async = "ID: {0} (タイトル:{1}) のサムネイルをダウンロードします。"
     nd_download_comment = "({0}/{1}) ID: {2} (タイトル:{3}) のコメントをダウンロードします。"
-    nd_start_dl_video = "{0} 件の動画をダウンロードします。"
-    nd_start_dl_pict = "{0} 件のサムネイルをダウンロードします。"
-    nd_start_dl_comment = "{0} 件のコメントをダウンロードします。"
-    nd_file_name = "{0}_{1}.{2}"
-    nd_video_url_is = "{0} の動画URL: {1}"
+    nd_start_dl_video = "{count} 件の動画をダウンロードします。: {ids}"
+    nd_start_dl_pict = "{count} 件のサムネイルをダウンロードします。: {ids}"
+    nd_start_dl_comment = "{count} 件のコメントをダウンロードします。: {ids}"
+    nd_file_name = "{vid}_{name}.{ext}"
     nd_deleted_or_private = "{0} は削除されているか、非公開です。"
 
     ml_exported = "{0} に出力しました。"

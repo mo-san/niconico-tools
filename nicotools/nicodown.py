@@ -246,7 +246,10 @@ class Thumbnail(utils.Canopy):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.info(Msg.nd_start_dl_pict.format(len(self.glossary)))
+
+        self.logger.info(Msg.nd_start_dl_pict.format(
+            count=len(self.glossary), ids=list(self.glossary)))
+
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_pict.format(
