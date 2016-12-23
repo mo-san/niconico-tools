@@ -24,6 +24,7 @@ setup(
         'requests',
         'prettytable',
         'bs4',
+        'aiohttp',
         'tqdm'
     ],
     entry_points={

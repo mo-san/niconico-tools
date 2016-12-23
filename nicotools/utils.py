@@ -1,8 +1,8 @@
 # coding: UTF-8
+import asyncio
 import inspect
 import logging
 import os
-import pickle
 import re
 import sys
 from argparse import ArgumentParser
@@ -11,7 +11,9 @@ from os.path import join, expanduser
 from pathlib import Path
 from urllib.parse import parse_qs
 
+import aiohttp
 import requests
+from requests import cookies
 
 ALL_ITEM = "*"
 LOG_FILE_ND = "nicotools_download.log"
@@ -325,6 +327,16 @@ class Canopy:
             return logger
 
 
+class CanopyAsync(Canopy):
+    def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
+        super().__init__(logger=logger)
+        self.loop = loop or asyncio.get_event_loop()
+        self.glossary = None
+        self.save_dir = None  # type: Path
+        self.logger = self.get_logger(logger)  # type: NTLogger
+        self.session = None  # type: aiohttp.ClientSession
+
+
 class LogIn:
     __singleton__ = None
     is_login = False
@@ -374,14 +386,14 @@ class LogIn:
             auth = auth or self._auth
             res = session.post(URL.URL_LogIn, params=auth)
             if self._we_have_logged_in(res.text):
-                self.save_cookies(session.cookies)
+                self.cookie = self.save_cookies(session.cookies)
                 self.is_login = True
             else:
                 return self.get_session(self._ask_credentials(), force_login=True)
         else:
             cook = self.load_cookies()
             if cook:
-                session.cookies = cook
+                session.cookies = cookies.cookiejar_from_dict(cook)
         return session
 
     def _we_have_logged_in(self, response):
@@ -456,22 +468,31 @@ class LogIn:
 
         :param requests.cookies.RequestsCookieJar requests_cookiejar:
         :param str file_name:
-        :rtype: None
+        :rtype: dict
         """
-        with open(join(expanduser("~"), file_name), "wb") as fd:
-            pickle.dump(requests_cookiejar, fd)
+        # file_path = make_dir(Path.home() / file_name)
+        # file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
+        file_path = join(expanduser("~"), file_name)
+        cook = {key: val for key, val in requests_cookiejar.items()}
+        with open(file_path, "w") as fd:
+            fd.write("\n".join([k + "\t" + v for k, v in cook.items()]))
+        return cook
 
     @classmethod
     def load_cookies(cls, file_name=COOKIE_FILE_NAME):
         """
-        クッキーを読み込む。
+        クッキーを読み込む。名前、値をタブで区切ったテキストファイルから。
 
         :param str file_name:
-        :rtype: requests.cookies.RequestsCookieJar | None
+        :rtype: dict | None
         """
+        # file_path = make_dir(Path.home() / file_name)
+        #     return {line.split("\t")[0]: line.split("\t")[1]
+        #             for line in file_path.read_text().split("\n")}
         try:
-            with open(join(expanduser("~"), file_name), "rb") as fd:
-                return pickle.load(fd)
+            file_path = join(expanduser("~"), file_name)
+            with open(file_path, "r") as fd:
+                return {line.split("\t")[0]: line.split("\t")[1].strip() for line in fd.readlines()}
         except (FileNotFoundError, EOFError):
             return None
 
