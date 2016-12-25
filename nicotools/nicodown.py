@@ -155,7 +155,8 @@ class Video(utils.Canopy):
         if isinstance(glossary, list):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
-        self.logger.info(Msg.nd_start_dl_video.format(len(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_video.format(
+            count=len(self.glossary), ids=list(self.glossary)))
 
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
@@ -221,7 +222,7 @@ class Video(utils.Canopy):
                     for chunk in video_data.iter_content(chunk_size=chunk_size):
                         if chunk:
                             pbar.update(f.write(chunk))
-        self.logger.info(Msg.nd_download_done.format(file_path))
+        self.logger.info(Msg.nd_download_done.format(path=file_path))
         return True
 
 
@@ -321,7 +322,7 @@ class Thumbnail(utils.Canopy):
 
         with file_path.open('wb') as f:
             f.write(image_data.content)
-        self.logger.info(Msg.nd_download_done.format(file_path))
+        self.logger.info(Msg.nd_download_done.format(path=file_path))
         return True
 
 
@@ -351,7 +352,8 @@ class Comment(utils.Canopy):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.info(Msg.nd_start_dl_comment.format(len(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_comment.format(
+            count=len(self.glossary), ids=list(self.glossary)))
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(
                 Msg.nd_download_comment.format(
@@ -437,7 +439,7 @@ class Comment(utils.Canopy):
         self.logger.debug("File Path: {}".format(file_path))
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
-        self.logger.info(Msg.nd_download_done.format(file_path))
+        self.logger.info(Msg.nd_download_done.format(path=file_path))
         return True
 
     def get_thread_key(self, thread_id, needs_key):
