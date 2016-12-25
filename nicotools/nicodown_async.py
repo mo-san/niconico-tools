@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup, Tag
 from tqdm import tqdm
 
 from nicotools import utils
-from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc
+from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc, NotLoginError
 
 
 class Info(utils.CanopyAsync):
@@ -45,26 +45,29 @@ class Info(utils.CanopyAsync):
         if self.session:
             return self.session
         else:
-            cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
+            login = utils.LogIn(mail=self.__mail, password=self.__password)
+            if login.is_login:
+                cook = login.cookie
+            else:
+                login.get_session(utils.LogIn.ask_credentials())
+                cook = login.cookie
             self.logger.debug("Object ID of cookie (Info): {}".format(id(cook)))
             return aiohttp.ClientSession(cookies=cook)
 
     def get_data(self, video_ids: list) -> Dict:
         glossary = utils.validator(video_ids)
 
-        self.logger.info(Msg.nd_start_download.format(len(glossary)))
+        self.logger.info(Msg.nd_start_download.format(
+            count=len(glossary), ids=glossary))
 
-        result = self.loop.run_until_complete(self._retrieve_info(glossary))
+        infos = self.loop.run_until_complete(
+            asyncio.gather(*[self._retrieve_info(_id) for _id in video_ids]))
+        result = {_id: _info for _id, _info in zip(video_ids, infos)}
         if not self.__return_session:
             self.session.close()
         return result
 
-    async def _retrieve_info(self, video_ids: list) -> Dict:
-        infos = await asyncio.gather(*[self._worker(_id) for _id in video_ids])
-        result = {_id: _info for _id, _info in zip(video_ids, infos)}
-        return result
-
-    async def _worker(self, video_id: str) -> Dict:
+    async def _retrieve_info(self, video_id: str) -> Dict:
         interval = self.interval
         backoff = self.backoff
         attempt = max(0, self.retries) + 1
@@ -251,9 +254,11 @@ class Info(utils.CanopyAsync):
         :rtype: Dict
         """
         soup = BeautifulSoup(content, "html.parser")
+        with open("junction.html", "a+", encoding="utf-8") as fd:
+            fd.write(content)
         _not_login = soup.select("#Login_nico")
         if _not_login:
-            exit("ログインしてないよ")
+            raise NotLoginError("ログインしてないよ")
         _data_api = soup.select("#js-initial-watch-data")
         _watch_api = soup.select("#watchAPIDataContainer")
         if _data_api:
@@ -261,7 +266,12 @@ class Info(utils.CanopyAsync):
         elif _watch_api:
             return self._pick_info_from_watch_api(_watch_api[0].text)
         else:
-            raise AttributeError("Unknown HTML: {}".format(content))
+            file_name = "_#_niconico_#_.html"
+            with open(file_name, "w", encoding="utf-8") as fd:
+                fd.write(content)
+            raise AttributeError("Unknown HTML. For debug purpose,"
+                                 " the content has been saved in {}."
+                                 " You can safely delete it.".format(file_name))
 
 
 class Thumbnail(utils.CanopyAsync):

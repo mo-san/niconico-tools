@@ -66,13 +66,14 @@ def get_infos(queue, logger=None):
     :param NTLogger | None logger: ログ出力
     :rtype: dict[str, dict[str, int | str | list]]
     """
-    if logger: logger.info(Msg.nd_start_download.format(len(queue)))
-    else: print(Msg.nd_start_download.format(len(queue)))
+    if isinstance(queue, str):
+        queue = [queue]
+    message = Msg.nd_start_download.format(count=len(queue), ids=queue)
+    if logger: logger.info(message)
+    else: print(message)
 
     # データベースとして使うための辞書。削除や非公開の動画はここに入る
     lexikon = {}
-    if isinstance(queue, str):
-        queue = [queue]
     for video_id in utils.validator(queue):
         xmldata = requests.get(URL.URL_Info + video_id).text
         root = ElementTree.fromstring(xmldata)

@@ -293,6 +293,11 @@ class MylistAPIError(MemoryError):
         self.ok = ok
 
 
+class NotLoginError(Exception):
+    """ ログインしていない、できなかったときに発生させるエラー """
+    pass
+
+
 class Canopy:
     def __init__(self, logger=None):
         self.glossary = None
@@ -363,58 +368,39 @@ class LogIn:
         :param str | None password: パスワード
         :param requests.Session | None session: セッションオブジェクト
         """
-        self._auth = {}
         if not (session or mail or password):
             self.session = self.get_session()
         elif session and not (mail or password):
             self.session = session
+            self.token = self.get_token(self.session)
         else:
-            self._auth = self._ask_credentials(mail=mail, password=password)
-            self.session = self.get_session(self._auth, force_login=True)
-        self.token = self.get_token(self.session)
+            self.session = self.get_session(self.ask_credentials(mail=mail, password=password))
 
-    def get_session(self, auth=None, force_login=False):
+    def get_session(self, auth=None):
         """
         クッキーを読み込み、必要ならばログインし、そのセッションを返す。
 
         :param dict[str, str] | None auth:
-        :param bool force_login: ログインするかどうか。クッキーが無い or 異常な場合にTrueにする。
         :rtype: requests.Session
         """
 
         session = requests.session()
-        if force_login:
-            auth = auth or self._auth
-            res = session.post(URL.URL_LogIn, params=auth)
-            if self._we_have_logged_in(res.text):
+        cook = self.load_cookies()
+        if auth or cook:
+            if cook:
+                session.cookies = requests.cookies.cookiejar_from_dict(cook)
+            else:
+                session.post(URL.URL_LogIn, params=auth)
+            self.token = self.get_token(session)
+            if self.token:
+                # if self._we_have_logged_in(res.text):
                 self.cookie = self.save_cookies(session.cookies)
                 self.is_login = True
             else:
-                return self.get_session(self._ask_credentials(), force_login=True)
+                return self.get_session(self.ask_credentials())
         else:
-            cook = self.load_cookies()
-            if cook:
-                session.cookies = cookies.cookiejar_from_dict(cook)
+            return self.get_session(self.ask_credentials())
         return session
-
-    def _we_have_logged_in(self, response):
-        """
-        ログインできたかどうかをHTMLの文面から推測する
-
-        :param str response:
-        :rtype: bool
-        """
-        # 成功したとき
-        if "<title>niconico</title>" in response:
-            return True
-        # 失敗したとき
-        elif "ログイン - niconico</title>" in response:
-            print(Err.invalid_auth)
-            return False
-        else:
-            print("Couldn't determine whether we could log in."
-                  " This is the returned HTML:\n{0}".format(response))
-            return False
 
     def get_token(self, session):
         """
@@ -428,12 +414,10 @@ class LogIn:
             fragment = htmltext.split("NicoAPI.token = \"")[1]
             return fragment[:fragment.find("\"")]
         except IndexError:
-            self._auth = self._ask_credentials()
-            session = self.get_session(self._auth, force_login=True)
-            return self.get_token(session)
+            return None
 
     @classmethod
-    def _ask_credentials(cls, mail=None, password=None):
+    def ask_credentials(cls, mail=None, password=None):
         """
         メールアドレスとパスワードをユーザーに求める。
 
@@ -441,7 +425,8 @@ class LogIn:
         :param str | None password: パスワード
         :rtype: dict[str, str]
         """
-        un, pw = mail, password
+        un = mail
+        pw = password
         try:
             if un is None:
                 r = re.compile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
@@ -456,7 +441,7 @@ class LogIn:
                     pw = getpass("-=>")
                     if pw: break
         except (EOFError, KeyboardInterrupt):
-            exit(Err.keyboard_interrupt)
+            sys.exit(Err.keyboard_interrupt)
         return {
             "mail_tel": un,
             "password": pw
@@ -471,6 +456,7 @@ class LogIn:
         :param str file_name:
         :rtype: dict
         """
+        # Python 3.5以上専用でいいならこう書く。
         # file_path = make_dir(Path.home() / file_name)
         # file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
         file_path = join(expanduser("~"), file_name)
@@ -487,6 +473,7 @@ class LogIn:
         :param str file_name:
         :rtype: dict | None
         """
+        # Python 3.5以上専用でいいならこう書く。
         # file_path = make_dir(Path.home() / file_name)
         #     return {line.split("\t")[0]: line.split("\t")[1]
         #             for line in file_path.read_text().split("\n")}
@@ -670,7 +657,7 @@ class Msg:
     input_pass = "パスワードを入力してください(画面には表示されません)。"
 
     ''' ログに書くメッセージ '''
-    nd_start_download = "{0} 件の情報を取りに行きます。"
+    nd_start_download = "{count} 件の情報を取りに行きます。: {ids}"
     nd_download_done = "{path} に保存しました。"
     nd_download_video = "({0}/{1}) ID: {2} (タイトル:{3}) の動画をダウンロードします。"
     nd_download_pict = "({0}/{1}) ID: {2} (タイトル:{3}) のサムネイルをダウンロードします。"
