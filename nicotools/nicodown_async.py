@@ -26,6 +26,7 @@ class Info(utils.CanopyAsync):
                  session: aiohttp.ClientSession=None,
                  return_session=False,
                  limit: int=4,
+                 sieve=True,
                  loop: asyncio.AbstractEventLoop=None,
                  interval: Union[int, float]=5,
                  backoff: Union[int, float]=3,
@@ -36,6 +37,7 @@ class Info(utils.CanopyAsync):
         self.__password = password
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__parallel_limit = limit
+        self.__do_sieve = sieve
         self.__return_session = return_session
         self.interval = interval
         self.backoff = backoff
@@ -65,7 +67,19 @@ class Info(utils.CanopyAsync):
         result = {_id: _info for _id, _info in zip(video_ids, infos)}
         if not self.__return_session:
             self.session.close()
-        return result
+        sieved_result = self.siever(result)
+        return sieved_result
+
+    def siever(self, infos: dict):
+        good = {_id: info for _id, info in infos.items()
+                  if info[KeyDmc.IS_PUBLIC] and not info[KeyDmc.IS_DELETED]}
+        bad = list(set(infos) - set(good))
+        if len(bad) > 0:
+            self.logger.info(Msg.nd_deleted_or_private.format(bad))
+        if self.__do_sieve:
+            return good
+        else:
+            return infos
 
     async def _retrieve_info(self, video_id: str) -> Dict:
         interval = self.interval
@@ -311,19 +325,19 @@ class Thumbnail(utils.CanopyAsync):
             glossary = self.loop.run_until_complete(self._get_infos(glossary))
         self.glossary = glossary
         self.logger.debug("Dictionary of Videos: {}".format(self.glossary))
-        del self.__bucket
 
         self.save_dir = utils.make_dir(save_dir)
         self.logger.debug("Directory to save in: {}".format(self.save_dir))
 
-        self.logger.info(Msg.nd_start_dl_pict.format(
-            count=len(self.glossary), ids=list(self.glossary)))
+        if len(self.glossary) > 0:
+            self.logger.info(Msg.nd_start_dl_pict.format(
+                count=len(self.glossary), ids=list(self.glossary)))
 
-        self.loop.run_until_complete(self._download(list(self.glossary)))
-        while len(self.undone) > 0:
-            self.logger.debug("いくつか残ってる。{}".format(self.undone))
-            self.loop.run_until_complete(self._download(self.undone, False))
-        self.logger.debug("全部終わった")
+            self.loop.run_until_complete(self._download(list(self.glossary)))
+            while len(self.undone) > 0:
+                self.logger.debug("いくつか残ってる。{}".format(self.undone))
+                self.loop.run_until_complete(self._download(self.undone, False))
+            self.logger.debug("全部終わった")
         if not self.__return_session:
             self.session.close()
         return self
@@ -394,7 +408,12 @@ class Thumbnail(utils.CanopyAsync):
         """
         tasks = [self._get_infos_worker(video_id) for video_id in queue]
         await asyncio.wait(tasks, loop=self.loop)
-        return self.__bucket
+        bad = list(set(queue) - set(self.__bucket))
+        if len(bad) > 0:
+            self.logger.info(Msg.nd_deleted_or_private.format(bad))
+        result = self.__bucket
+        del self.__bucket
+        return result
 
     async def _get_infos_worker(self, video_id: str):
         async with asyncio.Semaphore(self.__parallel_limit):
@@ -1239,7 +1258,8 @@ def main(args):
 
     if args.getthumbinfo:
         file_name = args.out[0] if isinstance(args.out, list) else None
-        return utils.print_info(videoid, file_name)
+        utils.print_info(videoid, file_name)
+        sys.exit()
 
     """ 本筋 """
     log_level = "DEBUG" if is_debug else args.loglevel
@@ -1247,17 +1267,21 @@ def main(args):
     destination = utils.make_dir(args.dest[0])
 
     if args.thumbnail:
-        res_t = Thumbnail(logger=logger).start(videoid, destination)
+        Thumbnail(logger=logger).start(videoid, destination)
         if not (args.comment or args.video):
             # サムネイルのダウンロードだけなら
             # ログインする必要がないのでここで終える。
-            return res_t
+            return True
 
     info = Info(
         mail=mailadrs, password=password,
-        logger=logger, return_session=True)
+        logger=logger, sieve=args.nosieve, return_session=True)
     database = info.get_data(videoid)
     session = info.session
+
+    if len(database) == 0:
+        session.close()
+        return True
 
     if args.comment:
         (Comment(logger=logger, session=session)

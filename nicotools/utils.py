@@ -639,6 +639,8 @@ class Msg:
     nd_help_mail = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
     nd_help_outfile = "--getthumbinfo の結果をそのファイル名で テキストファイルに出力します。"
+    nd_help_sieve = ("指定すると、動画とコメントについて、"
+                     "非公開や削除済みの項目でもダウンロードを試みます。")
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
     nd_help_video = "指定すると、 動画をダウンロードします。"
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
