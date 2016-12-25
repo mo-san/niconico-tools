@@ -268,8 +268,6 @@ class Info(utils.CanopyAsync):
         :rtype: Dict
         """
         soup = BeautifulSoup(content, "html.parser")
-        with open("junction.html", "a+", encoding="utf-8") as fd:
-            fd.write(content)
         _not_login = soup.select("#Login_nico")
         if _not_login:
             raise NotLoginError("ログインしてないよ")
