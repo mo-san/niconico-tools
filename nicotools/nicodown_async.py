@@ -962,6 +962,7 @@ class Comment(utils.CanopyAsync):
                  session: aiohttp.ClientSession=None,
                  return_session=False,
                  limit: int=4,
+                 wayback=False,
                  loop: asyncio.AbstractEventLoop=None,
                  ):
         super().__init__(loop=loop, logger=logger)
@@ -971,6 +972,7 @@ class Comment(utils.CanopyAsync):
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__return_session = return_session
         self.__parallel_limit = limit
+        self.__wayback = wayback
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self.session:
@@ -1041,6 +1043,9 @@ class Comment(utils.CanopyAsync):
         if is_official:
             thread_key, force_184 = await self.get_thread_key(thread_id, needs_key)
 
+        if self.__wayback:
+            waybackkey = await self.get_wayback_key(thread_id)
+
         if is_xml:
             req_param = self.make_param_xml(thread_id, user_id, thread_key, force_184)
             com_data = await self.retriever(data=req_param, url=msg_server)
@@ -1101,8 +1106,15 @@ class Comment(utils.CanopyAsync):
         force_184 = parameters["force_184"][0]  # type: str
         return threadkey, force_184
 
+    async def get_wayback_key(self, thread_id: int):
+        async with asyncio.Semaphore(self.__parallel_limit):
+            async with self.session.get(URL.URL_WayBackKey, params={"thread", thread_id}) as resp:
+                response = await resp.text()
+                self.logger.debug("Waybackkey response: {}".format(response))
+            return parse_qs(response)["waybackkey"][0]
+
     def make_param_xml(self, thread_id, user_id, thread_key=None, force_184=None,
-                       quantity=1000, density="0-99999:9999,1000"):
+                       waybackkey=None, quantity=1000, density="0-99999:9999,1000"):
         """
         コメント取得用のxmlを構成する。
 
@@ -1114,36 +1126,38 @@ class Comment(utils.CanopyAsync):
         :param str user_id:
         :param str thread_key:
         :param str force_184:
+        :param str waybackkey:
         :param int | str quantity:取りに行くコメント数
         :param str density: 取りに行くコメントの密度。 0-99999:9999,1000 のような形式。
         :rtype: str
         """
         utils.check_arg({"thread_id": thread_id, "user_id": user_id})
         self.logger.debug("Arguments: {}".format(locals()))
+        wbk = 'waybackkey="{}"'.format(waybackkey) if waybackkey else ""
         if thread_key:
             return (
                 '<packet>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' threadkey="{thread_key}" force_184="{force_184}"'
-                ' version="20090904" res_from="-{quantity}"/>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' threadkey="{thread_key}" force_184="{force_184}"'
-                ' version="20090904" res_from="-{quantity}" fork="1"/>'
-                '<thread_leaves thread="{thread_id}" user_id="{user_id}" scores="1">'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' threadkey="{t_key}" force_184="{force}"'
+                ' {wbk} version="20090904" res_from="-{quantity}"/>'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' threadkey="{t_key}" force_184="{force}"'
+                ' {wbk} version="20090904" res_from="-{quantity}" fork="1"/>'
+                '<thread_leaves thread="{t_id}" user_id="{user_id}" scores="1">'
                 '{density}</thread_leaves>'
-                '</packet>').format(thread_id=thread_id, user_id=user_id,
-                                    thread_key=thread_key, force_184=force_184,
+                '</packet>').format(t_id=thread_id, user_id=user_id,
+                                    t_key=thread_key, force=force_184, wbk=wbk,
                                     quantity=quantity, density=density)
         else:
             return (
                 '<packet>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' version="20090904" res_from="-{quantity}"/>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' version="20090904" res_from="-{quantity}" fork="1"/>'
-                '<thread_leaves thread="{thread_id}" user_id="{user_id}" scores="1">'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' {wbk} version="20090904" res_from="-{quantity}"/>'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' {wbk} version="20090904" res_from="-{quantity}" fork="1"/>'
+                '<thread_leaves thread="{t_id}" user_id="{user_id}" scores="1">'
                 '{density}</thread_leaves>'
-                '</packet>').format(thread_id=thread_id, user_id=user_id,
+                '</packet>').format(t_id=thread_id, user_id=user_id, wbk=wbk,
                                     quantity=quantity, density=density)
 
     def make_param_json(self, official_video, user_id, user_key, thread_id,

@@ -572,6 +572,7 @@ class URL:
     URL_Info   = "http://ext.nicovideo.jp/api/getthumbinfo/"
     URL_Pict   = "http://tn-skr1.smilevideo.jp/smile"
     URL_GetThreadKey = "http://flapi.nicovideo.jp/api/getthreadkey"
+    URL_WayBackKey = "http://flapi.nicovideo.jp/api/getwaybackkey"
     URL_Msg_JSON = "http://nmsg.nicovideo.jp/api.json/"
     URL_Msg_XML = "http://nmsg.nicovideo.jp/api/"
 
@@ -840,10 +841,10 @@ class KeyDmc:
     IS_PUBLIC       = "is_public"       # bool
     IS_OFFICIAL     = "is_official"     # bool
     IS_PREMIUM      = "is_premium"      # bool
-    USER_ID         = "user_id"
+    USER_ID         = "user_id"         # int
     USER_KEY        = "user_key"
     MSG_SERVER      = "ms"
-    THREAD_ID       = "thread_id"
+    THREAD_ID       = "thread_id"       # int
     THREAD_KEY      = "thread_key"
 
     API_URL         = "api_url"
