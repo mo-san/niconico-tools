@@ -259,8 +259,8 @@ class NicoMyList(utils.Canopy):
             self.logger.debug("List IDs:\t{}".format(res))
             return res
 
-        if search_for == Msg.ml_default_name or search_for == Msg.ml_default_id:
-            return composer(_id=Msg.ml_default_id, _name=Msg.ml_default_name)
+        if search_for == utils.DEFAULT_NAME or search_for == utils.DEFAULT_ID:
+            return composer(_id=utils.DEFAULT_ID, _name=utils.DEFAULT_NAME)
 
         elif isinstance(search_for, int):
             value = self.mylists.get(search_for)  # type: dict
@@ -337,7 +337,7 @@ class NicoMyList(utils.Canopy):
             whole = False
         self.logger.debug("Is in whole mode?:\t{}".format(whole))
 
-        if list_id == Msg.ml_default_id:
+        if list_id == utils.DEFAULT_ID:
             jtext = json.loads(self.session.get(URL.URL_ListDef).text)
         else:
             jtext = json.loads(self.session.get(URL.URL_ListOne,
@@ -509,7 +509,7 @@ class NicoMyList(utils.Canopy):
         utils.check_arg(locals())
         if utils.ALL_ITEM == mylist_name:
             raise utils.MylistError(Err.cant_perform_all)
-        if mylist_name == "" or mylist_name == Msg.ml_default_name:
+        if mylist_name == "" or mylist_name == utils.DEFAULT_NAME:
             raise utils.MylistError(Err.cant_create)
         res = self.get_response("create", is_public=is_public,
                                 mylist_name=mylist_name, description=description)
@@ -539,7 +539,7 @@ class NicoMyList(utils.Canopy):
             raise utils.MylistError(Err.cant_perform_all)
         list_id, list_name = self._get_list_id(list_id)
 
-        if list_id == Msg.ml_default_id:
+        if list_id == utils.DEFAULT_ID:
             raise utils.MylistError(Err.deflist_to_create_or_purge)
         if not confident and not self._confirmation("purge", list_name):
             print(Msg.ml_answer_no)
@@ -567,7 +567,7 @@ class NicoMyList(utils.Canopy):
             raise utils.MylistError(Err.cant_perform_all)
         list_id, list_name = self._get_list_id(list_id)
 
-        to_def = (list_id == Msg.ml_default_id)
+        to_def = (list_id == utils.DEFAULT_ID)
         self.logger.info(Msg.ml_will_add.format(list_name, list(videoids)))
 
         _done = []
@@ -609,8 +609,8 @@ class NicoMyList(utils.Canopy):
         if list_id_from == list_id_to:
             raise utils.MylistError(Err.list_names_are_same)
 
-        to_def = (list_id_to == Msg.ml_default_id)
-        from_def = (list_id_from == Msg.ml_default_id)
+        to_def = (list_id_to == utils.DEFAULT_ID)
+        from_def = (list_id_from == utils.DEFAULT_ID)
 
         item_ids = self.get_item_ids(list_id_from, *videoids)
         if len(item_ids) == 0:
@@ -664,8 +664,8 @@ class NicoMyList(utils.Canopy):
         list_id_from, list_name_from = self._get_list_id(list_id_from)
         list_id_to, list_name_to = self._get_list_id(list_id_to)
 
-        to_def = (list_id_to == Msg.ml_default_id)
-        from_def = (list_id_from == Msg.ml_default_id)
+        to_def = (list_id_to == utils.DEFAULT_ID)
+        from_def = (list_id_from == utils.DEFAULT_ID)
 
         item_ids = self.get_item_ids(list_id_from, *videoids)
         if len(item_ids) == 0:
@@ -736,7 +736,7 @@ class NicoMyList(utils.Canopy):
             raise utils.MylistError(Err.videoids_contain_all)
         list_id, list_name = self._get_list_id(list_id)
 
-        from_def = (list_id == Msg.ml_default_id)
+        from_def = (list_id == utils.DEFAULT_ID)
 
         item_ids = self.get_item_ids(list_id, *videoids)
         if len(item_ids) == 0:
@@ -798,7 +798,7 @@ class NicoMyList(utils.Canopy):
         else:
             container = []
         # とりあえずマイリストのデータ
-        container.append([Msg.ml_default_id, Msg.ml_default_name, counts, "非公開", "--", ""])
+        container.append([utils.DEFAULT_ID, utils.DEFAULT_NAME, counts, "非公開", "--", ""])
 
         # その他のマイリストのデータ
         # 作成日順に並び替えてから情報を得る
@@ -830,7 +830,7 @@ class NicoMyList(utils.Canopy):
         list_id, list_name = self._get_list_id(list_id)
 
         self.logger.info(Msg.ml_showing_mylist.format(list_name))
-        if list_id == Msg.ml_default_id:
+        if list_id == utils.DEFAULT_ID:
             jtext = json.loads(self.session.get(URL.URL_ListDef).text)
         else:
             jtext = json.loads(self.session.get(URL.URL_ListOne,
@@ -879,13 +879,13 @@ class NicoMyList(utils.Canopy):
         utils.check_arg(locals())
         container = []
         if with_info:
-            result_def = self.fetch_one(Msg.ml_default_id)
+            result_def = self.fetch_one(utils.DEFAULT_ID)
             container.extend(result_def)
             for l_id in self.mylists.keys():
                 result = self.fetch_one(l_id, False)
                 container.extend(result)
         else:
-            result_def = self.fetch_one(Msg.ml_default_id, False)
+            result_def = self.fetch_one(utils.DEFAULT_ID, False)
             container.extend(result_def)
             for l_id in self.mylists.keys():
                 result = self.fetch_one(l_id, False)
@@ -1084,7 +1084,7 @@ def main(args):
     if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
         args.add and utils.ALL_ITEM in args.add):
         sys.exit(Err.cant_perform_all)
-    if (args.create or args.purge) and Msg.ml_default_name == source:
+    if (args.create or args.purge) and utils.DEFAULT_NAME == source:
         sys.exit(Err.deflist_to_create_or_purge)
     if args.create and "" == source:
         sys.exit(Err.cant_create)

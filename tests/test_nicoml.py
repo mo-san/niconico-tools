@@ -339,11 +339,11 @@ class TestErrors:
         with pytest.raises(utils.MylistError):
             instance.add(utils.ALL_ITEM, "sm9")
         with pytest.raises(utils.MylistError):
-            instance.add(utils.Msg.ml_default_id, utils.ALL_ITEM)
+            instance.add(utils.DEFAULT_ID, utils.ALL_ITEM)
 
     def test_delete_ambiguous_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            instance.delete(utils.Msg.ml_default_id, utils.ALL_ITEM, "sm9")
+            instance.delete(utils.DEFAULT_ID, utils.ALL_ITEM, "sm9")
 
     def test_copy_same_internal(self, instance):
         with pytest.raises(utils.MylistError):
@@ -351,11 +351,11 @@ class TestErrors:
 
     def test_copy_ambiguous_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            instance.copy(utils.Msg.ml_default_id, 1, utils.ALL_ITEM, "sm9")
+            instance.copy(utils.DEFAULT_ID, 1, utils.ALL_ITEM, "sm9")
 
     def test_create_allname_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            instance.create_mylist(utils.Msg.ml_default_name)
+            instance.create_mylist(utils.DEFAULT_NAME)
 
     def test_create_null_internal(self, instance):
         with pytest.raises(utils.MylistError):
@@ -363,7 +363,7 @@ class TestErrors:
 
     def test_purge_def_internal(self, instance):
         with pytest.raises(utils.MylistError):
-            instance.purge_mylist(utils.Msg.ml_default_name)
+            instance.purge_mylist(utils.DEFAULT_NAME)
 
     def test_purge_all_internal(self, instance):
         with pytest.raises(utils.MylistError):

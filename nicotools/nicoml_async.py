@@ -281,8 +281,8 @@ class NicoMyList(utils.CanopyAsync):
             self.logger.debug("List IDs:\t{}".format(res))
             return res
 
-        if search_for == Msg.ml_default_name or search_for == Msg.ml_default_id:
-            return composer(_id=Msg.ml_default_id, _name=Msg.ml_default_name)
+        if search_for == utils.DEFAULT_NAME or search_for == utils.DEFAULT_ID:
+            return composer(_id=utils.DEFAULT_ID, _name=utils.DEFAULT_NAME)
 
         elif isinstance(search_for, int):
             value = self.mylists.get(search_for)  # type: dict
@@ -362,7 +362,7 @@ class NicoMyList(utils.CanopyAsync):
             whole = False
         self.logger.debug("Is in whole mode?:\t{}".format(whole))
 
-        if list_id == Msg.ml_default_id:
+        if list_id == utils.DEFAULT_ID:
             async with self.session.get(URL.URL_ListDef) as resp:
                 jtext = json.loads(await resp.text())
         else:
@@ -530,7 +530,7 @@ class NicoMyList(utils.CanopyAsync):
         utils.check_arg(locals())
         if utils.ALL_ITEM == mylist_name:
             raise utils.MylistError(Err.cant_perform_all)
-        if mylist_name == "" or mylist_name == Msg.ml_default_name:
+        if mylist_name == "" or mylist_name == utils.DEFAULT_NAME:
             raise utils.MylistError(Err.cant_create)
 
         return self.loop.run_until_complete(self._create_mylist(mylist_name, is_public, description))
@@ -568,7 +568,7 @@ class NicoMyList(utils.CanopyAsync):
         return self.loop.run_until_complete(self._purge_mylist(list_id, list_name, confident))
 
     async def _purge_mylist(self, list_id, list_name, confident=False):
-        if list_id == Msg.ml_default_id:
+        if list_id == utils.DEFAULT_ID:
             raise utils.MylistError(Err.deflist_to_create_or_purge)
         if not confident and not self._confirmation("purge", list_name):
             print(Msg.ml_answer_no)
@@ -606,7 +606,7 @@ class NicoMyList(utils.CanopyAsync):
     async def _add_onetime(self, list_id: int, *videoids):
         list_id, list_name = self._get_list_id(list_id)
         self.logger.info(Msg.ml_will_add.format(list_name, list(videoids)))
-        to_def = (list_id == Msg.ml_default_id)
+        to_def = (list_id == utils.DEFAULT_ID)
 
         res = await self.get_response(
             "add", to_def=to_def, list_id_to=list_id, video_id=list(videoids))
@@ -624,7 +624,7 @@ class NicoMyList(utils.CanopyAsync):
     async def _add_sequential(self, list_id: int, *videoids):
         list_id, list_name = self._get_list_id(list_id)
         self.logger.info(Msg.ml_will_add.format(list_name, list(videoids)))
-        to_def = (list_id == Msg.ml_default_id)
+        to_def = (list_id == utils.DEFAULT_ID)
 
         _done = []
         for _counter, vd_id in enumerate(videoids):
@@ -674,8 +674,8 @@ class NicoMyList(utils.CanopyAsync):
                 self._copy_sequential(list_id_from, list_name_from, list_id_to, list_name_to, *videoids))
 
     async def _copy_onetime(self, list_id_from, list_name_from, list_id_to, list_name_to, *videoids):
-        to_def = (list_id_to == Msg.ml_default_id)
-        from_def = (list_id_from == Msg.ml_default_id)
+        to_def = (list_id_to == utils.DEFAULT_ID)
+        from_def = (list_id_from == utils.DEFAULT_ID)
 
         item_ids = await self._get_item_ids(list_id_from, *videoids)
         if len(item_ids) == 0:
@@ -708,8 +708,8 @@ class NicoMyList(utils.CanopyAsync):
             return True
 
     async def _copy_sequential(self, list_id_from, list_name_from, list_id_to, list_name_to, *videoids):
-        to_def = (list_id_to == Msg.ml_default_id)
-        from_def = (list_id_from == Msg.ml_default_id)
+        to_def = (list_id_to == utils.DEFAULT_ID)
+        from_def = (list_id_from == utils.DEFAULT_ID)
 
         item_ids = await self._get_item_ids(list_id_from, *videoids)
         if len(item_ids) == 0:
@@ -773,8 +773,8 @@ class NicoMyList(utils.CanopyAsync):
                 self._move_sequential(list_id_from, list_name_from, list_id_to, list_name_to, *videoids))
 
     async def _move_onetime(self, list_id_from, list_name_from, list_id_to, list_name_to, *videoids):
-        to_def = (list_id_to == Msg.ml_default_id)
-        from_def = (list_id_from == Msg.ml_default_id)
+        to_def = (list_id_to == utils.DEFAULT_ID)
+        from_def = (list_id_from == utils.DEFAULT_ID)
 
         item_ids = await self._get_item_ids(list_id_from, *videoids)
         if len(item_ids) == 0:
@@ -820,8 +820,8 @@ class NicoMyList(utils.CanopyAsync):
             return True
 
     async def _move_sequential(self, list_id_from, list_name_from, list_id_to, list_name_to, *videoids):
-        to_def = (list_id_to == Msg.ml_default_id)
-        from_def = (list_id_from == Msg.ml_default_id)
+        to_def = (list_id_to == utils.DEFAULT_ID)
+        from_def = (list_id_from == utils.DEFAULT_ID)
 
         item_ids = await self._get_item_ids(list_id_from, *videoids)
         if len(item_ids) == 0:
@@ -902,7 +902,7 @@ class NicoMyList(utils.CanopyAsync):
                 self._delete_sequential(list_id, list_name, *videoids, confident=confident))
 
     async def _delete_onetime(self, list_id, list_name, *videoids, confident=False):
-        from_def = (list_id == Msg.ml_default_id)
+        from_def = (list_id == utils.DEFAULT_ID)
 
         item_ids = await self._get_item_ids(list_id, *videoids)
         if len(item_ids) == 0:
@@ -941,7 +941,7 @@ class NicoMyList(utils.CanopyAsync):
             return True
 
     async def _delete_sequential(self, list_id, list_name, *videoids, confident=False):
-        from_def = (list_id == Msg.ml_default_id)
+        from_def = (list_id == utils.DEFAULT_ID)
 
         item_ids = await self._get_item_ids(list_id, *videoids)
         if len(item_ids) == 0:
@@ -1015,7 +1015,7 @@ class NicoMyList(utils.CanopyAsync):
         async with self.session.get(URL.URL_ListDef) as resp:
             counts = json.loads(await resp.text())["mylistitem"]
         container = [
-            Msg.ml_default_id, Msg.ml_default_name, counts, "非公開", "--", ""
+            utils.DEFAULT_ID, utils.DEFAULT_NAME, counts, "非公開", "--", ""
         ]
         return container
 
@@ -1048,7 +1048,7 @@ class NicoMyList(utils.CanopyAsync):
         list_id, list_name = self._get_list_id(list_id)
 
         self.logger.info(Msg.ml_showing_mylist.format(list_name))
-        if list_id == Msg.ml_default_id:
+        if list_id == utils.DEFAULT_ID:
             async with self.session.get(URL.URL_ListDef) as resp:
                 jtext = json.loads(await resp.text())
         else:
@@ -1097,7 +1097,7 @@ class NicoMyList(utils.CanopyAsync):
         """
         utils.check_arg(locals())
 
-        task_def = self.fetch_one(Msg.ml_default_id, with_header=with_info)
+        task_def = self.fetch_one(utils.DEFAULT_ID, with_header=with_info)
         tasks = [self.fetch_one(l_id, False) for l_id in self.mylists.keys()]
         container = await asyncio.gather(task_def, *tasks)
 
@@ -1306,7 +1306,7 @@ def main(args):
         if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
                     args.add and utils.ALL_ITEM in args.add):
             raise ZeroDivisionError(Err.cant_perform_all)
-        if (args.create or args.purge) and Msg.ml_default_name == source:
+        if (args.create or args.purge) and utils.DEFAULT_NAME == source:
             raise ZeroDivisionError(Err.deflist_to_create_or_purge)
         if args.create and "" == source:
             raise ZeroDivisionError(Err.cant_create)

@@ -21,7 +21,7 @@ def main(arguments=None, async_=True):
     """
     choices = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-    parser = InheritedParser(prog="nicotools", fromfile_prefix_chars="+")
+    parser = InheritedParser(prog="nicotools", fromfile_prefix_chars="+", description=Msg.description)
     # nargs があると値はリストに入る。
     parser.add_argument("-l", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD", dest="password")

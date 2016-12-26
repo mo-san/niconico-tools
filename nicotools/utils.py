@@ -16,6 +16,8 @@ import requests
 from requests import cookies
 
 ALL_ITEM = "*"
+DEFAULT_NAME = "とりあえずマイリスト"
+DEFAULT_ID = 0
 LOG_FILE_ND = "nicotools_download.log"
 LOG_FILE_ML = "nicotools_mylist.log"
 IS_DEBUG = int(os.getenv("PYTHON_TEST", 0))
@@ -600,9 +602,10 @@ class URL:
 class Msg:
     """メッセージ集"""
 
+    description = ("nicotools downlaod --help または nicotools mylist --help"
+                   " で各コマンドのヘルプを表示します。")
+
     ''' マイリスト編集コマンドのヘルプメッセージ '''
-    ml_default_name = "とりあえずマイリスト"
-    ml_default_id = 0
     ml_description = ("マイリストを扱います。 add, delete, move, copy の引数には"
                       "テキストファイルも指定できます。 その場合はファイル名の"
                       "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")

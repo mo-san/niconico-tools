@@ -1,6 +1,6 @@
 from setuptools import setup
 
-with open('pypi.rst') as f:
+with open('README.rst') as f:
     readme = f.read()
 
 setup(
@@ -21,8 +21,8 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Natural Language :: Japanese',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.4'
-        'Programming Language :: Python :: 3.5'
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6'
     ],
     long_description=readme,

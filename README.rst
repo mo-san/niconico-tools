@@ -31,8 +31,9 @@ Usage
 
 By running without any arguments, we will show you a help.
 
+*******************
 Usage as a CLI tool
-===================
+*******************
 
 For the first time you will asked your mail address and password.
 From the next time on HTTP Cookie will be saved in to your HOME directory, so mail and pass are not needed.
@@ -40,7 +41,6 @@ Or you may specify your credentials every time you run this, as this:
 
     ``nicotools download -v sm9 --mail <mail address> --pass <password>``
 
-***********
 Downloading
 ***********
 
@@ -64,7 +64,6 @@ Downloading
 
     ``nicotools mylist * --show --everything --out D:/Downloads/all.txt``
 
-********************
 Dealing with Mylists
 ********************
 
@@ -148,19 +147,23 @@ Dealing with Mylists
 
     ``nicotools mylist MYLIST --purge --yes``
 
+*****************
 Usage as a module
-=================
+*****************
 ::
 
-    from nicotools.nicodown_async import VideoDmc, VideoSmile, Comment, Thumbnail
+    from nicotools.nicodown_async import VideoDmc, VideoSmile
+    from nicotools.nicodown_async import Comment, Thumbnail
+    mail = "<your mail address>"
+    password = "<your password>"
+    xml = True # Set to True if you want in XML format, default is JSON
 
     Thumbnail().start([video ids], DIR_PATH)
 
-    Comment(mail="<mail address>", password="<password>").start([video ids], DIR_PATH, <True to XML otherwise JSON>)
+    Comment(mail, password).start([video ids], DIR_PATH, xml)
 
-    VideoSmile(mail="<mail address>", password="<password>") .start([video ids], DIR_PATH)
-
-    VideoDmc(mail="<mail address>", password="<password>") .start([video ids], DIR_PATH)
+    VideoSmile(mail, password).start([video ids], DIR_PATH)
+    VideoDmc(mail, password).start([video ids], DIR_PATH)
 
 where DIR_PATH is a directory path to save data in, and "video ids" is a list containing video ids.
 
