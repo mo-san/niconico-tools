@@ -5,7 +5,7 @@ import sys
 from . import nicodown, nicoml
 from .utils import Msg, Err, InheritedParser
 
-if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
+if sys.version_info >= (3, 5):
     from . import nicodown_async, nicoml_async
 else:
     nicodown_async, nicoml_async = None, None
