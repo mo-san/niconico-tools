@@ -10,7 +10,7 @@ from xml.etree import ElementTree
 
 import requests
 from requests.exceptions import Timeout
-from requests.packages.urllib3.exceptions import TimeoutError, RequestError
+from requests.packages import urllib3
 from tqdm import tqdm
 
 from nicotools import utils
@@ -149,8 +149,8 @@ class Video(utils.Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
-        self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(glossary))
+        self.logger.debug("Directory to save in: %s", save_dir)
+        self.logger.debug("Dictionary of Videos: %s", glossary)
         self.save_dir = utils.make_dir(save_dir)
         if isinstance(glossary, list):
             glossary = get_infos(glossary, self.logger)
@@ -179,8 +179,8 @@ class Video(utils.Canopy):
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             db[KeyGTI.V_OR_T_ID] = redirected
-        self.logger.debug("Video ID and its Thread ID (of officials):"
-                          " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
+        self.logger.debug("Video ID: %s and its Thread ID (of officials):"
+                          " %s", video_id, db[KeyGTI.V_OR_T_ID])
 
         response = utils.get_from_getflv(
             db[KeyGTI.V_OR_T_ID], self.session, self.logger)
@@ -194,8 +194,8 @@ class Video(utils.Canopy):
         # ↓この時点ではダウンロードは始まらず、ヘッダーだけが来ている
         video_data = self.session.get(url=vid_url, stream=True, timeout=(10.0, 30.0))
         db[KeyGTI.FILE_SIZE] = int(video_data.headers["content-length"])
-        self.logger.debug("File Size: {} (Premium: {})".format(
-            db[KeyGTI.FILE_SIZE], [False, True][int(is_premium)]))
+        self.logger.debug("File Size: %s (Premium: %s)",
+                          db[KeyGTI.FILE_SIZE], [False, True][int(is_premium)])
 
         return self._saver(video_id, video_data, chunk_size)
 
@@ -208,13 +208,14 @@ class Video(utils.Canopy):
         :rtype: bool
         """
         file_path = self.make_name(video_id, self.glossary[video_id][KeyGTI.MOVIE_TYPE])
-        self.logger.debug("File Path: {}".format(file_path))
+        self.logger.debug("File Path: %s", file_path)
         db = self.glossary[video_id]
 
         if tqdm is None:
             with file_path.open("wb") as f:
-                [f.write(chunk) for chunk in
-                 video_data.iter_content(chunk_size=chunk_size) if chunk]
+                for chunk in video_data.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
         else:
             with tqdm(total=db[KeyGTI.FILE_SIZE], leave=False,
                       unit="B", unit_scale=True, file=sys.stdout) as pbar:
@@ -242,8 +243,8 @@ class Thumbnail(utils.Canopy):
         :rtype: bool
         """
         utils.check_arg(locals())
-        self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(glossary))
+        self.logger.debug("Directory to save in: %s", save_dir)
+        self.logger.debug("Dictionary of Videos: %s", glossary)
         if isinstance(glossary, list):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
@@ -301,8 +302,10 @@ class Thumbnail(utils.Canopy):
                             video_id, db[KeyGTI.TITLE]))
                         return False
             except (TypeError, ConnectionError,
-                    socket.timeout, Timeout, TimeoutError, RequestError) as e:
-                self.logger.debug("An exception occurred: {}".format(e))
+                    socket.timeout, Timeout,
+                    urllib3.exceptions.TimeoutError,
+                    urllib3.exceptions.RequestError) as e:
+                self.logger.debug("An exception occurred: %s", e)
                 if is_large and url.endswith(".L"):
                     return self._worker(video_id, url[:-2], is_large=False)
                 else:
@@ -318,7 +321,7 @@ class Thumbnail(utils.Canopy):
         :return:
         """
         file_path = self.make_name(video_id, "jpg")
-        self.logger.debug("File Path: {}".format(file_path))
+        self.logger.debug("File Path: %s", file_path)
 
         with file_path.open('wb') as f:
             f.write(image_data.content)
@@ -345,9 +348,9 @@ class Comment(utils.Canopy):
         :param bool xml:
         """
         utils.check_arg(locals())
-        self.logger.debug("Directory to save in: {}".format(save_dir))
-        self.logger.debug("Dictionary of Videos: {}".format(glossary))
-        self.logger.debug("Download XML? : {}".format(xml))
+        self.logger.debug("Directory to save in: %s", save_dir)
+        self.logger.debug("Dictionary of Videos: %s", glossary)
+        self.logger.debug("Download XML? : %s", xml)
         if isinstance(glossary, list):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
@@ -375,8 +378,8 @@ class Comment(utils.Canopy):
         if video_id.startswith("so"):
             redirected = self.session.get(URL.URL_Watch + video_id).url.split("/")[-1]
             db[KeyGTI.V_OR_T_ID] = redirected
-        self.logger.debug("Video ID and its Thread ID (of officials):"
-                          " {}".format(video_id, db[KeyGTI.V_OR_T_ID]))
+        self.logger.debug("Video ID: %s and its Thread ID (of officials):"
+                          " %s", video_id, db[KeyGTI.V_OR_T_ID])
 
         response = utils.get_from_getflv(
             db[KeyGTI.V_OR_T_ID], self.session, self.logger)
@@ -397,7 +400,7 @@ class Comment(utils.Canopy):
 
         if xml and video_id.startswith(("sm", "nm")):
             req_param = self.make_param_xml(thread_id, user_id)
-            self.logger.debug("Posting Parameters: {}".format(req_param))
+            self.logger.debug("Posting Parameters: %s", req_param)
 
             res_com = self.session.post(url=msg_server, data=req_param)
             comment_data = res_com.text.replace("><", ">\n<")
@@ -412,7 +415,7 @@ class Comment(utils.Canopy):
                     True, user_id, user_key, thread_id,
                     opt_thread_id, thread_key, force_184)
 
-            self.logger.debug("Posting Parameters: {}".format(req_param))
+            self.logger.debug("Posting Parameters: %s", req_param)
             res_com = self.session.post(
                 url=URL.URL_Msg_JSON,
                 json=req_param)
@@ -436,7 +439,7 @@ class Comment(utils.Canopy):
             extention = "json"
 
         file_path = self.make_name(video_id, extention)
-        self.logger.debug("File Path: {}".format(file_path))
+        self.logger.debug("File Path: %s", file_path)
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
         self.logger.info(Msg.nd_download_done.format(path=file_path))
@@ -452,11 +455,11 @@ class Comment(utils.Canopy):
         """
         utils.check_arg(locals())
         if not needs_key == "1":
-            self.logger.debug("Video ID (or Thread ID): {},"
-                              " needs_key: {}".format(thread_id, needs_key))
+            self.logger.debug("Video ID (or Thread ID): %s,"
+                              " needs_key: %s", thread_id, needs_key)
             return "", "0"
         response = self.session.get(URL.URL_GetThreadKey, params={"thread": thread_id})
-        self.logger.debug("Response from GetThreadKey API: {}".format(response.text))
+        self.logger.debug("Response from GetThreadKey API: %s", response.text)
         parameters = parse_qs(response.text)
         threadkey = parameters["threadkey"][0]  # type: str
         force_184 = parameters["force_184"][0]  # type: str
@@ -475,7 +478,7 @@ class Comment(utils.Canopy):
         :rtype: str
         """
         utils.check_arg(locals())
-        self.logger.debug("Arguments: {}".format(locals()))
+        self.logger.debug("Arguments: %s", locals())
         return '<packet>' \
               '<thread thread="{0}" user_id="{1}" version="20090904" scores="1"/>' \
               '<thread thread="{0}" user_id="{1}" version="20090904" scores="1"' \
@@ -504,7 +507,7 @@ class Comment(utils.Canopy):
         """
         utils.check_arg({"official_video": official_video, "user_id": user_id,
                          "user_key": user_key, "thread_id": thread_id})
-        self.logger.debug("Arguments of creating JSON: {}".format(locals()))
+        self.logger.debug("Arguments of creating JSON: %s", locals())
         result = [
             {"ping": {"content": "rs:0"}},
             {"ping": {"content": "ps:0"}},
@@ -583,7 +586,9 @@ def main(args):
     mailadrs = args.mail[0] if args.mail else None
     password = args.password[0] if args.password else None
 
-    """ エラーの除外 """
+    #
+    # エラーの除外
+    #
     if hasattr(args, "dmc"):
         sys.exit(Err.unexpected_commands.format("--dmc"))
     if hasattr(args, "smile"):
@@ -598,7 +603,9 @@ def main(args):
         file_name = args.out[0] if isinstance(args.out, list) else None
         return utils.print_info(videoid, file_name)
 
-    """ 本筋 """
+    #
+    # 本筋
+    #
     log_level = "DEBUG" if is_debug else args.loglevel
     logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
     destination = utils.make_dir(args.dest[0])

@@ -4,7 +4,11 @@
     :target: https://codecov.io/gh/mo-san/niconico-tools
 .. image:: https://coveralls.io/repos/github/mo-san/niconico-tools/badge.svg?branch=master
     :target: https://coveralls.io/github/mo-san/niconico-tools?branch=master
-
+.. image:: https://landscape.io/github/mo-san/niconico-tools/master/landscape.svg?style=flat
+    :target: https://landscape.io/github/mo-san/niconico-tools/master
+    :alt: Code Health
+.. image:: https://badge.fury.io/py/nicotools.svg
+    :target: https://badge.fury.io/py/nicotools
 
 ========
 Features
@@ -24,6 +28,16 @@ Installation
 
 ``pip install nicotools``
 
+************
+Requirements
+************
+
+* Python >= 3.4
+* requests
+* prettytable
+* bs4 (BeautifulSoup4)
+* aiohttp
+* tqdm
 
 =====
 Usage
@@ -131,10 +145,6 @@ Dealing with Mylists
 
     ``nicotools mylist * --export --out D:/Downloads/all.txt``
 
-* to export ids into a text file:
-
-    ``nicotools mylist MYLIST --export --out C:/Users/Me/Desktop/file.txt``
-
 * to create new LIST with name of LISTNAME:
 
     ``nicotools mylist LISTNAME --create``
@@ -154,18 +164,22 @@ Usage as a module
 
     from nicotools.nicodown_async import VideoDmc, VideoSmile
     from nicotools.nicodown_async import Comment, Thumbnail
+
     mail = "<your mail address>"
     password = "<your password>"
     xml = True # Set to True if you want in XML format, default is JSON
 
-    Thumbnail().start([video ids], DIR_PATH)
+    # a list of video ids
+    video_ids = ["sm1", "sm2", "sm3"]
+    # directory path to save files in
+    DIR_PATH = "./downloads/"
 
-    Comment(mail, password).start([video ids], DIR_PATH, xml)
+    Thumbnail().start(video_ids, DIR_PATH)
 
-    VideoSmile(mail, password).start([video ids], DIR_PATH)
-    VideoDmc(mail, password).start([video ids], DIR_PATH)
+    Comment(mail, password).start(video_ids, DIR_PATH, xml)
 
-where DIR_PATH is a directory path to save data in, and "video ids" is a list containing video ids.
+    VideoSmile(mail, password).start(video_ids, DIR_PATH)
+    VideoDmc(mail, password).start(video_ids, DIR_PATH)
 
 ==========
 Change log

@@ -87,9 +87,11 @@ def main(arguments=None, async_=True):
 
     args = parser.parse_args(globals().get("DEBUG_ARGS") or arguments)
     if (len(sys.argv) <= 1 or not hasattr(args, "func")) and not int(os.getenv("PYTHON_TEST", 0)):
-        parser.print_help() or sys.exit()
+        parser.print_help()
+        sys.exit()
     if args.what:
-        print(args) or sys.exit()
+        print(args)
+        sys.exit()
 
     try:
         return args.func(args)

@@ -199,7 +199,7 @@ class NicoMyList(utils.Canopy):
         :rtype: dict[int, dict[str, int | str | bool]]
         """
         jsonliketext = self.session.get(URL.URL_ListAll).text
-        self.logger.debug("Response All Mylists:\t{}".format(jsonliketext))
+        self.logger.debug("Response All Mylists: %s", jsonliketext)
         jtext = json.loads(jsonliketext)
 
         candidate = {}
@@ -220,7 +220,7 @@ class NicoMyList(utils.Canopy):
                 MKey.SINCE: self._get_jst_from_utime(item["create_time"]),  # type: str
                 MKey.DESCRIPTION: description,
             }
-        self.logger.debug("Mylists infos:\t{}".format(candidate))
+        self.logger.debug("Mylists infos: %s", candidate)
         return candidate
 
     @classmethod
@@ -256,7 +256,7 @@ class NicoMyList(utils.Canopy):
         def composer(_err=False, _id=None, _name=None, _msg=None, _dic=None):
             res = {"error": _err, "list_id": _id, "list_name": _name,
                    "err_msg": _msg, "err_dic": _dic}
-            self.logger.debug("List IDs:\t{}".format(res))
+            self.logger.debug("List IDs: %s", res)
             return res
 
         if search_for == utils.DEFAULT_NAME or search_for == utils.DEFAULT_ID:
@@ -310,7 +310,7 @@ class NicoMyList(utils.Canopy):
         else:
             list_id = result["list_id"]
             list_name = result["list_name"]
-            self.logger.debug("List_id: {}, List_name:\t{}".format(list_id, list_name))
+            self.logger.debug("List_id: %s, List_name: %s", list_id, list_name)
             return list_id, list_name
 
     def get_item_ids(self, list_id, *videoids):
@@ -326,7 +326,7 @@ class NicoMyList(utils.Canopy):
         :rtype: dict[str, str]
         """
         utils.check_arg(locals())
-        list_id, list_name = self._get_list_id(list_id)
+        list_id, _ = self._get_list_id(list_id)
 
         # *videoids が要素数1のタプル ("*") or
         # *videoids が要素数0のタプル(即ち未指定) -> 全体モード
@@ -335,14 +335,14 @@ class NicoMyList(utils.Canopy):
             whole = True
         else:
             whole = False
-        self.logger.debug("Is in whole mode?:\t{}".format(whole))
+        self.logger.debug("Is in whole mode?: %s", whole)
 
         if list_id == utils.DEFAULT_ID:
             jtext = json.loads(self.session.get(URL.URL_ListDef).text)
         else:
             jtext = json.loads(self.session.get(URL.URL_ListOne,
                                                 params={"group_id": list_id}).text)
-        self.logger.debug("Response:\t{}".format(jtext))
+        self.logger.debug("Response: %s", jtext)
 
         results = {}
         for item in jtext["mylistitem"]:
@@ -406,7 +406,7 @@ class NicoMyList(utils.Canopy):
         utils.check_arg(locals())
         assert mode.lower() in ("add", "delete", "copy", "move", "purge", "create")
 
-        self.logger.debug("Query components:\t{}".format(kwargs))
+        self.logger.debug("Query components: %s", kwargs)
         to_def = kwargs.get("to_def")  # type: bool
         from_def = kwargs.get("from_def")  # type: bool
         is_public = kwargs.get("is_public")  # type: bool
@@ -491,10 +491,10 @@ class NicoMyList(utils.Canopy):
                 "token"          : self.token
             }
             url = URL.URL_AddMyList
-        self.logger.debug("URL:\t{}".format(url))
-        self.logger.debug("Query to post:\t{}".format(payload))
+        self.logger.debug("URL: %s", url)
+        self.logger.debug("Query to post: %s", payload)
         res = self.session.get(url, params=payload).text
-        self.logger.debug("Response:\t{}".format(res))
+        self.logger.debug("Response: %s", res)
         return json.loads(res)
 
     def create_mylist(self, mylist_name, is_public=False, description=""):
@@ -835,7 +835,7 @@ class NicoMyList(utils.Canopy):
         else:
             jtext = json.loads(self.session.get(URL.URL_ListOne,
                                                 params={"group_id": list_id}).text)
-        self.logger.debug("Returned:\t{}".format(jtext))
+        self.logger.debug("Returned: %s", jtext)
 
         if with_header:
             container = [[
@@ -866,7 +866,7 @@ class NicoMyList(utils.Canopy):
                 list_name,
                 # data[KeyGTI.LAST_RES_BODY],
             ])
-        self.logger.debug("Mylists info:\t{}".format(container))
+        self.logger.debug("Mylists info: %s", container)
         return container
 
     def fetch_all(self, with_info=True):
@@ -1080,7 +1080,9 @@ def main(args):
     dest = args.to[0] if isinstance(args.to, list) else None
     file_name = args.out[0] if isinstance(args.out, list) else None
 
-    """ エラーの除外 """
+    #
+    # エラーの除外
+    #
     if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
         args.add and utils.ALL_ITEM in args.add):
         sys.exit(Err.cant_perform_all)
@@ -1108,7 +1110,9 @@ def main(args):
             or args.add or args.copy or args.move or args.delete):
         sys.exit(Err.no_commands)
 
-    """ 本筋 """
+    #
+    # 本筋
+    #
     if args.export:
         res = instnc.export(source, file_name, survey=args.everything)
     elif args.show:
