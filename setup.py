@@ -5,7 +5,7 @@ with open('tests/README.rst') as f:
 
 setup(
     name='nicotools',
-    version='1.0.0',
+    version='1.0.1',
     packages=['nicotools'],
     # package_data={'nicotools': ['nicotools/stubs/*']},
     # include_package_data=True,
