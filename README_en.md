@@ -1,11 +1,7 @@
 [![Build Status](https://travis-ci.org/mo-san/niconico-tools.svg?branch=master)](https://travis-ci.org/mo-san/niconico-tools)
-
 [![codecov](https://codecov.io/gh/mo-san/niconico-tools/branch/master/graph/badge.svg)](https://codecov.io/gh/mo-san/niconico-tools)
-
 [![Coverage Status](https://coveralls.io/repos/github/mo-san/niconico-tools/badge.svg?branch=master)](https://coveralls.io/github/mo-san/niconico-tools?branch=master)
-
 [![Code Health](https://landscape.io/github/mo-san/niconico-tools/master/landscape.svg?style=flat)](https://landscape.io/github/mo-san/niconico-tools/master)
-
 [![PyPI version](https://badge.fury.io/py/nicotools.svg)](https://pypi.python.org/pypi/nicotools)
 
 [日本語の説明文はこちら (README.md)](./README.md)

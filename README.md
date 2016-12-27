@@ -1,11 +1,7 @@
 [![Build Status](https://travis-ci.org/mo-san/niconico-tools.svg?branch=master)](https://travis-ci.org/mo-san/niconico-tools)
-
 [![codecov](https://codecov.io/gh/mo-san/niconico-tools/branch/master/graph/badge.svg)](https://codecov.io/gh/mo-san/niconico-tools)
-
 [![Coverage Status](https://coveralls.io/repos/github/mo-san/niconico-tools/badge.svg?branch=master)](https://coveralls.io/github/mo-san/niconico-tools?branch=master)
-
 [![Code Health](https://landscape.io/github/mo-san/niconico-tools/master/landscape.svg?style=flat)](https://landscape.io/github/mo-san/niconico-tools/master)
-
 [![PyPI version](https://badge.fury.io/py/nicotools.svg)](https://pypi.python.org/pypi/nicotools)
 
 Here is a description page written in Japanese.
@@ -139,13 +135,14 @@ optional arguments:
                         情報をまとめて取得します。
 ```
 
-```>nicotools download --help
-   usage: nicotools download [-h]
-                             [--loglevel {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
-                             [-w] [-l MAIL] [-p WORD] [-d DEST] [-c] [-v] [-t]
-                             [-i] [-x] [-o FILE] [--smile] [--dmc]
-                             [--limit LIMIT] [--nomulti] [--nosieve]
-                             VIDEO_ID [VIDEO_ID ...]
+```
+>nicotools download --help
+usage: nicotools download [-h]
+                          [--loglevel {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+                          [-w] [-l MAIL] [-p WORD] [-d DEST] [-c] [-v] [-t]
+                          [-i] [-x] [-o FILE] [--smile] [--dmc]
+                          [--limit LIMIT] [--nomulti] [--nosieve]
+                          VIDEO_ID [VIDEO_ID ...]
    
    positional arguments:
      VIDEO_ID              ダウンロードしたい動画ID。 例: sm12345678
