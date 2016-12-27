@@ -350,7 +350,7 @@ class LogIn:
     cookie = {}
 
     @classmethod
-    def __new__(cls, *more):
+    def __new__(cls, *more, **kwargs):
         """
         ログイン処理が一度だけなのを保障するためにシングルトンとして振る舞わせる。
 
