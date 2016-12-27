@@ -1,24 +1,31 @@
 from setuptools import setup
 
+with open('tests/README.rst') as f:
+    readme = f.read()
+
 setup(
     name='nicotools',
-    version='1.0.0',
+    version='1.0.1',
     packages=['nicotools'],
-    package_data={'nicotools': ['nicotools/stubs/*']},
+    # package_data={'nicotools': ['nicotools/stubs/*']},
+    # include_package_data=True,
     url='https://github.com/mo-san/niconico-tools',
     license='MIT License',
     author='Masaki Taniguchi',
     author_email='window100@gmail.com',
-    description='Downloading videos, comments and thumbnails and handling your Mylists.',
+    description=('Downloading videos, comments and thumbnails and'
+                 ' handling your Mylists on niconico (ニコニコ動画).'),
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: End Users/Desktop',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: Japanese',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.5'
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6'
     ],
-    include_package_data=True,
+    long_description=readme,
     keywords=['niconico', 'nicovideo', 'ニコニコ動画'],
     install_requires=[
         'requests',

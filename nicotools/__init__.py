@@ -5,7 +5,7 @@ import sys
 from . import nicodown, nicoml
 from .utils import Msg, Err, InheritedParser
 
-if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
+if sys.version_info >= (3, 5):
     from . import nicodown_async, nicoml_async
 else:
     nicodown_async, nicoml_async = None, None
@@ -21,7 +21,7 @@ def main(arguments=None, async_=True):
     """
     choices = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-    parser = InheritedParser(prog="nicotools", fromfile_prefix_chars="+")
+    parser = InheritedParser(prog="nicotools", fromfile_prefix_chars="+", description=Msg.description)
     # nargs があると値はリストに入る。
     parser.add_argument("-l", "--mail", nargs=1, help=Msg.nd_help_mail, metavar="MAIL")
     parser.add_argument("-p", "--pass", nargs=1, help=Msg.nd_help_password, metavar="PASSWORD", dest="password")
@@ -87,9 +87,11 @@ def main(arguments=None, async_=True):
 
     args = parser.parse_args(globals().get("DEBUG_ARGS") or arguments)
     if (len(sys.argv) <= 1 or not hasattr(args, "func")) and not int(os.getenv("PYTHON_TEST", 0)):
-        parser.print_help() or sys.exit()
+        parser.print_help()
+        sys.exit()
     if args.what:
-        print(args) or sys.exit()
+        print(args)
+        sys.exit()
 
     try:
         return args.func(args)

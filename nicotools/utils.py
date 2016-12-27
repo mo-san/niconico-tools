@@ -16,6 +16,8 @@ import requests
 from requests import cookies
 
 ALL_ITEM = "*"
+DEFAULT_NAME = "とりあえずマイリスト"
+DEFAULT_ID = 0
 LOG_FILE_ND = "nicotools_download.log"
 LOG_FILE_ML = "nicotools_mylist.log"
 IS_DEBUG = int(os.getenv("PYTHON_TEST", 0))
@@ -388,7 +390,7 @@ class LogIn:
         cook = self.load_cookies()
         if auth or cook:
             if cook:
-                session.cookies = requests.cookies.cookiejar_from_dict(cook)
+                session.cookies = cookies.cookiejar_from_dict(cook)
             else:
                 session.post(URL.URL_LogIn, params=auth)
             self.token = self.get_token(session)
@@ -452,7 +454,7 @@ class LogIn:
         """
         クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
 
-        :param requests.cookies.RequestsCookieJar requests_cookiejar:
+        :param cookies.RequestsCookieJar requests_cookiejar:
         :param str file_name:
         :rtype: dict
         """
@@ -506,13 +508,13 @@ class NTLogger(logging.Logger):
         else:
             self._is_debug = False
 
-        formatter = self.get_formatter()
         logging.Logger.__init__(self, name, log_level)
         self.logger = logging.getLogger(name=name)
 
         # 標準出力用ハンドラー
         log_stdout = logging.StreamHandler(sys.stdout)
         log_stdout.setLevel(log_level)
+        formatter = self.get_formatter("stdout")
         log_stdout.setFormatter(formatter)
         self.addHandler(log_stdout)
 
@@ -525,19 +527,30 @@ class NTLogger(logging.Logger):
                 log_file = logging.FileHandler(encoding="utf-8",
                     filename=join(expanduser("~"), file_name))
             log_file.setLevel(log_level)
+            formatter = self.get_formatter("file")
             log_file.setFormatter(formatter)
             self.addHandler(log_file)
 
-    def get_formatter(self):
-        if self._is_debug:
-            fmt = logging.Formatter("[{asctime}|{levelname: ^7}|{message}", style="{")
-        else:
-            fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
+    def get_formatter(self, mode):
+        """
+        書式を指定する。
+
+        :param str mode: stdout, file
+        :rtype: logging.Formatter
+        """
+        if mode == "stdout":
+            fmt = logging.Formatter("[{levelname: ^7}]\t{message}", style="{")
+        else:  # file
+            if self._is_debug:
+                fmt = logging.Formatter("[{asctime}|{levelname: ^7}|{message}", style="{")
+            else:
+                fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
         return fmt
 
     def forwarding(self, level, msg, *args, **kwargs):
         _enco = get_encoding()
         if self._is_debug:
+            # [YYYY-MM-DD hh:mm:ss,ms| level |line:n|<...> from <...> from <...>]\t{message}
             history = inspect.stack()
             funcs = "line:{}|{}".format(
                 # ログを呼び出した場所の行数
@@ -572,6 +585,7 @@ class URL:
     URL_Info   = "http://ext.nicovideo.jp/api/getthumbinfo/"
     URL_Pict   = "http://tn-skr1.smilevideo.jp/smile"
     URL_GetThreadKey = "http://flapi.nicovideo.jp/api/getthreadkey"
+    URL_WayBackKey = "http://flapi.nicovideo.jp/api/getwaybackkey"
     URL_Msg_JSON = "http://nmsg.nicovideo.jp/api.json/"
     URL_Msg_XML = "http://nmsg.nicovideo.jp/api/"
 
@@ -599,9 +613,10 @@ class URL:
 class Msg:
     """メッセージ集"""
 
+    description = ("nicotools downlaod --help または nicotools mylist --help"
+                   " で各コマンドのヘルプを表示します。")
+
     ''' マイリスト編集コマンドのヘルプメッセージ '''
-    ml_default_name = "とりあえずマイリスト"
-    ml_default_id = 0
     ml_description = ("マイリストを扱います。 add, delete, move, copy の引数には"
                       "テキストファイルも指定できます。 その場合はファイル名の"
                       "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
@@ -840,10 +855,10 @@ class KeyDmc:
     IS_PUBLIC       = "is_public"       # bool
     IS_OFFICIAL     = "is_official"     # bool
     IS_PREMIUM      = "is_premium"      # bool
-    USER_ID         = "user_id"
+    USER_ID         = "user_id"         # int
     USER_KEY        = "user_key"
     MSG_SERVER      = "ms"
-    THREAD_ID       = "thread_id"
+    THREAD_ID       = "thread_id"       # int
     THREAD_KEY      = "thread_key"
 
     API_URL         = "api_url"

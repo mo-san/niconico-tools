@@ -24,14 +24,29 @@ class Info(utils.CanopyAsync):
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
                  session: aiohttp.ClientSession=None,
-                 return_session=False,
                  limit: int=4,
                  sieve=True,
                  loop: asyncio.AbstractEventLoop=None,
+                 return_session=False,
                  interval: Union[int, float]=5,
                  backoff: Union[int, float]=3,
                  retries: Union[int, float]=3,
                  ):
+        """
+        動画視聴ページから様々なデータを集める。
+
+        :param Optional[str] mail: メールアドレス
+        :param Optional[str] password: パスワード
+        :param T <= logging.logger logger: ロガーのインスタンス
+        :param aiohttp.ClientSession session:
+        :param bool return_session: データを取り終わった後にセッションを返すか閉じるか
+        :param int limit: 同時にアクセスする最大数
+        :param bool sieve: 非公開や削除済み動画を除外するかどうか
+        :param asyncio.AbstractEventLoop loop: イベントループ
+        :param Union[int, float] interval: うまくいかなかった場合の待ち時間
+        :param Union[int, float] backoff: 待ち時間の増大倍率
+        :param Union[int,float] retries: 再試行回数
+        """
         super().__init__(loop=loop, logger=logger)
         self.__mail = mail
         self.__password = password
@@ -44,6 +59,11 @@ class Info(utils.CanopyAsync):
         self.retries = retries
 
     async def get_session(self) -> aiohttp.ClientSession:
+        """
+        aiohttp のセッションを返す。
+
+        :rtype: aiohttp.ClientSession
+        """
         if self.session:
             return self.session
         else:
@@ -53,10 +73,16 @@ class Info(utils.CanopyAsync):
             else:
                 login.get_session(utils.LogIn.ask_credentials())
                 cook = login.cookie
-            self.logger.debug("Object ID of cookie (Info): {}".format(id(cook)))
+            self.logger.debug("Object ID of cookie (Info): %s", id(cook))
             return aiohttp.ClientSession(cookies=cook)
 
-    def get_data(self, video_ids: list) -> Dict:
+    def get_data(self, video_ids: List) -> Dict:
+        """
+        動画やコメントのダウンロードに必要なデータを集めてくる。
+
+        :param List video_ids:
+        :rtype: Dict
+        """
         glossary = utils.validator(video_ids)
 
         self.logger.info(Msg.nd_start_download.format(
@@ -70,7 +96,13 @@ class Info(utils.CanopyAsync):
         sieved_result = self.siever(result)
         return sieved_result
 
-    def siever(self, infos: dict):
+    def siever(self, infos: Dict) -> Dict:
+        """
+        非公開や削除済み動画をふるいにかける。
+
+        :param Dict infos:
+        :rtype: Dict
+        """
         good = {_id: info for _id, info in infos.items()
                   if info[KeyDmc.IS_PUBLIC] and not info[KeyDmc.IS_DELETED]}
         bad = list(set(infos) - set(good))
@@ -86,14 +118,14 @@ class Info(utils.CanopyAsync):
         backoff = self.backoff
         attempt = max(0, self.retries) + 1
         url = URL.URL_Watch + video_id
-        self.logger.debug("_worker: {}".format(locals()))
+        self.logger.debug("_worker: %s", locals())
 
         async with asyncio.Semaphore(self.__parallel_limit):
             st = 0
             while attempt > 0:
                 attempt -= 1
                 async with self.session.get(url) as response:  # type: aiohttp.ClientResponse
-                    self.logger.debug("Video ID: {}, Status Code: {}".format(video_id, response.status))
+                    self.logger.debug("Video ID: %s, Status Code: %s", video_id, response.status)
                     if response.status == 200:
                         info_data = await response.text()
                         return self._junction(info_data)
@@ -114,6 +146,12 @@ class Info(utils.CanopyAsync):
 
     def _pick_info_from_watch_api(self, content: str) -> \
             Dict[str, Union[str, int, List[str], bool]]:
+        """
+        watchAPIDataContainer を含む HTML から情報を取り出す。
+
+        :param str content: HTMLの文字列
+        :rtype: Dict
+        """
         watch_api = json.loads(content)
         flash_vars = watch_api["flashvars"]
         flvinfo = utils.extract_getflv(unquote(flash_vars["flvInfo"]))
@@ -184,7 +222,13 @@ class Info(utils.CanopyAsync):
         return info
 
     def _pick_info_from_data_api(self, content: str) -> \
-            Dict[str, Union[str, int, List[str], bool]]:
+            Dict[str, Union[str, int, List[str], bool]]:  # pragma: no cover
+        """
+        data-api-data 属性を持つタグがあるHTMLから情報を取り出す。
+
+        :param str content: HTMLの文字列
+        :rtype: Dict
+        """
         j = json.loads(content)
         _video = j["video"]
         if "dmcInfo" in _video:
@@ -294,6 +338,15 @@ class Thumbnail(utils.CanopyAsync):
                  return_session: bool=False,
                  loop: asyncio.AbstractEventLoop=None,
                  ):
+        """
+        サムネイル画像をダウンロードする。
+
+        :param T<= logging.logger logger: ロガー
+        :param int limit: 同時にアクセスする最大数
+        :param aiohttp.ClientSession session:
+        :param bool return_session: セッションを返すか閉じるか
+        :param asyncio.AbstractEventLoop loop: イベントループ
+        """
         super().__init__(loop=loop, logger=logger)
         self.undone = []
         self.__bucket = {}
@@ -310,8 +363,10 @@ class Thumbnail(utils.CanopyAsync):
     def start(self, glossary: Union[List, Dict],
               save_dir: Union[str, Path], is_large=True):
         """
+        ダウンロードを開始する。
 
         :param dict[str, dict[str, int | str]] | list[str] glossary:
+         動画の情報が入った辞書またはIDのリスト
         :param str | Path save_dir:
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
         :rtype: bool | aiohttp.ClientSession
@@ -322,18 +377,18 @@ class Thumbnail(utils.CanopyAsync):
             glossary = utils.validator(glossary)
             glossary = self.loop.run_until_complete(self._get_infos(glossary))
         self.glossary = glossary
-        self.logger.debug("Dictionary of Videos: {}".format(self.glossary))
+        self.logger.debug("Dictionary of Videos: %s", self.glossary)
 
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.debug("Directory to save in: {}".format(self.save_dir))
+        self.logger.debug("Directory to save in: %s", self.save_dir)
 
         if len(self.glossary) > 0:
             self.logger.info(Msg.nd_start_dl_pict.format(
                 count=len(self.glossary), ids=list(self.glossary)))
 
-            self.loop.run_until_complete(self._download(list(self.glossary)))
+            self.loop.run_until_complete(self._download(list(self.glossary), is_large))
             while len(self.undone) > 0:
-                self.logger.debug("いくつか残ってる。{}".format(self.undone))
+                self.logger.debug("いくつか残ってる。%s", self.undone)
                 self.loop.run_until_complete(self._download(self.undone, False))
             self.logger.debug("全部終わった")
         if not self.__return_session:
@@ -361,7 +416,7 @@ class Thumbnail(utils.CanopyAsync):
 
             try:
                 async with self.session.get(url, timeout=10) as response:
-                    self.logger.debug("Video ID: {}, Status Code: {}".format(video_id, response.status))
+                    self.logger.debug("Video ID: %s, Status Code: %s", video_id, response.status)
                     if response.status == 200:
                         # ダウンロードに成功したら「未完了のリスト」から取り除く
                         if video_id in self.undone:
@@ -371,7 +426,7 @@ class Thumbnail(utils.CanopyAsync):
                         self.undone.append(video_id)
                         return None
             except asyncio.TimeoutError:
-                self.logger.warning("{} が時間切れ".format(video_id))
+                self.logger.warning("%s が時間切れ", video_id)
                 self.undone.append(video_id)
                 return None
 
@@ -379,7 +434,7 @@ class Thumbnail(utils.CanopyAsync):
         image_data = coroutine.result()
         if image_data:
             file_path = self.make_name(video_id, "jpg")
-            self.logger.debug("File Path: {}".format(file_path))
+            self.logger.debug("File Path: %s", file_path)
 
             with file_path.open('wb') as f:
                 f.write(image_data)
@@ -440,6 +495,20 @@ class VideoSmile(utils.CanopyAsync):
                  multiline=True,
                  loop: asyncio.AbstractEventLoop=None,
                  ):
+        """
+        Smileサーバーから動画をダウンロードする。
+
+        :param mail: メールアドレス
+        :param password: パスワード
+        :param logger: ロガー
+        :param session: セッション
+        :param return_session: セッションを返すか
+        :param division: いくつに分割するか
+        :param limit: (実際のダウンロード前のファイルサイズの確認で)同時にアクセスする最大数
+        :param chunk_size: サーバーに一度に要求するデータ量
+        :param multiline: プログレスバーを複数行で表示するか
+        :param loop: イベントループ
+        """
         super().__init__(loop=loop, logger=logger)
         self.__mail = mail
         self.__password = password
@@ -466,7 +535,9 @@ class VideoSmile(utils.CanopyAsync):
               save_dir: Union[str, Path]):
         # TODO Downloading in Economy mode
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.debug("Directory to save in: {}".format(self.save_dir))
+        self.logger.debug("Directory to save in: %s", self.save_dir)
+        # 分割数と同じだけの要素を持つリストを作り、各要素にそれぞれが
+        # 保存したファイルサイズを記録する。プログレスバーに利用する。
         self.__downloaded_size = [0] * self.__division
 
         if isinstance(glossary, list):
@@ -477,10 +548,11 @@ class VideoSmile(utils.CanopyAsync):
             glossary = info.get_data(glossary)
             self.session = info.session
         self.glossary = glossary
-        self.logger.debug("Dictionary of Videos: {}".format(self.glossary))
+        self.logger.debug("Dictionary of Videos: %s", self.glossary)
         self.logger.info(Msg.nd_start_dl_video.format(
             count=len(self.glossary), ids=list(self.glossary)))
 
+        # まず各動画のファイルサイズを集める。
         self.loop.run_until_complete(self._push_file_size())
         self.loop.run_until_complete(self._broker())
         if not self.__return_session:
@@ -497,7 +569,7 @@ class VideoSmile(utils.CanopyAsync):
 
     async def _get_file_size_worker(self, video_id: str) -> int:
         vid_url = self.glossary[video_id][KeyDmc.VIDEO_URL_SM]
-        self.logger.debug("Video ID: {}, Video URL: {}".format(video_id, vid_url))
+        self.logger.debug("Video ID: %s, Video URL: %s", video_id, vid_url)
         async with self.session.head(vid_url) as resp:
             headers = resp.headers
             self.logger.debug(str(headers))
@@ -528,7 +600,9 @@ class VideoSmile(utils.CanopyAsync):
                 int(file_size*order/division),
                 int((file_size*(order+1))/division-1)
             )} for order in range(division)]
-        [self.logger.debug(str(h)) for h in headers]
+
+        for h in headers:
+            self.logger.debug(str(h))
 
         if self.__multiline:
             progress_bars = [tqdm(total=int(file_size / division),
@@ -555,7 +629,7 @@ class VideoSmile(utils.CanopyAsync):
         # => video.mp4.000 ～ video.mp4.003 (4分割の場合)
         with file_path.open("wb") as fd:
             async with self.session.get(url=video_url, headers=header) as video_data:
-                self.logger.debug("Started! Header: {}, Video URL: {}".format(header, video_url))
+                self.logger.debug("Started! Header: %s, Video URL: %s", header, video_url)
                 while True:
                     data = await video_data.content.read(self.__chunk_size)
                     if not data:
@@ -564,26 +638,38 @@ class VideoSmile(utils.CanopyAsync):
                     self.__downloaded_size[order] += downloaded_size
                     if pbar:
                         pbar.update(downloaded_size)
-        self.logger.debug("Order: {} Done!".format(order))
+        self.logger.debug("Order: %s Done!", order)
         return pbar
 
     async def _counter_whole(self, file_size: int, interval: int=1):
-        with tqdm(total=file_size, unit="B") as bar:
+        """
+        ダウンロード済みのファイルサイズを総合して一つのプログレスバーに表示する。
+
+        :param int file_size: 全体のファイルサイズ
+        :param int interval: ダウンロード率を更新する間隔
+        """
+        with tqdm(total=file_size, unit="B") as pbar:
             oldsize = 0
             while True:
                 newsize = sum(self.__downloaded_size)
                 if newsize >= file_size:
-                    bar.update(file_size - oldsize)
+                    pbar.update(file_size - oldsize)
                     break
-                bar.update(newsize - oldsize)
+                pbar.update(newsize - oldsize)
                 oldsize = newsize
                 await asyncio.sleep(interval)
 
     def _combiner(self, video_id: str, coroutine: asyncio.Task):
+        """
+        ダウンロードが終わった後に分割したそれぞれを一つにまとめる関数。
+
+        :param str video_id:
+        :param asyncio.Task coroutine: 動画をダウンロードしたタスク
+        """
         if coroutine.done() and not coroutine.cancelled():
             file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
             file_names = ["{}.{:03}".format(file_path, order) for order in range(self.__division)]
-            self.logger.debug("File names: {}".format(file_names))
+            self.logger.debug("File names: %s", file_names)
             with file_path.open("wb") as fd:
                 for name in file_names:
                     with open(name, "rb") as file:
@@ -599,11 +685,23 @@ class VideoDmc(utils.CanopyAsync):
                  session: aiohttp.ClientSession=None,
                  return_session=False,
                  division: int=4,
-                 limit: int=4,
                  chunk_size=1024*50,
                  multiline=True,
                  loop: asyncio.AbstractEventLoop=None,
                  ):
+        """
+        DMCサーバーから動画をダウンロードする。
+
+        :param mail: メールアドレス
+        :param password: パスワード
+        :param logger: ロガー
+        :param session: セッション
+        :param return_session: セッションを返すか
+        :param division: いくつに分割するか
+        :param chunk_size: 一度にサーバーに要求するデータ量
+        :param multiline: プログレスバーを複数行で表示するか
+        :param loop: イベントループ
+        """
         super().__init__(loop=loop, logger=logger)
         self.__mail = mail
         self.__password = password
@@ -612,7 +710,6 @@ class VideoDmc(utils.CanopyAsync):
         self.__division = division
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__return_session = return_session
-        self.__parallel_limit = limit
         self.__chunk_size = chunk_size
 
     async def get_session(self) -> aiohttp.ClientSession:
@@ -631,7 +728,7 @@ class VideoDmc(utils.CanopyAsync):
               xml: bool=True):
         self.save_dir = utils.make_dir(save_dir)
         self.__downloaded_size = [0] * self.__division
-        self.logger.debug("Directory to save in: {}".format(self.save_dir))
+        self.logger.debug("Directory to save in: %s", self.save_dir)
 
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
@@ -641,7 +738,7 @@ class VideoDmc(utils.CanopyAsync):
             glossary = info.get_data(glossary)
             self.session = info.session
         self.glossary = glossary
-        self.logger.debug("Dictionary of Videos: {}".format(self.glossary))
+        self.logger.debug("Dictionary of Videos: %s", self.glossary)
         self.logger.info(Msg.nd_start_dl_video.format(
             count=len(self.glossary), ids=list(self.glossary)))
 
@@ -653,9 +750,9 @@ class VideoDmc(utils.CanopyAsync):
     async def _broker(self, xml: bool=True) -> None:
         for idx, video_id in enumerate(self.glossary):
             if self.glossary[video_id][KeyDmc.API_URL] is None:
-                self.logger.warning("{} はDMC動画ではありません。従来サーバーの動画を"
+                self.logger.warning("%s はDMC動画ではありません。従来サーバーの動画を"
                                     "ダウンロードする場合は --smile をコマンドに"
-                                    "指定してください。".format(video_id))
+                                    "指定してください。", video_id)
                 continue
             if xml:
                 res_xml = await self._first_nego_xml(video_id)
@@ -666,7 +763,7 @@ class VideoDmc(utils.CanopyAsync):
                 video_url = self._extract_video_url_json(res_json)
                 coro_heartbeat = asyncio.ensure_future(self._heartbeat(video_id, res_json))
 
-            self.logger.debug("動画URL: {}".format(video_url))
+            self.logger.debug("動画URL: %s", video_url)
             coro_download = asyncio.ensure_future(self._download(idx, video_id, video_url))
             coro_download.add_done_callback(functools.partial(self._canceler, coro_heartbeat))
             coro_download.add_done_callback(functools.partial(self._combiner, video_id))
@@ -675,8 +772,8 @@ class VideoDmc(utils.CanopyAsync):
 
     async def _first_nego_xml(self, video_id: str) -> str:
         payload = self._make_param_xml(self.glossary[video_id])
-        self.logger.debug("Attempting to first negotiation of {}".format(video_id))
-        self.logger.debug("This is the posting XML: {}".format(payload))
+        self.logger.debug("Attempting to first negotiation of %s", video_id)
+        self.logger.debug("This is the posting XML: %s", payload)
         async with self.session.post(
                 url=self.glossary[video_id][KeyDmc.API_URL],
                 params={"_format": "xml"},
@@ -684,10 +781,10 @@ class VideoDmc(utils.CanopyAsync):
         ) as response:  # type: aiohttp.ClientResponse
             return await response.text()
 
-    async def _first_nego_json(self, video_id: str) -> str:
+    async def _first_nego_json(self, video_id: str) -> str:  # pragma: no cover
         payload = self._make_param_json(self.glossary[video_id])
-        self.logger.debug("Attempting to first negotiation of {}".format(video_id))
-        self.logger.debug("This is the posting JSON: {}".format(payload))
+        self.logger.debug("Attempting to first negotiation of %s", video_id)
+        self.logger.debug("This is the posting JSON: %s", payload)
         async with self.session.post(
                 url=self.glossary[video_id][KeyDmc.API_URL],
                 params={"_format": "json"},
@@ -760,7 +857,7 @@ class VideoDmc(utils.CanopyAsync):
         """)
         return xml.substitute(info)
 
-    def _make_param_json(self, info: Dict[str, Union[str, list, int]]) -> str:
+    def _make_param_json(self, info: Dict[str, Union[str, list, int]]) -> str:  # pragma: no cover
         param = {
             "session": {
                 "recipe_id": info[KeyDmc.RECIPE_ID],
@@ -818,13 +915,13 @@ class VideoDmc(utils.CanopyAsync):
         return result
 
     def _extract_video_url_xml(self, text: str) -> str:
-        self.logger.debug("Returned XML data: {}".format(text))
+        self.logger.debug("Returned XML data: %s", text)
         soup = BeautifulSoup(text, "html.parser")
         url_tag = soup.content_uri  # type: Tag
         return url_tag.text
 
-    def _extract_video_url_json(self, text: str) -> str:
-        self.logger.debug("Returned JSON data: {}".format(text))
+    def _extract_video_url_json(self, text: str) -> str:  # pragma: no cover
+        self.logger.debug("Returned JSON data: %s", text)
         soup = json.loads(text)
         url_tag = soup["data"]["session"]["content_uri"]
         return url_tag
@@ -832,13 +929,13 @@ class VideoDmc(utils.CanopyAsync):
     def _extract_session_id_xml(self, text: str) -> str:
         soup = BeautifulSoup(text, "html.parser")
         id_tag = soup.session.id  # type: Tag
-        self.logger.debug("Session ID: {}".format(id_tag.text))
+        self.logger.debug("Session ID: %s", id_tag.text)
         return id_tag.text
 
-    def _extract_session_id_json(self, text: str) -> str:
+    def _extract_session_id_json(self, text: str) -> str:  # pragma: no cover
         soup = json.loads(text)
         id_tag = soup["data"]["session"]["id"]
-        self.logger.debug("Session ID: {}".format(id_tag))
+        self.logger.debug("Session ID: %s", id_tag)
         return id_tag.text
 
     def _extract_session_tag(self, text: str) -> str:
@@ -846,13 +943,19 @@ class VideoDmc(utils.CanopyAsync):
         # return xml_text[xml_text.find("<session>"): xml_text.find("</session>")+10]
 
     async def _heartbeat(self, video_id: str, text: str) -> None:
+        """
+        動画を視聴中に定期的に特定のデータを送信し続ける必要がある。そのための関数。
+
+        :param video_id:
+        :param text:
+        """
         try:
-            self.logger.debug("返ってきたXML: {}".format(text))
+            self.logger.debug("返ってきたXML: %s", text)
             api_url = self.glossary[video_id][KeyDmc.API_URL]
             # 1分ちょうどで送ると遅れるので、待ち時間を少し早める
             waiting = (self.glossary[video_id][KeyDmc.HEARTBEAT] / 1000) - 5
             companion = self._extract_session_tag(text)
-            self.logger.debug("送信するXML: {}".format(companion))
+            self.logger.debug("送信するXML: %s", companion)
             session_id = self._extract_session_id_xml(text)
             await asyncio.sleep(waiting)
             async with self.session.post(
@@ -866,7 +969,7 @@ class VideoDmc(utils.CanopyAsync):
             pass
 
     async def _get_file_size(self, video_id: str, video_url: str) -> int:
-        self.logger.debug("Video ID: {}, Video URL: {}".format(video_id, video_url))
+        self.logger.debug("Video ID: %s, Video URL: %s", video_id, video_url)
         async with self.session.head(video_url) as resp:
             headers = resp.headers
             self.logger.debug(str(headers))
@@ -887,7 +990,9 @@ class VideoDmc(utils.CanopyAsync):
                 int(file_size*order/division),
                 int((file_size*(order+1))/division-1)
             )} for order in range(division)]
-        [self.logger.debug("Order: {}, {}".format(o, h)) for o, h in zip(range(division), headers)]
+
+        for o, h in zip(range(division), headers):
+            self.logger.debug("Order: %s, %s", o, h)
 
         if self.__multiline:
             progress_bars = [tqdm(total=int(file_size / division),
@@ -915,7 +1020,7 @@ class VideoDmc(utils.CanopyAsync):
         self.logger.debug(file_path)
         with file_path.open("wb") as fd:
             async with self.session.get(url=video_url, headers=header) as video_data:
-                self.logger.debug("Started! Header: {}, Video URL: {}".format(header, video_url))
+                self.logger.debug("Started! Header: %s, Video URL: %s", header, video_url)
                 while True:
                     data = await video_data.content.read(self.__chunk_size)
                     if not data:
@@ -924,29 +1029,42 @@ class VideoDmc(utils.CanopyAsync):
                     self.__downloaded_size[order] += downloaded_size
                     if pbar:
                         pbar.update(downloaded_size)
-        self.logger.debug("Order: {} Done!".format(order))
+        self.logger.debug("Order: %s Done!", order)
         return pbar
 
     def _canceler(self, task_to_cancel: asyncio.Task, _: asyncio.Task) -> bool:
+        """
+        動画のダウンロードが終わった後にHeartbeatを止めるための関数。
+
+        :param asyncio.Task task_to_cancel:
+        :param asyncio.Task _:
+        :rtype: bool
+        """
         return task_to_cancel.cancel()
 
     async def _counter_whole(self, file_size: int, interval: int=1):
-        with tqdm(total=file_size, unit="B") as bar:
+        with tqdm(total=file_size, unit="B") as pbar:
             oldsize = 0
             while True:
                 newsize = sum(self.__downloaded_size)
                 if newsize >= file_size:
-                    bar.update(file_size - oldsize)
+                    pbar.update(file_size - oldsize)
                     break
-                bar.update(newsize - oldsize)
+                pbar.update(newsize - oldsize)
                 oldsize = newsize
                 await asyncio.sleep(interval)
 
     def _combiner(self, video_id: str, coroutine: asyncio.Task):
+        """
+        ダウンロードが終わった後に分割したそれぞれを一つにまとめる関数。
+
+        :param str video_id:
+        :param asyncio.Task coroutine:
+        """
         if coroutine.done() and not coroutine.cancelled():
             file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
             file_names = ["{}.{:03}".format(file_path, order) for order in range(self.__division)]
-            self.logger.debug("File names: {}".format(file_names))
+            self.logger.debug("File names: %s", file_names)
             with file_path.open("wb") as fd:
                 for name in file_names:
                     with open(name, "rb") as file:
@@ -962,8 +1080,21 @@ class Comment(utils.CanopyAsync):
                  session: aiohttp.ClientSession=None,
                  return_session=False,
                  limit: int=4,
+                 wayback=False,
                  loop: asyncio.AbstractEventLoop=None,
                  ):
+        """
+        コメントをダウンロードする。
+
+        :param mail: メールアドレス
+        :param password: パスワード
+        :param logger: ロガー
+        :param session: セッション
+        :param return_session: セッションを返すか
+        :param limit: 同時にアクセスする最大数
+        :param wayback: 過去ログを取りに行くかどうか
+        :param loop: イベントループ
+        """
         super().__init__(loop=loop, logger=logger)
         self.__mail = mail
         self.__password = password
@@ -971,6 +1102,7 @@ class Comment(utils.CanopyAsync):
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__return_session = return_session
         self.__parallel_limit = limit
+        self.__wayback = wayback
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self.session:
@@ -982,16 +1114,21 @@ class Comment(utils.CanopyAsync):
     def close(self):
         self.session.close()
 
-    def start(self, glossary, save_dir, xml=False):
+    def start(self, glossary, save_dir, xml=False, density: str="0-99999:9999,1000"):
         """
+        ダウンロードを開始する。
+
+        0-99999:9999,1000: 「0分～99999分までの範囲で
+        一分間あたり9999件、直近の1000件を取得する」の意味。
 
         :param dict[str, dict[str, int | str]] | list[str] glossary:
         :param str | Path save_dir:
         :param bool xml:
+        :param str density: ダウンロードするコメントの密度。
         """
         utils.check_arg(locals())
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.debug("Directory to save in: {}".format(self.save_dir))
+        self.logger.debug("Directory to save in: %s", self.save_dir)
 
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
@@ -1007,7 +1144,7 @@ class Comment(utils.CanopyAsync):
 
         futures = []
         for idx, video_id in enumerate(self.glossary):
-            coro = self._download(idx, self.glossary[video_id], xml)
+            coro = self._download(idx, self.glossary[video_id], xml, density)
             f = asyncio.ensure_future(coro)
             f.add_done_callback(functools.partial(self.saver, video_id, xml))
             futures.append(f)
@@ -1015,7 +1152,7 @@ class Comment(utils.CanopyAsync):
         self.loop.run_until_complete(asyncio.wait(futures, loop=self.loop))
         return self
 
-    async def _download(self, idx: int, info: dict, is_xml: bool) -> str:
+    async def _download(self, idx: int, info: dict, is_xml: bool, density: str) -> str:
         utils.check_arg(locals())
 
         video_id        = info[KeyDmc.VIDEO_ID]
@@ -1041,24 +1178,35 @@ class Comment(utils.CanopyAsync):
         if is_official:
             thread_key, force_184 = await self.get_thread_key(thread_id, needs_key)
 
+        if self.__wayback:
+            waybackkey = await self.get_wayback_key(thread_id)
+
         if is_xml:
-            req_param = self.make_param_xml(thread_id, user_id, thread_key, force_184)
+            req_param = self.make_param_xml(
+                thread_id, user_id, thread_key, force_184, density=density)
             com_data = await self.retriever(data=req_param, url=msg_server)
         else:
             req_param = self.make_param_json(
                 is_official, user_id, user_key, thread_id,
-                opt_thread_id, thread_key, force_184)
+                opt_thread_id, thread_key, force_184, density=density)
             com_data = await self.retriever(data=json.dumps(req_param), url=URL.URL_Msg_JSON)
 
         return self.postprocesser(is_xml, com_data)
 
     async def retriever(self, data: str, url: str) -> str:
-        self.logger.debug("Posting Parameters: {}".format(data))
+        self.logger.debug("Posting Parameters: %s", data)
         async with asyncio.Semaphore(self.__parallel_limit):
             async with self.session.post(url=url, data=data) as resp:  # type: aiohttp.ClientResponse
                 return await resp.text()
 
     def postprocesser(self, is_xml: bool, result: str):
+        """
+        取ってきたコメントデータに後処理する。
+
+        :param bool is_xml: 受け取ったデータがXML形式かどうか。
+        :param str result: コメントの文字列
+        :rtype: str
+        """
         if is_xml:
             return result.replace("><", ">\n<")
         else:
@@ -1073,7 +1221,7 @@ class Comment(utils.CanopyAsync):
             extention = "json"
 
         file_path = self.make_name(video_id, extention)
-        self.logger.debug("File Path: {}".format(file_path))
+        self.logger.debug("File Path: %s", file_path)
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
         self.logger.info(Msg.nd_download_done.format(path=file_path))
@@ -1089,20 +1237,27 @@ class Comment(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         if not int(needs_key) == 1:
-            self.logger.debug("needs_key is not 1. Video ID (or Thread ID): {},"
-                              " needs_key: {}".format(thread_id, needs_key))
+            self.logger.debug("needs_key is not 1. Video ID (or Thread ID): %s,"
+                              " needs_key: %s", thread_id, needs_key)
             return "", "0"
         async with self.session.get(URL.URL_GetThreadKey, params={"thread": thread_id}) as resp:
             response = await resp.text()
         self.logger.debug("Response from GetThreadKey API"
-                          " (thread id is {}): {}".format(thread_id, response))
+                          " (thread id is %s): %s", thread_id, response)
         parameters = parse_qs(response)
         threadkey = parameters["threadkey"][0]  # type: str
         force_184 = parameters["force_184"][0]  # type: str
         return threadkey, force_184
 
+    async def get_wayback_key(self, thread_id: int):
+        async with asyncio.Semaphore(self.__parallel_limit):
+            async with self.session.get(URL.URL_WayBackKey, params={"thread", thread_id}) as resp:
+                response = await resp.text()
+                self.logger.debug("Waybackkey response: %s", response)
+            return parse_qs(response)["waybackkey"][0]
+
     def make_param_xml(self, thread_id, user_id, thread_key=None, force_184=None,
-                       quantity=1000, density="0-99999:9999,1000"):
+                       waybackkey=None, quantity=1000, density="0-99999:9999,1000"):
         """
         コメント取得用のxmlを構成する。
 
@@ -1114,36 +1269,38 @@ class Comment(utils.CanopyAsync):
         :param str user_id:
         :param str thread_key:
         :param str force_184:
+        :param str waybackkey:
         :param int | str quantity:取りに行くコメント数
         :param str density: 取りに行くコメントの密度。 0-99999:9999,1000 のような形式。
         :rtype: str
         """
         utils.check_arg({"thread_id": thread_id, "user_id": user_id})
-        self.logger.debug("Arguments: {}".format(locals()))
+        self.logger.debug("Arguments: %s", locals())
+        wbk = 'waybackkey="{}"'.format(waybackkey) if waybackkey else ""
         if thread_key:
             return (
                 '<packet>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' threadkey="{thread_key}" force_184="{force_184}"'
-                ' version="20090904" res_from="-{quantity}"/>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' threadkey="{thread_key}" force_184="{force_184}"'
-                ' version="20090904" res_from="-{quantity}" fork="1"/>'
-                '<thread_leaves thread="{thread_id}" user_id="{user_id}" scores="1">'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' threadkey="{t_key}" force_184="{force}"'
+                ' {wbk} version="20090904" res_from="-{quantity}"/>'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' threadkey="{t_key}" force_184="{force}"'
+                ' {wbk} version="20090904" res_from="-{quantity}" fork="1"/>'
+                '<thread_leaves thread="{t_id}" user_id="{user_id}" scores="1">'
                 '{density}</thread_leaves>'
-                '</packet>').format(thread_id=thread_id, user_id=user_id,
-                                    thread_key=thread_key, force_184=force_184,
+                '</packet>').format(t_id=thread_id, user_id=user_id,
+                                    t_key=thread_key, force=force_184, wbk=wbk,
                                     quantity=quantity, density=density)
         else:
             return (
                 '<packet>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' version="20090904" res_from="-{quantity}"/>'
-                '<thread thread="{thread_id}" user_id="{user_id}" scores="1"'
-                ' version="20090904" res_from="-{quantity}" fork="1"/>'
-                '<thread_leaves thread="{thread_id}" user_id="{user_id}" scores="1">'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' {wbk} version="20090904" res_from="-{quantity}"/>'
+                '<thread thread="{t_id}" user_id="{user_id}" scores="1"'
+                ' {wbk} version="20090904" res_from="-{quantity}" fork="1"/>'
+                '<thread_leaves thread="{t_id}" user_id="{user_id}" scores="1">'
                 '{density}</thread_leaves>'
-                '</packet>').format(thread_id=thread_id, user_id=user_id,
+                '</packet>').format(t_id=thread_id, user_id=user_id, wbk=wbk,
                                     quantity=quantity, density=density)
 
     def make_param_json(self, official_video, user_id, user_key, thread_id,
@@ -1168,7 +1325,7 @@ class Comment(utils.CanopyAsync):
         """
         utils.check_arg({"official_video": official_video, "user_id": user_id,
                          "user_key": user_key, "thread_id": thread_id})
-        self.logger.debug("Arguments of creating JSON: {}".format(locals()))
+        self.logger.debug("Arguments of creating JSON: %s", locals())
         result = [
             {"ping": {"content": "rs:0"}},
             {"ping": {"content": "ps:0"}},
@@ -1247,7 +1404,9 @@ def main(args):
     mailadrs = args.mail[0] if args.mail else None
     password = args.password[0] if args.password else None
 
-    """ エラーの除外 """
+    #
+    # エラーの除外
+    #
     videoid = utils.validator(args.VIDEO_ID)
     if not videoid:
         sys.exit(Err.invalid_videoid)
@@ -1259,7 +1418,9 @@ def main(args):
         utils.print_info(videoid, file_name)
         sys.exit()
 
-    """ 本筋 """
+    #
+    # 本筋
+    #
     log_level = "DEBUG" if is_debug else args.loglevel
     logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
     destination = utils.make_dir(args.dest[0])
