@@ -130,3 +130,4 @@ secrets.py
 /requests_cookie
 *.pyii
 *.sublime-workspace
+pyinst_working/

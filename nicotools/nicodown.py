@@ -68,9 +68,11 @@ def get_infos(queue, logger=None):
     """
     if isinstance(queue, str):
         queue = [queue]
-    message = Msg.nd_start_download.format(count=len(queue), ids=queue)
-    if logger: logger.info(message)
-    else: print(message)
+    message = Msg.nd_start_download.format(len(queue), queue)
+    if logger:
+        logger.info(message)
+    else:
+        print(message)
 
     # データベースとして使うための辞書。削除や非公開の動画はここに入る
     lexikon = {}
@@ -79,8 +81,10 @@ def get_infos(queue, logger=None):
         root = ElementTree.fromstring(xmldata)
         # 「status="ok"」 なら動画は生存 / 存在しない動画には「status="fail"」が返る
         if not root.get("status").lower() == "ok":
-            if logger: logger.warning(Msg.nd_deleted_or_private.format(video_id))
-            else: print(Msg.nd_deleted_or_private.format(video_id))
+            if logger:
+                logger.warning(Msg.nd_deleted_or_private, video_id)
+            else:
+                print(Msg.nd_deleted_or_private, video_id)
             continue
         else:
             # 各種情報を辞書に追加していく
@@ -155,14 +159,13 @@ class Video(utils.Canopy):
         if isinstance(glossary, list):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
-        self.logger.info(Msg.nd_start_dl_video.format(
-            count=len(self.glossary), ids=list(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_video,
+            len(self.glossary), list(self.glossary))
 
         for index, video_id in enumerate(self.glossary.keys()):
-            self.logger.info(
-                Msg.nd_download_video.format(
-                    index + 1, len(glossary), video_id,
-                    self.glossary[video_id][KeyGTI.TITLE]))
+            self.logger.info(Msg.nd_download_video,
+                index + 1, len(glossary), video_id,
+                self.glossary[video_id][KeyGTI.TITLE])
             self._download(video_id, chunk_size)
             if len(glossary) > 1:
                 time.sleep(1)
@@ -223,7 +226,7 @@ class Video(utils.Canopy):
                     for chunk in video_data.iter_content(chunk_size=chunk_size):
                         if chunk:
                             pbar.update(f.write(chunk))
-        self.logger.info(Msg.nd_download_done.format(path=file_path))
+        self.logger.info(Msg.nd_download_done, file_path)
         return True
 
 
@@ -250,14 +253,13 @@ class Thumbnail(utils.Canopy):
         self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
 
-        self.logger.info(Msg.nd_start_dl_pict.format(
-            count=len(self.glossary), ids=list(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_pict,
+            len(self.glossary), list(self.glossary))
 
         for index, video_id in enumerate(self.glossary.keys()):
-            self.logger.info(
-                Msg.nd_download_pict.format(
-                    index + 1, len(glossary), video_id,
-                    self.glossary[video_id][KeyGTI.TITLE]))
+            self.logger.info(Msg.nd_download_pict,
+                index + 1, len(glossary), video_id,
+                self.glossary[video_id][KeyGTI.TITLE])
             self._download(video_id, is_large)
         return True
 
@@ -298,8 +300,8 @@ class Thumbnail(utils.Canopy):
                     if is_large and url.endswith(".L"):
                         return self._worker(video_id, url[:-2], is_large=False)
                     else:
-                        self.logger.error(Err.connection_404.format(
-                            video_id, db[KeyGTI.TITLE]))
+                        self.logger.error(Err.connection_404,
+                            video_id, db[KeyGTI.TITLE])
                         return False
             except (TypeError, ConnectionError,
                     socket.timeout, Timeout,
@@ -325,7 +327,7 @@ class Thumbnail(utils.Canopy):
 
         with file_path.open('wb') as f:
             f.write(image_data.content)
-        self.logger.info(Msg.nd_download_done.format(path=file_path))
+        self.logger.info(Msg.nd_download_done, file_path)
         return True
 
 
@@ -355,13 +357,12 @@ class Comment(utils.Canopy):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.info(Msg.nd_start_dl_comment.format(
-            count=len(self.glossary), ids=list(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_comment,
+            len(self.glossary), list(self.glossary))
         for index, video_id in enumerate(self.glossary.keys()):
-            self.logger.info(
-                Msg.nd_download_comment.format(
-                    index + 1, len(glossary), video_id,
-                    self.glossary[video_id][KeyGTI.TITLE]))
+            self.logger.info(Msg.nd_download_comment,
+                index + 1, len(glossary), video_id,
+                self.glossary[video_id][KeyGTI.TITLE])
             self._download(video_id, xml)
             if len(self.glossary) > 1:
                 time.sleep(1.5)
@@ -442,7 +443,7 @@ class Comment(utils.Canopy):
         self.logger.debug("File Path: %s", file_path)
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
-        self.logger.info(Msg.nd_download_done.format(path=file_path))
+        self.logger.info(Msg.nd_download_done, file_path)
         return True
 
     def get_thread_key(self, thread_id, needs_key):

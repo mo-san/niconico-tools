@@ -110,7 +110,7 @@ class NicoMyList(utils.Canopy):
         """
         assert mode.lower() in ("purge", "delete")
         if mode == "purge":
-            print(Msg.ml_will_purge.format(list_name))
+            print(Msg.ml_will_purge % list_name)
         else:
             print(Msg.ml_ask_delete_all.format(list_name))
             print("{}".format(contents_to_be_deleted))
@@ -168,7 +168,7 @@ class NicoMyList(utils.Canopy):
                 self.logger.error(msg)
                 raise MylistAPIError(code=Err.EXIST, msg=msg, ok=True)
             elif code == Err.NONEXIST:
-                msg = Err.item_not_contained.format(list_name, video_id)
+                msg = Err.item_not_contained % (list_name, video_id)
                 self.logger.error(msg)
                 raise MylistAPIError(code=Err.NONEXIST, msg=msg, ok=True)
             else:
@@ -350,7 +350,7 @@ class NicoMyList(utils.Canopy):
             # 0以外のは削除されているか非公開
             if not whole:
                 if not "0" == data["deleted"]:
-                    self.logger.debug(Msg.ml_deleted_or_private.format(data))
+                    self.logger.debug(Msg.ml_deleted_or_private, data)
                     continue
 
             if whole or data["video_id"] in videoids:
@@ -368,7 +368,7 @@ class NicoMyList(utils.Canopy):
         document = ElementTree.fromstring(self.session.get(URL.URL_Info + video_id).text)
         # 「status="ok"」 なら動画は生存 / 存在しない動画には「status="fail"」が返る
         if not document.get("status").lower() == "ok":
-            self.logger.error(Msg.nd_deleted_or_private.format(video_id))
+            self.logger.error(Msg.nd_deleted_or_private, video_id)
             return ""
         else:
             return html.unescape(document[0].find("title").text)
@@ -519,11 +519,11 @@ class NicoMyList(utils.Canopy):
         else:
             self.mylists = self.get_mylists_info()
             item = self.mylists[res[MKey.ID]]
-            self.logger.info(Msg.ml_done_create.format(
-                _id=res[MKey.ID], name=item[MKey.NAME],
-                pub=item[MKey.PUBLICITY], desc=item[MKey.DESCRIPTION]))
+            self.logger.info(Msg.ml_done_create,
+                res[MKey.ID], item[MKey.NAME],
+                item[MKey.PUBLICITY], item[MKey.DESCRIPTION])
             if mylist_name != item[MKey.NAME]:
-                self.logger.info(Err.name_replaced.format(mylist_name, item[MKey.NAME]))
+                self.logger.info(Err.name_replaced, mylist_name, item[MKey.NAME])
             return True
 
     def purge_mylist(self, list_id, confident=False):
@@ -550,7 +550,7 @@ class NicoMyList(utils.Canopy):
             self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
             return False
         else:
-            self.logger.info(Msg.ml_done_purge.format(name=list_name))
+            self.logger.info(Msg.ml_done_purge, list_name)
             del self.mylists[list_id]
             return True
 
@@ -568,7 +568,7 @@ class NicoMyList(utils.Canopy):
         list_id, list_name = self._get_list_id(list_id)
 
         to_def = (list_id == utils.DEFAULT_ID)
-        self.logger.info(Msg.ml_will_add.format(list_name, list(videoids)))
+        self.logger.info(Msg.ml_will_add, list_name, list(videoids))
 
         _done = []
         for _counter, vd_id in enumerate(videoids):
@@ -578,8 +578,7 @@ class NicoMyList(utils.Canopy):
             try:
                 self._should_continue(res, video_id=vd_id, list_name=list_name,
                                       count_now=_counter, count_whole=len(videoids))
-                self.logger.info(Msg.ml_done_add.format(
-                    now=_counter, all=len(videoids), video_id=vd_id))
+                self.logger.info(Msg.ml_done_add, _counter, len(videoids), vd_id)
                 _done.append(vd_id)
                 time.sleep(0.5)
             except MylistAPIError as error:
@@ -622,10 +621,10 @@ class NicoMyList(utils.Canopy):
             # 指定したものが含まれているかの確認
             excluded = [vd_id for vd_id in videoids if vd_id not in item_ids]
             if len(excluded) > 0:
-                self.logger.error(Err.item_not_contained.format(list_name_from, excluded))
+                self.logger.error(Err.item_not_contained, list_name_from, excluded)
 
-        self.logger.info(Msg.ml_will_copy.format(
-            list_name_from, list_name_to, sorted(item_ids.keys())))
+        self.logger.info(Msg.ml_will_copy,
+            list_name_from, list_name_to, sorted(item_ids.keys()))
 
         _done = []
         for _counter, vd_id in enumerate(item_ids):
@@ -636,8 +635,7 @@ class NicoMyList(utils.Canopy):
             try:
                 self._should_continue(res, video_id=vd_id, list_name=list_name_to,
                                       count_now=_counter, count_whole=len(item_ids))
-                self.logger.info(Msg.ml_done_copy.format(
-                    now=_counter, all=len(item_ids), video_id=vd_id))
+                self.logger.info(Msg.ml_done_copy, _counter, len(item_ids), vd_id)
                 _done.append(vd_id)
             except MylistAPIError as error:
                 if error.ok:
@@ -677,10 +675,10 @@ class NicoMyList(utils.Canopy):
             # 指定したものが含まれているかの確認
             excluded = [vd_id for vd_id in videoids if vd_id not in item_ids]
             if len(excluded) > 0:
-                self.logger.error(Err.item_not_contained.format(list_name_from, excluded))
+                self.logger.error(Err.item_not_contained, list_name_from, excluded)
 
-        self.logger.info(Msg.ml_will_move.format(
-            list_name_from, list_name_to, sorted(item_ids.keys())))
+        self.logger.info(Msg.ml_will_move,
+            list_name_from, list_name_to, sorted(item_ids.keys()))
 
         _done = []
         for _counter, vd_id in enumerate(item_ids):
@@ -709,8 +707,7 @@ class NicoMyList(utils.Canopy):
             try:
                 self._should_continue(res, video_id=vd_id, list_name=list_name_to,
                                       count_now=_counter, count_whole=len(item_ids))
-                self.logger.info(Msg.ml_done_move.format(
-                    now=_counter, all=len(item_ids), video_id=vd_id))
+                self.logger.info(Msg.ml_done_move, _counter, len(item_ids), vd_id)
                 _done.append(vd_id)
             except MylistAPIError as error:
                 if error.ok:
@@ -749,16 +746,16 @@ class NicoMyList(utils.Canopy):
                     "delete", list_name, sorted(item_ids.keys())):
                 print(Msg.ml_answer_no)
                 return False
-            self.logger.info(Msg.ml_will_delete.format(list_name, sorted(item_ids.keys())))
+            self.logger.info(Msg.ml_will_delete, list_name, sorted(item_ids.keys()))
         else:
             # 個別モード
-            self.logger.info(Msg.ml_will_delete.format(list_name, list(videoids)))
+            self.logger.info(Msg.ml_will_delete, list_name, list(videoids))
             item_ids = {vd_id: item_ids[vd_id] for vd_id in videoids if vd_id in item_ids}
 
             # 指定したIDが含まれているかの確認
             excluded = [vd_id for vd_id in videoids if vd_id not in item_ids]
             if len(excluded) > 0:
-                self.logger.error(Err.item_not_contained.format(list_name, excluded))
+                self.logger.error(Err.item_not_contained, list_name, excluded)
 
         _done = []
         for _counter, vd_id in enumerate(item_ids):
@@ -769,8 +766,7 @@ class NicoMyList(utils.Canopy):
             try:
                 self._should_continue(res, video_id=vd_id, list_name=list_name,
                                       count_now=_counter, count_whole=len(item_ids))
-                self.logger.info(Msg.ml_done_delete.format(
-                    now=_counter, all=len(item_ids), video_id=vd_id))
+                self.logger.info(Msg.ml_done_delete, _counter, len(item_ids), vd_id)
                 _done.append(vd_id)
             except MylistAPIError as error:
                 if error.ok:
@@ -829,7 +825,7 @@ class NicoMyList(utils.Canopy):
         utils.check_arg(locals())
         list_id, list_name = self._get_list_id(list_id)
 
-        self.logger.info(Msg.ml_showing_mylist.format(list_name))
+        self.logger.info(Msg.ml_showing_mylist, list_name)
         if list_id == utils.DEFAULT_ID:
             jtext = json.loads(self.session.get(URL.URL_ListDef).text)
         else:
@@ -1027,7 +1023,7 @@ class NicoMyList(utils.Canopy):
         if len(container) == 0:
             return ""
         elif not PrettyTable:
-            raise ImportError(Err.not_installed.format("PrettyTable"))
+            raise ImportError(Err.not_installed, "PrettyTable")
         else:
             column_names = container.pop(0)
             table = PrettyTable(column_names)
@@ -1051,12 +1047,55 @@ class NicoMyList(utils.Canopy):
             _text = "{}\n".format(text)
             with file_name.open(mode="w", encoding="utf-8") as fd:
                 fd.write(_text)
-            self.logger.info(Msg.ml_exported.format(file_name))
+            self.logger.info(Msg.ml_exported, file_name)
         else:
             enco = utils.get_encoding()
             _text = text.encode(enco, utils.BACKSLASH).decode(enco) + "\n"
             print(_text)
         return _text
+
+
+def linting(args, dest, source):
+    """
+
+    :param args:
+    :param str | None dest:
+    :param str | int source:
+    """
+    if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
+                args.add and utils.ALL_ITEM in args.add):
+        raise ZeroDivisionError(Err.cant_perform_all)
+    if (args.create or args.purge) and utils.DEFAULT_NAME == source:
+        raise ZeroDivisionError(Err.deflist_to_create_or_purge)
+    if args.create and "" == source:
+        raise ZeroDivisionError(Err.cant_create)
+    if args.copy or args.move:
+        if dest is None:
+            raise ZeroDivisionError(Err.not_specified.format("--to"))
+        if source == dest:
+            raise ZeroDivisionError(Err.list_names_are_same)
+    if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
+            (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
+            (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
+        raise ZeroDivisionError(Err.videoids_contain_all)
+    if not (args.export or args.show or args.create or args.purge
+            or args.add or args.copy or args.move or args.delete):
+        raise ZeroDivisionError(Err.no_commands)
+
+
+def linting_2(args):
+    operand = []
+    if args.add or args.copy or args.move or args.delete:
+        if args.add:
+            operand = utils.validator(args.add)
+        elif args.copy:
+            operand = utils.validator(args.copy)
+        elif args.move:
+            operand = utils.validator(args.move)
+        else:
+            operand = utils.validator(args.delete)
+        if not operand: raise ZeroDivisionError(Err.invalid_videoid)
+    return operand
 
 
 def main(args):
@@ -1083,32 +1122,11 @@ def main(args):
     #
     # エラーの除外
     #
-    if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
-        args.add and utils.ALL_ITEM in args.add):
-        sys.exit(Err.cant_perform_all)
-    if (args.create or args.purge) and utils.DEFAULT_NAME == source:
-        sys.exit(Err.deflist_to_create_or_purge)
-    if args.create and "" == source:
-        sys.exit(Err.cant_create)
-    if args.copy or args.move:
-        if dest is None:
-            sys.exit(Err.not_specified.format("--to"))
-        if source == dest:
-            sys.exit(Err.list_names_are_same)
-    if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
-            (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
-            (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
-        sys.exit(Err.videoids_contain_all)
-    operand = []
-    if args.add or args.copy or args.move or args.delete:
-        if args.add:    operand = utils.validator(args.add)
-        elif args.copy: operand = utils.validator(args.copy)
-        elif args.move: operand = utils.validator(args.move)
-        else:           operand = utils.validator(args.delete)
-        if not operand: sys.exit(Err.invalid_videoid)
-    if not (args.export or args.show or args.create or args.purge
-            or args.add or args.copy or args.move or args.delete):
-        sys.exit(Err.no_commands)
+    try:
+        linting(args, dest, source)
+        operand = linting_2(args)
+    except ZeroDivisionError as error:
+        sys.exit(error.args)
 
     #
     # 本筋

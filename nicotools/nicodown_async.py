@@ -85,8 +85,7 @@ class Info(utils.CanopyAsync):
         """
         glossary = utils.validator(video_ids)
 
-        self.logger.info(Msg.nd_start_download.format(
-            count=len(glossary), ids=glossary))
+        self.logger.info(Msg.nd_start_download, len(glossary), glossary)
 
         infos = self.loop.run_until_complete(
             asyncio.gather(*[self._retrieve_info(_id) for _id in video_ids]))
@@ -107,7 +106,7 @@ class Info(utils.CanopyAsync):
                   if info[KeyDmc.IS_PUBLIC] and not info[KeyDmc.IS_DELETED]}
         bad = list(set(infos) - set(good))
         if len(bad) > 0:
-            self.logger.info(Msg.nd_deleted_or_private.format(bad))
+            self.logger.info(Msg.nd_deleted_or_private, bad)
         if self.__do_sieve:
             return good
         else:
@@ -144,13 +143,12 @@ class Info(utils.CanopyAsync):
             raise aiohttp.errors.HttpProcessingError(
                 code=st, message=Err.connection_timeout.format(video_id))
 
-    def _pick_info_from_watch_api(self, content: str) -> \
-            Dict[str, Union[str, int, List[str], bool]]:
+    def _pick_info_from_watch_api(self, content: str) -> Dict:
         """
         watchAPIDataContainer を含む HTML から情報を取り出す。
 
         :param str content: HTMLの文字列
-        :rtype: Dict
+        :rtype: Dict[str, Union[str, int, List[str], bool]]
         """
         watch_api = json.loads(content)
         flash_vars = watch_api["flashvars"]
@@ -221,13 +219,12 @@ class Info(utils.CanopyAsync):
             })
         return info
 
-    def _pick_info_from_data_api(self, content: str) -> \
-            Dict[str, Union[str, int, List[str], bool]]:  # pragma: no cover
+    def _pick_info_from_data_api(self, content: str) -> Dict:  # pragma: no cover
         """
         data-api-data 属性を持つタグがあるHTMLから情報を取り出す。
 
         :param str content: HTMLの文字列
-        :rtype: Dict
+        :rtype: Dict[str, Union[str, int, List[str], bool]]
         """
         j = json.loads(content)
         _video = j["video"]
@@ -302,14 +299,14 @@ class Info(utils.CanopyAsync):
             })
         return info
 
-    def _junction(self, content: str) -> Dict[str, Union[str, int, List[str], bool]]:
+    def _junction(self, content: str) -> Dict:
         """
         動画視聴ページのHTMLから必要な情報を取り出す。
 
         HTML構造は複数あり、ものによって内容が異なる。適切な担当者へ振り向ける。
 
         :param str content:
-        :rtype: Dict
+        :rtype: Dict[str, Union[str, int, List[str], bool]]
         """
         soup = BeautifulSoup(content, "html.parser")
         _not_login = soup.select("#Login_nico")
@@ -383,8 +380,8 @@ class Thumbnail(utils.CanopyAsync):
         self.logger.debug("Directory to save in: %s", self.save_dir)
 
         if len(self.glossary) > 0:
-            self.logger.info(Msg.nd_start_dl_pict.format(
-                count=len(self.glossary), ids=list(self.glossary)))
+            self.logger.info(Msg.nd_start_dl_pict,
+                len(self.glossary), list(self.glossary))
 
             self.loop.run_until_complete(self._download(list(self.glossary), is_large))
             while len(self.undone) > 0:
@@ -409,10 +406,9 @@ class Thumbnail(utils.CanopyAsync):
     async def _worker(self, idx: int, video_id: str, url: str) -> Optional[bytes]:
         async with asyncio.Semaphore(self.__parallel_limit):
 
-            self.logger.info(
-                Msg.nd_download_pict.format(
-                    idx + 1, len(self.glossary), video_id,
-                    self.glossary[video_id][KeyGTI.TITLE]))
+            self.logger.info(Msg.nd_download_pict,
+                idx + 1, len(self.glossary), video_id,
+                self.glossary[video_id][KeyGTI.TITLE])
 
             try:
                 async with self.session.get(url, timeout=10) as response:
@@ -438,7 +434,7 @@ class Thumbnail(utils.CanopyAsync):
 
             with file_path.open('wb') as f:
                 f.write(image_data)
-            self.logger.info(Msg.nd_download_done.format(path=file_path))
+            self.logger.info(Msg.nd_download_done, file_path)
 
     def _make_urls(self, video_ids: List[str], is_large: bool=True) -> List[str]:
         if is_large:
@@ -447,7 +443,7 @@ class Thumbnail(utils.CanopyAsync):
             urls = [self.glossary[_id][KeyGTI.THUMBNAIL_URL] for _id in video_ids]
         return urls
 
-    async def _get_infos(self, queue: List[str]) -> Dict[str, Dict]:
+    async def _get_infos(self, queue: List[str]) -> dict:
         """
         getthumbinfo APIから、細かな情報をもらってくる
 
@@ -457,13 +453,13 @@ class Thumbnail(utils.CanopyAsync):
         * video_id          str
 
         :param list[str] queue: 動画IDのリスト
-        :rtype: dict[str, dict]
+        :rtype: Dict[str, Dict]
         """
         tasks = [self._get_infos_worker(video_id) for video_id in queue]
         await asyncio.wait(tasks, loop=self.loop)
         bad = list(set(queue) - set(self.__bucket))
         if len(bad) > 0:
-            self.logger.info(Msg.nd_deleted_or_private.format(bad))
+            self.logger.info(Msg.nd_deleted_or_private, bad)
         result = self.__bucket
         del self.__bucket
         return result
@@ -549,8 +545,8 @@ class VideoSmile(utils.CanopyAsync):
             self.session = info.session
         self.glossary = glossary
         self.logger.debug("Dictionary of Videos: %s", self.glossary)
-        self.logger.info(Msg.nd_start_dl_video.format(
-            count=len(self.glossary), ids=list(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_video,
+            len(self.glossary), list(self.glossary))
 
         # まず各動画のファイルサイズを集める。
         self.loop.run_until_complete(self._push_file_size())
@@ -588,10 +584,9 @@ class VideoSmile(utils.CanopyAsync):
         division = self.__division
         file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
 
-        self.logger.info(
-            Msg.nd_download_video.format(
-                idx + 1, len(self.glossary), video_id,
-                self.glossary[video_id][KeyDmc.TITLE]))
+        self.logger.info(Msg.nd_download_video,
+            idx + 1, len(self.glossary), video_id,
+            self.glossary[video_id][KeyDmc.TITLE])
 
         video_url = self.glossary[video_id][KeyDmc.VIDEO_URL_SM]
         file_size = self.glossary[video_id][KeyDmc.FILE_SIZE]
@@ -675,7 +670,7 @@ class VideoSmile(utils.CanopyAsync):
                     with open(name, "rb") as file:
                         fd.write(file.read())
                     os.remove(name)
-            self.logger.info(Msg.nd_download_done.format(path=file_path))
+            self.logger.info(Msg.nd_download_done, file_path)
 
 
 class VideoDmc(utils.CanopyAsync):
@@ -739,8 +734,8 @@ class VideoDmc(utils.CanopyAsync):
             self.session = info.session
         self.glossary = glossary
         self.logger.debug("Dictionary of Videos: %s", self.glossary)
-        self.logger.info(Msg.nd_start_dl_video.format(
-            count=len(self.glossary), ids=list(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_video,
+            len(self.glossary), list(self.glossary))
 
         self.loop.run_until_complete(self._broker(xml))
         if not self.__return_session:
@@ -792,12 +787,17 @@ class VideoDmc(utils.CanopyAsync):
         ) as response:  # type: aiohttp.ClientResponse
             return await response.text()
 
-    def _make_param_xml(self, info: Dict[str, str]) -> str:
+    def _make_param_xml(self, info: Dict) -> str:
+        """
+
+        :param Dict[str, str] info:
+        :rtype: str
+        """
         info.update({
             "video_src_ids_xml": "".join(map(
-                lambda _: "<string>{}</string>".format(_), info[KeyDmc.VIDEO_SRC_IDS])),
+                lambda t: "<string>%s</string>" % t, info[KeyDmc.VIDEO_SRC_IDS])),
             "audio_src_ids_xml": "".join(map(
-                lambda _: "<string>{}</string>".format(_), info[KeyDmc.AUDIO_SRC_IDS]))
+                lambda t: "<string>%s</string>" % t, info[KeyDmc.AUDIO_SRC_IDS]))
         })
         xml = Template("""<session>
           <recipe_id>${recipe_id}</recipe_id>
@@ -857,7 +857,12 @@ class VideoDmc(utils.CanopyAsync):
         """)
         return xml.substitute(info)
 
-    def _make_param_json(self, info: Dict[str, Union[str, list, int]]) -> str:  # pragma: no cover
+    def _make_param_json(self, info: Dict) -> str:  # pragma: no cover
+        """
+
+        :param Dict[str, Union[str, list, int]] info:
+        :rtype: str
+        """
         param = {
             "session": {
                 "recipe_id": info[KeyDmc.RECIPE_ID],
@@ -979,10 +984,9 @@ class VideoDmc(utils.CanopyAsync):
         division = self.__division
         file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
 
-        self.logger.info(
-            Msg.nd_download_video.format(
-                idx + 1, len(self.glossary), video_id,
-                self.glossary[video_id][KeyDmc.TITLE]))
+        self.logger.info(Msg.nd_download_video,
+            idx + 1, len(self.glossary), video_id,
+            self.glossary[video_id][KeyDmc.TITLE])
 
         file_size = await self._get_file_size(video_id, video_url)
         headers = [
@@ -1070,7 +1074,7 @@ class VideoDmc(utils.CanopyAsync):
                     with open(name, "rb") as file:
                         fd.write(file.read())
                     os.remove(name)
-            self.logger.info(Msg.nd_download_done.format(path=file_path))
+            self.logger.info(Msg.nd_download_done, file_path)
 
 
 class Comment(utils.CanopyAsync):
@@ -1139,8 +1143,8 @@ class Comment(utils.CanopyAsync):
             self.session = info.session
         self.glossary = glossary
 
-        self.logger.info(Msg.nd_start_dl_comment.format(
-            count=len(self.glossary), ids=list(self.glossary)))
+        self.logger.info(Msg.nd_start_dl_comment,
+            len(self.glossary), list(self.glossary))
 
         futures = []
         for idx, video_id in enumerate(self.glossary):
@@ -1167,10 +1171,9 @@ class Comment(utils.CanopyAsync):
         thread_key      = None
         force_184       = None
 
-        self.logger.info(
-            Msg.nd_download_comment.format(
-                idx + 1, len(self.glossary), video_id,
-                info[KeyGTI.TITLE]))
+        self.logger.info(Msg.nd_download_comment,
+            idx + 1, len(self.glossary), video_id,
+            info[KeyGTI.TITLE])
 
 
         is_official = re.match("^(?:so|\d)", info[KeyDmc.VIDEO_ID]) is not None
@@ -1178,8 +1181,8 @@ class Comment(utils.CanopyAsync):
         if is_official:
             thread_key, force_184 = await self.get_thread_key(thread_id, needs_key)
 
-        if self.__wayback:
-            waybackkey = await self.get_wayback_key(thread_id)
+        # if self.__wayback:
+        #     waybackkey = await self.get_wayback_key(thread_id)
 
         if is_xml:
             req_param = self.make_param_xml(
@@ -1224,7 +1227,7 @@ class Comment(utils.CanopyAsync):
         self.logger.debug("File Path: %s", file_path)
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
-        self.logger.info(Msg.nd_download_done.format(path=file_path))
+        self.logger.info(Msg.nd_download_done, file_path)
         return True
 
     async def get_thread_key(self, thread_id, needs_key):

@@ -1,11 +1,11 @@
 from setuptools import setup
 
-with open('tests/README.rst') as f:
+with open('README.rst') as f:
     readme = f.read()
 
 setup(
     name='nicotools',
-    version='1.0.1',
+    version='1.0.2',
     packages=['nicotools'],
     # package_data={'nicotools': ['nicotools/stubs/*']},
     # include_package_data=True,
@@ -16,7 +16,7 @@ setup(
     description=('Downloading videos, comments and thumbnails and'
                  ' handling your Mylists on niconico (ニコニコ動画).'),
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: End Users/Desktop',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: Japanese',
