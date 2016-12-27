@@ -6,7 +6,6 @@ import json
 import os
 import sys
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from typing import Dict, Union, Optional
 
 import aiohttp
@@ -171,12 +170,12 @@ class NicoMyList(utils.CanopyAsync):
             code = res["error"]["code"]
             description = res["error"]["description"]
         except KeyError:
-            self.logger.error(Err.unknown_error_itemid.format(
-                count_now, count_whole, video_id, res))
+            self.logger.error(Err.unknown_error_itemid,
+                count_now, count_whole, video_id, res)
             raise
         else:
             if code == Err.INTERNAL or code == Err.MAINTENANCE:
-                self.logger.error(Err.known_error.format(video_id, code, description))
+                self.logger.error(Err.known_error, video_id, code, description)
                 raise MylistAPIError(code=code, msg=description)
             elif code == Err.MAXERROR:
                 msg = Err.over_load.format(list_name)
@@ -192,7 +191,7 @@ class NicoMyList(utils.CanopyAsync):
                 self.logger.error(msg)
                 raise MylistAPIError(code=Err.NONEXIST, msg=msg, ok=True)
             else:
-                self.logger.error(Err.known_error.format(video_id, code, description))
+                self.logger.error(Err.known_error, video_id, code, description)
                 raise MylistAPIError(code=code, msg=description, ok=True)
 
     def get_mylists_info(self) -> Dict[int, Dict]:
@@ -539,7 +538,7 @@ class NicoMyList(utils.CanopyAsync):
         res = await self.get_response("create", is_public=is_public,
                                 mylist_name=mylist_name, description=description)
         if res["status"] != "ok":
-            self.logger.error(Err.failed_to_create.format(mylist_name, res))
+            self.logger.error(Err.failed_to_create, mylist_name, res)
             error = res["error"]
             raise MylistAPIError(code=error["code"], msg=error["description"])
         else:
@@ -576,7 +575,7 @@ class NicoMyList(utils.CanopyAsync):
 
         res = await self.get_response("purge", list_id=list_id)
         if res["status"] != "ok":
-            self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
+            self.logger.error(Err.failed_to_purge, list_name, res["status"])
             error = res["error"]
             raise MylistAPIError(code=error["code"], msg=error["description"])
         else:
@@ -641,8 +640,8 @@ class NicoMyList(utils.CanopyAsync):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
@@ -739,8 +738,8 @@ class NicoMyList(utils.CanopyAsync):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
@@ -848,8 +847,8 @@ class NicoMyList(utils.CanopyAsync):
                         return True
                     else:
                         # エラーが起きた場合
-                        self.logger.error(Err.remaining.format(
-                            [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                        self.logger.error(Err.remaining,
+                            [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                         raise
                 res = await self.get_response("delete", from_def=True,
                                         video_id=vd_id, item_id=item_ids[vd_id])
@@ -867,8 +866,8 @@ class NicoMyList(utils.CanopyAsync):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
@@ -974,8 +973,8 @@ class NicoMyList(utils.CanopyAsync):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
@@ -1039,7 +1038,7 @@ class NicoMyList(utils.CanopyAsync):
         utils.check_arg(locals())
         list_id, list_name = self._get_list_id(list_id)
 
-        self.logger.info(Msg.ml_showing_mylist.format(list_name))
+        self.logger.info(Msg.ml_showing_mylist, list_name)
         if list_id == utils.DEFAULT_ID:
             async with self.session.get(URL.URL_ListDef) as resp:
                 jtext = json.loads(await resp.text())

@@ -11,7 +11,6 @@ from os.path import join, expanduser
 from pathlib import Path
 from urllib.parse import parse_qs
 
-import aiohttp
 import requests
 from requests import cookies
 
@@ -342,7 +341,7 @@ class CanopyAsync(Canopy):
         self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
-        self.session = None  # type: aiohttp.ClientSession
+        self.session = None
 
 
 class LogIn:
@@ -361,7 +360,7 @@ class LogIn:
         """
 
         if cls.__singleton__ is None:
-            cls.__singleton__ = super().__new__(cls, *more)
+            cls.__singleton__ = super().__new__(cls)
         return cls.__singleton__
 
     def __init__(self, mail=None, password=None, session=None):
@@ -723,11 +722,17 @@ class Msg:
 class Err:
     """ エラーメッセージ """
 
+    known_error = "[エラー] 動画: %s, コード: %s, 内容: %s"
+    unknown_error_itemid = "[エラー] (%s/%s) 動画: %s, サーバーからの返事: %s"
+    failed_to_create = "[エラー] %s の作成に失敗しました。 サーバーからの返事: %s"
+    failed_to_purge = "[エラー] %s の削除に失敗しました。 サーバーからの返事: %s"
     failed_operation = "以下の理由により操作は失敗しました: %s"
     name_replaced = ("作成しようとした名前「%s」は特殊文字を含むため、"
                      "「%s」に置き換わっています。")
     not_installed = "%s がインストールされていないため実行できません。"
     item_not_contained = "[エラー] 以下の項目は %s に存在しません: %s"
+    remaining = "以下の項目は処理されませんでした: %s"
+
     waiting_for_permission = "アクセス制限が解除されるのを待っています…"
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
@@ -754,13 +759,7 @@ class Err:
     mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
     mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
     over_load = "[エラー] {0} にはこれ以上追加できません。"
-    remaining = "以下の項目は処理されませんでした: {0}"
     already_exist = "[エラー]すでに存在しています。 ID: {0} (タイトル: {1})"
-    known_error = "[エラー] 動画: {0}, コード: {}, 内容: {1}"
-    unknown_error_itemid = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
-    unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
-    failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {1}"
-    failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
     invalid_spec = ("[エラー] {0} は不正です。マイリストの名前"
                     "またはIDは文字列か整数で入力してください。")
     no_items = "[エラー] 指定した動画はいずれもこのマイリストには登録されていません。"

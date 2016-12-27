@@ -12,7 +12,7 @@ from typing import Dict, Union, Optional, List
 from urllib.parse import parse_qs, unquote
 
 import aiohttp
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from nicotools import utils
@@ -436,14 +436,20 @@ class Thumbnail(utils.CanopyAsync):
                 f.write(image_data)
             self.logger.info(Msg.nd_download_done, file_path)
 
-    def _make_urls(self, video_ids: List[str], is_large: bool=True) -> List[str]:
+    def _make_urls(self, video_ids: list, is_large: bool=True) -> list:
+        """
+
+        :param List[str] video_ids:
+        :param bool is_large:
+        :rtype: List[str]
+        """
         if is_large:
             urls = ["{0}.L".format(self.glossary[_id][KeyGTI.THUMBNAIL_URL]) for _id in video_ids]
         else:
             urls = [self.glossary[_id][KeyGTI.THUMBNAIL_URL] for _id in video_ids]
         return urls
 
-    async def _get_infos(self, queue: List[str]) -> dict:
+    async def _get_infos(self, queue: list) -> dict:
         """
         getthumbinfo APIから、細かな情報をもらってくる
 
@@ -452,7 +458,7 @@ class Thumbnail(utils.CanopyAsync):
         * title             str
         * video_id          str
 
-        :param list[str] queue: 動画IDのリスト
+        :param List[str] queue: 動画IDのリスト
         :rtype: Dict[str, Dict]
         """
         tasks = [self._get_infos_worker(video_id) for video_id in queue]
@@ -922,7 +928,7 @@ class VideoDmc(utils.CanopyAsync):
     def _extract_video_url_xml(self, text: str) -> str:
         self.logger.debug("Returned XML data: %s", text)
         soup = BeautifulSoup(text, "html.parser")
-        url_tag = soup.content_uri  # type: Tag
+        url_tag = soup.content_uri
         return url_tag.text
 
     def _extract_video_url_json(self, text: str) -> str:  # pragma: no cover
@@ -933,7 +939,7 @@ class VideoDmc(utils.CanopyAsync):
 
     def _extract_session_id_xml(self, text: str) -> str:
         soup = BeautifulSoup(text, "html.parser")
-        id_tag = soup.session.id  # type: Tag
+        id_tag = soup.session.id
         self.logger.debug("Session ID: %s", id_tag.text)
         return id_tag.text
 

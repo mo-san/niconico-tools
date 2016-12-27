@@ -5,7 +5,6 @@ import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from xml.etree import ElementTree
 try:
     from prettytable import PrettyTable
@@ -151,12 +150,12 @@ class NicoMyList(utils.Canopy):
             code = res["error"]["code"]
             description = res["error"]["description"]
         except KeyError:
-            self.logger.error(Err.unknown_error_itemid.format(
-                count_now, count_whole, video_id, res))
+            self.logger.error(Err.unknown_error_itemid,
+                count_now, count_whole, video_id, res)
             raise
         else:
             if code == Err.INTERNAL or code == Err.MAINTENANCE:
-                self.logger.error(Err.known_error.format(video_id, code, description))
+                self.logger.error(Err.known_error, video_id, code, description)
                 raise MylistAPIError(code=code, msg=description)
             elif code == Err.MAXERROR:
                 msg = Err.over_load.format(list_name)
@@ -172,7 +171,7 @@ class NicoMyList(utils.Canopy):
                 self.logger.error(msg)
                 raise MylistAPIError(code=Err.NONEXIST, msg=msg, ok=True)
             else:
-                self.logger.error(Err.known_error.format(video_id, code, description))
+                self.logger.error(Err.known_error, video_id, code, description)
                 raise MylistAPIError(code=code, msg=description, ok=True)
 
     def get_mylists_info(self):
@@ -514,7 +513,7 @@ class NicoMyList(utils.Canopy):
         res = self.get_response("create", is_public=is_public,
                                 mylist_name=mylist_name, description=description)
         if res["status"] != "ok":
-            self.logger.error(Err.failed_to_create.format(mylist_name, res))
+            self.logger.error(Err.failed_to_create, mylist_name, res)
             return False
         else:
             self.mylists = self.get_mylists_info()
@@ -547,7 +546,7 @@ class NicoMyList(utils.Canopy):
 
         res = self.get_response("purge", list_id=list_id)
         if res["status"] != "ok":
-            self.logger.error(Err.failed_to_purge.format(list_name, res["status"]))
+            self.logger.error(Err.failed_to_purge, list_name, res["status"])
             return False
         else:
             self.logger.info(Msg.ml_done_purge, list_name)
@@ -586,8 +585,8 @@ class NicoMyList(utils.Canopy):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
@@ -642,8 +641,8 @@ class NicoMyList(utils.Canopy):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
@@ -695,8 +694,8 @@ class NicoMyList(utils.Canopy):
                         return True
                     else:
                         # エラーが起きた場合
-                        self.logger.error(Err.remaining.format(
-                            [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                        self.logger.error(Err.remaining,
+                            [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                         raise
                 res = self.get_response("delete", from_def=True,
                                         video_id=vd_id, item_id=item_ids[vd_id])
@@ -714,8 +713,8 @@ class NicoMyList(utils.Canopy):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
@@ -773,8 +772,8 @@ class NicoMyList(utils.Canopy):
                     return True
                 else:
                     # エラーが起きた場合
-                    self.logger.error(Err.remaining.format(
-                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM]))
+                    self.logger.error(Err.remaining,
+                        [i for i in videoids if i not in _done and i != utils.ALL_ITEM])
                     raise
         return True
 
