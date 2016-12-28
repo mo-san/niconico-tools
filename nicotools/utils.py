@@ -350,6 +350,7 @@ class LogIn:
     cookie = {}
 
     @classmethod
+    # more と kwargs は未使用の変数だが消してはいけない
     def __new__(cls, *more, **kwargs):
         """
         ログイン処理が一度だけなのを保障するためにシングルトンとして振る舞わせる。

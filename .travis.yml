@@ -47,7 +47,7 @@ deploy:
   provider: pypi
   user: mo-san
   on:
-    repo: mo-san/nicotools
+    repo: mo-san/niconico-tools
     branch: master
     python: 3.4
   password:
