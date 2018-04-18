@@ -6,8 +6,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, Union, Optional, List
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -460,8 +459,7 @@ class NicoMyList(utils.CanopyAsync):
                                            item_id=item_id)
 
         if "add" == mode or ("copy" == mode and to_def):
-            payload = MultiDict(item_type=0, token=self.token,
-                                description=description)
+            payload = MultiDict({"item_type": 0, "token": self.token, "description": description})
             payload.extend([("item_id", _id) for _id in video_id])
             if to_def:
                 url = URL.URL_AddDef
@@ -470,7 +468,7 @@ class NicoMyList(utils.CanopyAsync):
                 url = URL.URL_AddItem
 
         elif "delete" == mode:
-            payload = MultiDict(token=self.token)
+            payload = MultiDict({"token": self.token})
             payload.extend([("id_list[0][]", _id) for _id in item_id])
             if from_def:
                 url = URL.URL_DeleteDef
@@ -479,7 +477,7 @@ class NicoMyList(utils.CanopyAsync):
                 url = URL.URL_DeleteItem
 
         elif "copy" == mode:
-            payload = MultiDict(target_group_id=str(list_id_to), token=self.token)
+            payload = MultiDict({"target_group_id": str(list_id_to), "token": self.token})
             payload.extend([("id_list[0][]", _id) for _id in item_id])
             if from_def:
                 url = URL.URL_CopyDef
@@ -488,7 +486,7 @@ class NicoMyList(utils.CanopyAsync):
                 url = URL.URL_CopyItem
 
         elif "move" == mode:
-            payload = MultiDict(target_group_id=str(list_id_to), token=self.token)
+            payload = MultiDict({"target_group_id": str(list_id_to), "token": self.token})
             payload.extend([("id_list[0][]", _id) for _id in item_id])
             if from_def:
                 url = URL.URL_MoveDef
@@ -497,7 +495,7 @@ class NicoMyList(utils.CanopyAsync):
                 url = URL.URL_MoveItem
 
         elif "purge" == mode:
-            payload = MultiDict(group_id=str(list_id), token=self.token)
+            payload = MultiDict({"group_id": str(list_id), "token": self.token})
             url = URL.URL_PurgeList
 
         else:  # create
@@ -1280,6 +1278,49 @@ class NicoMyList(utils.CanopyAsync):
         return _text
 
 
+def linting(args, dest: Optional[str], source: Union[str, int]) -> None:
+    """
+
+    :param args:
+    :param str | None dest:
+    :param str | int source:
+    """
+    if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
+                args.add and utils.ALL_ITEM in args.add):
+        raise ZeroDivisionError(Err.cant_perform_all)
+    if (args.create or args.purge) and utils.DEFAULT_NAME == source:
+        raise ZeroDivisionError(Err.deflist_to_create_or_purge)
+    if args.create and "" == source:
+        raise ZeroDivisionError(Err.cant_create)
+    if args.copy or args.move:
+        if dest is None:
+            raise ZeroDivisionError(Err.not_specified.format("--to"))
+        if source == dest:
+            raise ZeroDivisionError(Err.list_names_are_same)
+    if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
+            (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
+            (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
+        raise ZeroDivisionError(Err.videoids_contain_all)
+    if not (args.export or args.show or args.create or args.purge
+            or args.add or args.copy or args.move or args.delete):
+        raise ZeroDivisionError(Err.no_commands)
+
+
+def linting_2(args) -> list:
+    operand = []
+    if args.add or args.copy or args.move or args.delete:
+        if args.add:
+            operand = utils.validator(args.add)
+        elif args.copy:
+            operand = utils.validator(args.copy)
+        elif args.move:
+            operand = utils.validator(args.move)
+        else:
+            operand = utils.validator(args.delete)
+        if not operand: raise ZeroDivisionError(Err.invalid_videoid)
+    return operand
+
+
 def main(args):
     """
     メイン。
@@ -1305,32 +1346,8 @@ def main(args):
     # エラーの除外
     #
     try:
-        if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
-                    args.add and utils.ALL_ITEM in args.add):
-            raise ZeroDivisionError(Err.cant_perform_all)
-        if (args.create or args.purge) and utils.DEFAULT_NAME == source:
-            raise ZeroDivisionError(Err.deflist_to_create_or_purge)
-        if args.create and "" == source:
-            raise ZeroDivisionError(Err.cant_create)
-        if args.copy or args.move:
-            if dest is None:
-                raise ZeroDivisionError(Err.not_specified.format("--to"))
-            if source == dest:
-                raise ZeroDivisionError(Err.list_names_are_same)
-        if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
-                (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
-                (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
-            raise ZeroDivisionError(Err.videoids_contain_all)
-        operand = []
-        if args.add or args.copy or args.move or args.delete:
-            if args.add:    operand = utils.validator(args.add)
-            elif args.copy: operand = utils.validator(args.copy)
-            elif args.move: operand = utils.validator(args.move)
-            else:           operand = utils.validator(args.delete)
-            if not operand: raise ZeroDivisionError(Err.invalid_videoid)
-        if not (args.export or args.show or args.create or args.purge
-                or args.add or args.copy or args.move or args.delete):
-            raise ZeroDivisionError(Err.no_commands)
+        linting(args, dest, source)
+        operand = linting_2(args)
     except ZeroDivisionError as error:
         # close しないと "Unclosed client session" とのエラーが出る。
         instnc.close()

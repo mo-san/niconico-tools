@@ -32,7 +32,8 @@ setup(
         'prettytable',
         'bs4',
         'aiohttp',
-        'tqdm'
+        'tqdm',
+        'multidict'
     ],
     entry_points={
         'console_scripts': ['nicotools = nicotools.__init__:main']
