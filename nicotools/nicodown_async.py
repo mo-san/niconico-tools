@@ -140,7 +140,7 @@ class Info(utils.CanopyAsync):
                     else:
                         st = response.status
                         break
-            raise aiohttp.errors.HttpProcessingError(
+            raise aiohttp.ServerTimeoutError(
                 code=st, message=Err.connection_timeout.format(video_id))
 
     def _pick_info_from_watch_api(self, content: str) -> Dict:
@@ -167,10 +167,9 @@ class Info(utils.CanopyAsync):
             KeyDmc.FILE_NAME    : utils.t2filename(flash_vars["videoTitle"]),
             KeyDmc.FILE_SIZE    : None,  # int
             KeyDmc.THUMBNAIL_URL: flash_vars["thumbImage"],  # str
-            KeyDmc.ECO          : flash_vars.get("eco") or 0,  # int
+            KeyDmc.ECO          : bool(flash_vars.get("eco", 0)),  # bool
             KeyDmc.MOVIE_TYPE   : flash_vars["movie_type"],  # str
             # KeyDmc.IS_DMC       : int(flash_vars["isDmc"]),  # int
-            KeyDmc.DELETED      : int(flash_vars["deleted"]),  # int
             KeyDmc.IS_DELETED   : watch_api["videoDetail"]["isDeleted"],  # bool
             KeyDmc.IS_PUBLIC    : watch_api["videoDetail"]["is_public"],  # bool
             KeyDmc.IS_OFFICIAL  : watch_api["videoDetail"]["is_official"],  # bool
@@ -228,7 +227,7 @@ class Info(utils.CanopyAsync):
         """
         j = json.loads(content)
         _video = j["video"]
-        if "dmcInfo" in _video:
+        if "dmcInfo" in _video and _video["dmcInfo"] is not None:
             dmc_info = _video["dmcInfo"]
             session_api = dmc_info["session_api"]
         else:
@@ -237,14 +236,13 @@ class Info(utils.CanopyAsync):
 
         info = {
             KeyDmc.VIDEO_ID     : _video["id"],  # type: str
-            KeyDmc.VIDEO_URL_SM : _video["source"],  # type: str
-            KeyDmc.TITLE        : _video["originalTitle"],  # type: str
-            KeyDmc.FILE_NAME    : utils.t2filename(_video["originalTitle"]),
+            KeyDmc.VIDEO_URL_SM : _video["smileInfo"]["url"],  # type: str
+            KeyDmc.TITLE        : _video["title"],  # type: str
+            KeyDmc.FILE_NAME    : utils.t2filename(_video["title"]),
             KeyDmc.FILE_SIZE    : None,
             KeyDmc.THUMBNAIL_URL: _video["thumbnailURL"],  # type: str
-            KeyDmc.ECO          : j["context"]["isEconomy"],  # type: int
+            KeyDmc.ECO          : j["context"]["isPeakTime"],  # type: bool
             KeyDmc.MOVIE_TYPE   : _video["movieType"],  # type: str
-            KeyDmc.DELETED      : dmc_info["video"]["deleted"],  # type: int
             KeyDmc.IS_DELETED   : _video["isDeleted"],  # type: bool
             KeyDmc.IS_PUBLIC    : _video["isPublic"],  # type: bool
             KeyDmc.IS_OFFICIAL  : _video["isOfficial"],  # type: bool

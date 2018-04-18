@@ -853,10 +853,9 @@ class KeyDmc:
     VIDEO_URL_SM    = "video_url"       # Smile サーバーのほう
     TITLE           = "title"
     THUMBNAIL_URL   = "thumbnail_url"
-    ECO             = "eco"             # int
+    ECO             = "eco"             # bool
     MOVIE_TYPE      = "movie_type"
     # IS_DMC          = "is_dmc"          # int or None
-    DELETED         = "deleted"         # int
     IS_DELETED      = "is_deleted"      # bool
     IS_PUBLIC       = "is_public"       # bool
     IS_OFFICIAL     = "is_official"     # bool
