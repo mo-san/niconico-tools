@@ -44,9 +44,9 @@ def main(arguments=None, async_=True):
     parser_nd.add_argument("-c", "--comment", action="store_true", help=Msg.nd_help_comment)
     parser_nd.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
     parser_nd.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
-    parser_nd.add_argument("-i", "--getthumbinfo", action="store_true", help=Msg.nd_help_info)
     parser_nd.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
     parser_nd.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="FILE")
+    parser_nd.add_argument("--getthumbinfo", action="store_true", help=Msg.nd_help_info)
     if async_ and nicodown_async is not None:
         parser_nd.add_argument("--smile", action="store_true", help=Msg.nd_help_smile)
         parser_nd.add_argument("--dmc", action="store_true", help=Msg.nd_help_dmc, default=True)
@@ -85,8 +85,12 @@ def main(arguments=None, async_=True):
     group_two.add_argument("-e", "--export", action="count", help=Msg.ml_help_export)
     group_two.add_argument("--everything", action="store_true", help=Msg.ml_help_everything)
 
+    if len(sys.argv) <= 1:
+        parser.print_help()
+        sys.exit()
+
     args = parser.parse_args(globals().get("DEBUG_ARGS") or arguments)
-    if (len(sys.argv) <= 1 or not hasattr(args, "func")) and not int(os.getenv("PYTHON_TEST", 0)):
+    if not (hasattr(args, "func") or int(os.getenv("PYTHON_TEST", 0))):
         parser.print_help()
         sys.exit()
     if args.what:
@@ -97,6 +101,7 @@ def main(arguments=None, async_=True):
         return args.func(args)
     except KeyboardInterrupt:
         sys.exit(Err.keyboard_interrupt)
+
 
 if __name__ == "__main__":
     main()

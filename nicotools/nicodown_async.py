@@ -83,10 +83,6 @@ class Info(utils.CanopyAsync):
         :param List video_ids:
         :rtype: Dict
         """
-        glossary = utils.validator(video_ids)
-
-        self.logger.info(Msg.nd_start_download, len(glossary), glossary)
-
         infos = self.loop.run_until_complete(
             asyncio.gather(*[self._retrieve_info(_id) for _id in video_ids]))
         result = {_id: _info for _id, _info in zip(video_ids, infos)}
@@ -140,7 +136,7 @@ class Info(utils.CanopyAsync):
                     else:
                         st = response.status
                         break
-            raise aiohttp.errors.HttpProcessingError(
+            raise aiohttp.client_exceptions.ServerTimeoutError(
                 code=st, message=Err.connection_timeout.format(video_id))
 
     def _pick_info_from_watch_api(self, content: str) -> Dict:
@@ -237,12 +233,12 @@ class Info(utils.CanopyAsync):
 
         info = {
             KeyDmc.VIDEO_ID     : _video["id"],  # type: str
-            KeyDmc.VIDEO_URL_SM : _video["source"],  # type: str
+            KeyDmc.VIDEO_URL_SM : _video["smileInfo"]["url"],  # type: str
             KeyDmc.TITLE        : _video["originalTitle"],  # type: str
             KeyDmc.FILE_NAME    : utils.t2filename(_video["originalTitle"]),
             KeyDmc.FILE_SIZE    : None,
             KeyDmc.THUMBNAIL_URL: _video["thumbnailURL"],  # type: str
-            KeyDmc.ECO          : j["context"]["isEconomy"],  # type: int
+            KeyDmc.ECO          : j["context"]["isPeakTime"],  # type: bool
             KeyDmc.MOVIE_TYPE   : _video["movieType"],  # type: str
             KeyDmc.DELETED      : dmc_info["video"]["deleted"],  # type: int
             KeyDmc.IS_DELETED   : _video["isDeleted"],  # type: bool
@@ -281,7 +277,7 @@ class Info(utils.CanopyAsync):
             info.update({
                 KeyDmc.MSG_SERVER   : dmc_info["thread"]["server_url"],  # type: str
                 KeyDmc.THREAD_ID    : dmc_info["thread"]["thread_id"],  # type: int
-                KeyDmc.API_URL      : session_api["api_urls"][0],  # type: str
+                KeyDmc.API_URL      : session_api["urls"][0]["url"],  # type: str
                 KeyDmc.RECIPE_ID    : session_api["recipe_id"],  # type: str
                 KeyDmc.CONTENT_ID   : session_api["content_id"],  # type: str
                 KeyDmc.VIDEO_SRC_IDS: session_api["videos"],  # type: List[str]
@@ -380,9 +376,6 @@ class Thumbnail(utils.CanopyAsync):
         self.logger.debug("Directory to save in: %s", self.save_dir)
 
         if len(self.glossary) > 0:
-            self.logger.info(Msg.nd_start_dl_pict,
-                len(self.glossary), list(self.glossary))
-
             self.loop.run_until_complete(self._download(list(self.glossary), is_large))
             while len(self.undone) > 0:
                 self.logger.debug("いくつか残ってる。%s", self.undone)
@@ -551,8 +544,6 @@ class VideoSmile(utils.CanopyAsync):
             self.session = info.session
         self.glossary = glossary
         self.logger.debug("Dictionary of Videos: %s", self.glossary)
-        self.logger.info(Msg.nd_start_dl_video,
-            len(self.glossary), list(self.glossary))
 
         # まず各動画のファイルサイズを集める。
         self.loop.run_until_complete(self._push_file_size())
@@ -740,8 +731,6 @@ class VideoDmc(utils.CanopyAsync):
             self.session = info.session
         self.glossary = glossary
         self.logger.debug("Dictionary of Videos: %s", self.glossary)
-        self.logger.info(Msg.nd_start_dl_video,
-            len(self.glossary), list(self.glossary))
 
         self.loop.run_until_complete(self._broker(xml))
         if not self.__return_session:
@@ -1148,9 +1137,6 @@ class Comment(utils.CanopyAsync):
             glossary = info.get_data(glossary)
             self.session = info.session
         self.glossary = glossary
-
-        self.logger.info(Msg.nd_start_dl_comment,
-            len(self.glossary), list(self.glossary))
 
         futures = []
         for idx, video_id in enumerate(self.glossary):

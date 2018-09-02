@@ -8,8 +8,6 @@ from urllib.parse import parse_qs
 from xml.etree import ElementTree
 
 import requests
-from requests.exceptions import Timeout
-from requests.packages import urllib3
 from tqdm import tqdm
 
 from nicotools import utils
@@ -67,11 +65,6 @@ def get_infos(queue, logger=None):
     """
     if isinstance(queue, str):
         queue = [queue]
-    message = Msg.nd_start_download.format(len(queue), queue)
-    if logger:
-        logger.info(message)
-    else:
-        print(message)
 
     # データベースとして使うための辞書。削除や非公開の動画はここに入る
     lexikon = {}
@@ -158,8 +151,6 @@ class Video(utils.Canopy):
         if isinstance(glossary, list):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
-        self.logger.info(Msg.nd_start_dl_video,
-            len(self.glossary), list(self.glossary))
 
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(Msg.nd_download_video,
@@ -252,9 +243,6 @@ class Thumbnail(utils.Canopy):
         self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
 
-        self.logger.info(Msg.nd_start_dl_pict,
-            len(self.glossary), list(self.glossary))
-
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(Msg.nd_download_pict,
                 index + 1, len(glossary), video_id,
@@ -303,9 +291,7 @@ class Thumbnail(utils.Canopy):
                             video_id, db[KeyGTI.TITLE])
                         return False
             except (TypeError, ConnectionError,
-                    socket.timeout, Timeout,
-                    urllib3.exceptions.TimeoutError,
-                    urllib3.exceptions.RequestError) as e:
+                    socket.timeout, requests.exceptions.RequestException) as e:
                 self.logger.debug("An exception occurred: %s", e)
                 if is_large and url.endswith(".L"):
                     return self._worker(video_id, url[:-2], is_large=False)
@@ -356,8 +342,6 @@ class Comment(utils.Canopy):
             glossary = get_infos(glossary, self.logger)
         self.glossary = glossary
         self.save_dir = utils.make_dir(save_dir)
-        self.logger.info(Msg.nd_start_dl_comment,
-            len(self.glossary), list(self.glossary))
         for index, video_id in enumerate(self.glossary.keys()):
             self.logger.info(Msg.nd_download_comment,
                 index + 1, len(glossary), video_id,

@@ -461,6 +461,7 @@ class NicoMyList(utils.CanopyAsync):
         if "add" == mode or ("copy" == mode and to_def):
             payload = MultiDict(item_type=0, token=self.token,
                                 description=description)
+            # noinspection PyTypeChecker
             payload.extend([("item_id", _id) for _id in video_id])
             if to_def:
                 url = URL.URL_AddDef
@@ -470,6 +471,7 @@ class NicoMyList(utils.CanopyAsync):
 
         elif "delete" == mode:
             payload = MultiDict(token=self.token)
+            # noinspection PyTypeChecker
             payload.extend([("id_list[0][]", _id) for _id in item_id])
             if from_def:
                 url = URL.URL_DeleteDef
@@ -479,6 +481,7 @@ class NicoMyList(utils.CanopyAsync):
 
         elif "copy" == mode:
             payload = MultiDict(target_group_id=str(list_id_to), token=self.token)
+            # noinspection PyTypeChecker
             payload.extend([("id_list[0][]", _id) for _id in item_id])
             if from_def:
                 url = URL.URL_CopyDef
@@ -488,6 +491,7 @@ class NicoMyList(utils.CanopyAsync):
 
         elif "move" == mode:
             payload = MultiDict(target_group_id=str(list_id_to), token=self.token)
+            # noinspection PyTypeChecker
             payload.extend([("id_list[0][]", _id) for _id in item_id])
             if from_def:
                 url = URL.URL_MoveDef
@@ -1280,26 +1284,32 @@ def linting(args, dest: Optional[str], source: Union[str, int]) -> None:
     """
     if (((args.add or args.create or args.purge) and utils.ALL_ITEM == source) or
                 args.add and utils.ALL_ITEM in args.add):
-        raise ZeroDivisionError(Err.cant_perform_all)
+        raise SyntaxError(Err.cant_perform_all)
     if (args.create or args.purge) and utils.DEFAULT_NAME == source:
-        raise ZeroDivisionError(Err.deflist_to_create_or_purge)
+        raise SyntaxError(Err.deflist_to_create_or_purge)
     if args.create and "" == source:
-        raise ZeroDivisionError(Err.cant_create)
+        raise SyntaxError(Err.cant_create)
     if args.copy or args.move:
         if dest is None:
-            raise ZeroDivisionError(Err.not_specified.format("--to"))
+            raise SyntaxError(Err.not_specified.format("--to"))
         if source == dest:
-            raise ZeroDivisionError(Err.list_names_are_same)
+            raise SyntaxError(Err.list_names_are_same)
     if (args.delete and (len(args.delete) > 1 and utils.ALL_ITEM in args.delete) or
             (args.copy and len(args.copy) > 1 and utils.ALL_ITEM in args.copy) or
             (args.move and len(args.move) > 1 and utils.ALL_ITEM in args.move)):
-        raise ZeroDivisionError(Err.videoids_contain_all)
+        raise SyntaxError(Err.videoids_contain_all)
     if not (args.export or args.show or args.create or args.purge
             or args.add or args.copy or args.move or args.delete):
-        raise ZeroDivisionError(Err.no_commands)
+        raise SyntaxError(Err.no_commands)
 
 
 def linting_2(args) -> list:
+    """
+    動画IDのうち適切なものだけを選り抜く
+
+    :param args:
+    :return: 動画IDのリスト
+    """
     operand = []
     if args.add or args.copy or args.move or args.delete:
         if args.add:
@@ -1310,7 +1320,7 @@ def linting_2(args) -> list:
             operand = utils.validator(args.move)
         else:
             operand = utils.validator(args.delete)
-        if not operand: raise ZeroDivisionError(Err.invalid_videoid)
+        if not operand: raise SyntaxError(Err.invalid_videoid)
     return operand
 
 
@@ -1341,7 +1351,7 @@ def main(args):
     try:
         linting(args, dest, source)
         operand = linting_2(args)
-    except ZeroDivisionError as error:
+    except SyntaxError as error:
         # close しないと "Unclosed client session" とのエラーが出る。
         instnc.close()
         sys.exit(error.args)

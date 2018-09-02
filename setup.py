@@ -5,10 +5,8 @@ with open('README.rst') as f:
 
 setup(
     name='nicotools',
-    version='1.0.2',
+    version='1.0.3',
     packages=['nicotools'],
-    # package_data={'nicotools': ['nicotools/stubs/*']},
-    # include_package_data=True,
     url='https://github.com/mo-san/niconico-tools',
     license='MIT License',
     author='Masaki Taniguchi',
@@ -21,9 +19,9 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Natural Language :: Japanese',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6'
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7'
     ],
     long_description=readme,
     keywords=['niconico', 'nicovideo', 'ニコニコ動画'],
@@ -32,7 +30,8 @@ setup(
         'prettytable',
         'bs4',
         'aiohttp',
-        'tqdm'
+        'tqdm',
+        'multidict'
     ],
     entry_points={
         'console_scripts': ['nicotools = nicotools.__init__:main']

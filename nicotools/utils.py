@@ -64,7 +64,8 @@ def print_info(queue, file_name=None):
 
 def validator(input_list):
     """
-    動画IDが適切なものか確認する。元のリスト内の順番は保持されない。
+    動画IDが適切なものか確認する。 重複があれば除外する。
+    元のリスト内の順番は保持されない。
 
     受け入れるのは以下の形式:
         * "*"
@@ -452,19 +453,16 @@ class LogIn:
     @classmethod
     def save_cookies(cls, requests_cookiejar, file_name=COOKIE_FILE_NAME):
         """
-        クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
+        クッキーを保存する。保存場所はユーザーのホームディレクトリ。
 
         :param cookies.RequestsCookieJar requests_cookiejar:
         :param str file_name:
         :rtype: dict
         """
-        # Python 3.5以上専用でいいならこう書く。
-        # file_path = make_dir(Path.home() / file_name)
-        # file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
-        file_path = join(expanduser("~"), file_name)
+        # Python 3.5以上専用の書き方。
         cook = {key: val for key, val in requests_cookiejar.items()}
-        with open(file_path, "w") as fd:
-            fd.write("\n".join([k + "\t" + v for k, v in cook.items()]))
+        file_path = make_dir(Path.home() / file_name)
+        file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
         return cook
 
     @classmethod
@@ -475,14 +473,11 @@ class LogIn:
         :param str file_name:
         :rtype: dict | None
         """
-        # Python 3.5以上専用でいいならこう書く。
-        # file_path = make_dir(Path.home() / file_name)
-        #     return {line.split("\t")[0]: line.split("\t")[1]
-        #             for line in file_path.read_text().split("\n")}
+        # Python 3.5以上専用の書き方。
         try:
-            file_path = join(expanduser("~"), file_name)
-            with open(file_path, "r") as fd:
-                return {line.split("\t")[0]: line.split("\t")[1].strip() for line in fd.readlines()}
+            file_path = make_dir(Path.home() / file_name)
+            return {line.split("\t")[0]: line.split("\t")[1]
+                    for line in file_path.read_text().split("\n")}
         except (FileNotFoundError, EOFError):
             return None
 
@@ -670,7 +665,9 @@ class Msg:
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
     nd_help_xml = ("指定すると、コメントをXML形式でダウンロードします。"
                    "チャンネル動画の場合は無視されます。")
-    nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
+
+    # getthumbinfo API から動画の情報のみを ダウンロードします。
+    nd_help_info = "デバッグ用"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
     nd_help_nomulti = "指定すると、プログレスバーを複数行で表示しません。"
@@ -685,14 +682,10 @@ class Msg:
     '''
     ログに書くメッセージ
     '''
-    nd_start_download = "%s 件の情報を取りに行きます。: %s"
     nd_download_done = "%s に保存しました。"
     nd_download_video = "(%s/%s) ID: %s (タイトル:%s) の動画をダウンロードします。"
     nd_download_pict = "(%s/%s) ID: %s (タイトル:%s) のサムネイルをダウンロードします。"
     nd_download_comment = "(%s/%s) ID: %s (タイトル:%s) のコメントをダウンロードします。"
-    nd_start_dl_video = "%s 件の動画をダウンロードします。: %s"
-    nd_start_dl_pict = "%s 件のサムネイルをダウンロードします。: %s"
-    nd_start_dl_comment = "%s 件のコメントをダウンロードします。: %s"
     nd_deleted_or_private = "%s は削除されているか、非公開です。"
 
     ml_exported = "%s に出力しました。"
