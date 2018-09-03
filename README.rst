@@ -179,6 +179,7 @@ Usage as a module
     Comment(mail, password).start(video_ids, DIR_PATH, xml)
 
     VideoSmile(mail, password).start(video_ids, DIR_PATH)
+
     VideoDmc(mail, password).start(video_ids, DIR_PATH)
 
 ==========

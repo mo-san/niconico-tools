@@ -164,7 +164,7 @@ from nicotools.nicodown_async import Comment, Thumbnail
 
 mail = "<your mail address>"
 password = "<your password>"
-xml = True # Set to True if you want in XML format, default is JSON
+xml = True  # Set to True if you want in XML format, default is JSON
 
 # a list of video ids
 video_ids = ["sm1", "sm2", "sm3"]

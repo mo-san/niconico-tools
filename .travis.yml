@@ -1,18 +1,13 @@
 language: python
 
 python:
- - "3.6-dev"
+ - "3.7-dev"
+ - "3.6"
  - "3.5"
- - "3.4"
 
 env:
  - TEST_ASYNC=0
  - TEST_ASYNC=1
-
-matrix:
-  exclude:
-  - python: "3.4"
-    env: TEST_ASYNC=1
 
 install:
   - pip install pytest pytest-catchlog codecov pytest-cov coveralls
@@ -42,3 +37,13 @@ branches:
   only:
   - master
   - develop
+
+deploy:
+  provider: pypi
+  user: mo-san
+  on:
+    repo: mo-san/niconico-tools
+    branch: master
+    python: 3.4
+  password:
+    secure: I6tWjzzqmhAWOWmcq5glcMacNtibSa5Kqi5Rhw6X0ODnrqTtlhX0GH2HxPfPEtTxovIaB8Yp5462myNwIwgAQcdtRIDL3CsZKNKN/p8SedlxJCWJbpB9cyT2RVCskIzcrgYUO72EAD6MXM5HkK2S91aVSgROH57YSt1XJm2QNw79eQfIAtOUhUOTLVj+jJ9JlmzkpS06Ca7tZG3w5vorFKcshGR03FiL4cBNWbgOuD1hUPckBamJ+3IfDqxokE0NzPynCHzFQNXBpoc5b54CGz5CGNyx6nFPt0QUGCakuU4+Km3Cu3qoKhtjhCWMcOGATjY/PRjBaruK5jYTYv//71dDevch3qcI5+aoL2ptkM/3R8DY7SpWijcYWZf9XjlJcZ2uMvhjbvw2ohX/QuHCT0opbzp7AeSKlYBXSBUJy3WCVs/DwAys6QMFxBw7PhK0Ac4krbx9r8K6xOvogeuyOU0zNWIkU22FVHFGy/+6SwSQerN0ShiDR69nwJuf979IUeKHDHP7V4AO6Z2bCQ24LfK/juyUEf7QI98+UXH/NGs6V7axMiNxipUBXjnbpp45lzppMtIxQWXC61mghsZrkgJsMq+kudObbajKqzLUEL8WwsquSjPjwaee8Mvbp89gZ1lJ9jmzxkZiSzQFUBFs/RsNuMoN0m9ce6krRT7HbXY=

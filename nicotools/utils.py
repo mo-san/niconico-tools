@@ -65,7 +65,8 @@ def print_info(queue, file_name=None):
 
 def validator(input_list):
     """
-    動画IDが適切なものか確認する。元のリスト内の順番は保持されない。
+    動画IDが適切なものか確認する。 重複があれば除外する。
+    元のリスト内の順番は保持されない。
 
     受け入れるのは以下の形式:
         * "*"
@@ -97,7 +98,8 @@ def validator(input_list):
         input_list = [input_list]
 
     if not isinstance(input_list, (list, tuple, set)):
-        raise MylistArgumentError(Err.invalid_argument.format(input_list))
+        print(Err.invalid_argument.format(input_list))
+        sys.exit()
 
     if "\t" in input_list[0]:
         for line in input_list[1:]:
@@ -178,7 +180,7 @@ def check_arg(parameters):
     """
     for _name, _value in parameters.items():
         if _value is None:
-            raise MylistArgumentError(Err.not_specified.format(_name))
+            raise SyntaxError(Err.not_specified.format(_name))
 
 
 def sizeof_fmt(num):
@@ -228,7 +230,7 @@ def get_from_getflv(video_id, session, logger=None):
     check_arg(locals())
     suffix = {"as3": 1} if video_id.startswith("nm") else None
     response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-    if logger: logger.debug("GetFLV Response: {}".format(response.text))
+    if logger: logger.debug("GetFLV Response: %s", response.text)
     return extract_getflv(response.text)
 
 
@@ -267,22 +269,7 @@ def extract_getflv(content):
     return result
 
 
-class MylistError(Exception):
-    """ マイリスト操作で誤りがあったときに発生させるエラー """
-    pass
-
-
-class MylistNotFoundError(MylistError):
-    """ マイリストが見つからなかったときに発生させるエラー """
-    pass
-
-
-class MylistArgumentError(MylistError):
-    """ 引数が誤っていたときに発生させるエラー """
-    pass
-
-
-class MylistAPIError(MemoryError):
+class MylistAPIError(Exception):
     """ APIの操作の結果が好ましくない場合に発生させるエラー """
     def __init__(self, code=None, msg=None, ok=False):
         """
@@ -293,11 +280,6 @@ class MylistAPIError(MemoryError):
         self.code = code
         self.msg = msg
         self.ok = ok
-
-
-class NotLoginError(Exception):
-    """ ログインしていない、できなかったときに発生させるエラー """
-    pass
 
 
 class Canopy:
@@ -315,7 +297,7 @@ class Canopy:
         :rtype: Path
         """
         check_arg(locals())
-        file_name =  Msg.nd_file_name.format(
+        file_name =  "{vid}_{name}.{ext}".format(
             vid=video_id, ext=ext,
             name=self.glossary[video_id][KeyGTI.FILE_NAME])
         return Path(self.save_dir).resolve() / file_name
@@ -338,11 +320,17 @@ class Canopy:
 class CanopyAsync(Canopy):
     def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
         super().__init__(logger=logger)
-        self.loop = loop or asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
         self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
         self.session = None  # type: aiohttp.ClientSession
+
+    def close(self):
+        async def _close():
+            await self.session.close()
+
+        self.loop.run_until_complete(_close())
 
 
 class LogIn:
@@ -351,6 +339,7 @@ class LogIn:
     cookie = {}
 
     @classmethod
+    # more と kwargs は未使用の変数だが消してはいけない
     def __new__(cls, *more, **kwargs):
         """
         ログイン処理が一度だけなのを保障するためにシングルトンとして振る舞わせる。
@@ -452,19 +441,16 @@ class LogIn:
     @classmethod
     def save_cookies(cls, requests_cookiejar, file_name=COOKIE_FILE_NAME):
         """
-        クッキーを保存する。保存場所は基本的にユーザーのホームディレクトリ。
+        クッキーを保存する。保存場所はユーザーのホームディレクトリ。
 
         :param cookies.RequestsCookieJar requests_cookiejar:
         :param str file_name:
         :rtype: dict
         """
-        # Python 3.5以上専用でいいならこう書く。
-        # file_path = make_dir(Path.home() / file_name)
-        # file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
-        file_path = join(expanduser("~"), file_name)
+        # Python 3.5以上専用の書き方。
         cook = {key: val for key, val in requests_cookiejar.items()}
-        with open(file_path, "w") as fd:
-            fd.write("\n".join([k + "\t" + v for k, v in cook.items()]))
+        file_path = make_dir(Path.home() / file_name)
+        file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
         return cook
 
     @classmethod
@@ -475,14 +461,11 @@ class LogIn:
         :param str file_name:
         :rtype: dict | None
         """
-        # Python 3.5以上専用でいいならこう書く。
-        # file_path = make_dir(Path.home() / file_name)
-        #     return {line.split("\t")[0]: line.split("\t")[1]
-        #             for line in file_path.read_text().split("\n")}
+        # Python 3.5以上専用の書き方。
         try:
-            file_path = join(expanduser("~"), file_name)
-            with open(file_path, "r") as fd:
-                return {line.split("\t")[0]: line.split("\t")[1].strip() for line in fd.readlines()}
+            file_path = make_dir(Path.home() / file_name)
+            return {line.split("\t")[0]: line.split("\t")[1]
+                    for line in file_path.read_text().split("\n")}
         except (FileNotFoundError, EOFError):
             return None
 
@@ -501,9 +484,9 @@ class NTLogger(logging.Logger):
 
         log_level = logging.getLevelName(log_level)
         self.log_level = log_level
-        if (IS_DEBUG or
-            isinstance(log_level, str) and log_level == "DEBUG" or
-            isinstance(log_level, int) and log_level <= logging.DEBUG):
+        if (isinstance(log_level, str) and log_level == "DEBUG" or
+            isinstance(log_level, int) and log_level <= logging.DEBUG or
+                IS_DEBUG):
             self._is_debug = True
         else:
             self._is_debug = False
@@ -567,15 +550,20 @@ class NTLogger(logging.Logger):
                        if isinstance(item, str) else item for item in args[0]])
         self._log(level, _msg, _args, **kwargs)
 
-    def debug(self, msg, *args, **kwargs): self.forwarding(logging.DEBUG, msg, args, **kwargs)
+    def debug(self, msg, *args, **kwargs):
+        self.forwarding(logging.DEBUG, msg, args, **kwargs)
 
-    def info(self, msg, *args, **kwargs): self.forwarding(logging.INFO, msg, args, **kwargs)
+    def info(self, msg, *args, **kwargs):
+        self.forwarding(logging.INFO, msg, args, **kwargs)
 
-    def warning(self, msg, *args, **kwargs): self.forwarding(logging.WARNING, msg, args, **kwargs)
+    def warning(self, msg, *args, **kwargs):
+        self.forwarding(logging.WARNING, msg, args, **kwargs)
 
-    def error(self, msg, *args, **kwargs): self.forwarding(logging.ERROR, msg, args, **kwargs)
+    def error(self, msg, *args, **kwargs):
+        self.forwarding(logging.ERROR, msg, args, **kwargs)
 
-    def critical(self, msg, *args, **kwargs): self.forwarding(logging.CRITICAL, msg, args, **kwargs)
+    def critical(self, msg, *args, **kwargs):
+        self.forwarding(logging.CRITICAL, msg, args, **kwargs)
 
 
 class URL:
@@ -616,7 +604,9 @@ class Msg:
     description = ("nicotools downlaod --help または nicotools mylist --help"
                    " で各コマンドのヘルプを表示します。")
 
-    ''' マイリスト編集コマンドのヘルプメッセージ '''
+    '''
+    マイリスト編集コマンドのヘルプメッセージ
+    '''
     ml_description = ("マイリストを扱います。 add, delete, move, copy の引数には"
                       "テキストファイルも指定できます。 その場合はファイル名の"
                       "先頭に \"+\" をつけます。 例: +\"C:/ids.txt\"")
@@ -645,7 +635,9 @@ class Msg:
                    "マイリスト内の全項目の削除の時に確認しません。")
     ml_help_each = "指定すると、登録や削除を、まとめずに一つずつ行います。"
 
-    ''' 動画ダウンロードコマンドのヘルプメッセージ '''
+    '''
+    動画ダウンロードコマンドのヘルプメッセージ
+    '''
     nd_description = "動画のいろいろをダウンロードします。"
     nd_help_video_id = ("ダウンロードしたい動画ID。 例: sm12345678 "
                         "テキストファイルも指定できます。 その場合はファイル名の "
@@ -661,7 +653,9 @@ class Msg:
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
     nd_help_xml = ("指定すると、コメントをXML形式でダウンロードします。"
                    "チャンネル動画の場合は無視されます。")
-    nd_help_info = "getthumbinfo API から動画の情報のみを ダウンロードします。"
+
+    # getthumbinfo API から動画の情報のみを ダウンロードします。
+    nd_help_info = "デバッグ用"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
     nd_help_nomulti = "指定すると、プログレスバーを複数行で表示しません。"
@@ -673,57 +667,57 @@ class Msg:
     input_mail = "メールアドレスを入力してください。"
     input_pass = "パスワードを入力してください(画面には表示されません)。"
 
-    ''' ログに書くメッセージ '''
-    nd_start_download = "{count} 件の情報を取りに行きます。: {ids}"
-    nd_download_done = "{path} に保存しました。"
-    nd_download_video = "({0}/{1}) ID: {2} (タイトル:{3}) の動画をダウンロードします。"
-    nd_download_pict = "({0}/{1}) ID: {2} (タイトル:{3}) のサムネイルをダウンロードします。"
-    nd_download_comment = "({0}/{1}) ID: {2} (タイトル:{3}) のコメントをダウンロードします。"
-    nd_start_dl_video = "{count} 件の動画をダウンロードします。: {ids}"
-    nd_start_dl_pict = "{count} 件のサムネイルをダウンロードします。: {ids}"
-    nd_start_dl_comment = "{count} 件のコメントをダウンロードします。: {ids}"
-    nd_file_name = "{vid}_{name}.{ext}"
-    nd_deleted_or_private = "{0} は削除されているか、非公開です。"
+    '''
+    ログに書くメッセージ
+    '''
+    nd_download_done = "%s に保存しました。"
+    nd_download_video = "(%s/%s) ID: %s (タイトル:%s) の動画をダウンロードします。"
+    nd_download_pict = "(%s/%s) ID: %s (タイトル:%s) のサムネイルをダウンロードします。"
+    nd_download_comment = "(%s/%s) ID: %s (タイトル:%s) のコメントをダウンロードします。"
+    nd_deleted_or_private = "%s は削除されているか、非公開です。"
 
-    ml_exported = "{0} に出力しました。"
-    ml_items_counts = "含まれる項目の数:"
-    ml_fetching_mylist_id = "マイリスト: {0} の ID を問い合わせています..."
-    ml_showing_mylist = "マイリスト「{0}」の詳細を読み込んでいます..."
+    ml_exported = "%s に出力しました。"
+    ml_showing_mylist = "マイリスト「%s」の詳細を読み込んでいます..."
     ml_loading_mylists = "マイリストページを読み込んでいます..."
-    ml_mylist_found = "ID: {0}, NAME: {1}, DESC: {2}"
 
-    ml_ask_delete_all = "{0} に登録されている以下の全ての項目を削除します。"
+    ml_ask_delete_all = "%s に登録されている以下の全ての項目を削除します。"
     ml_confirmation = "この操作は取り消せません。よろしいですか? (Y/N)"
     ml_answer_yes = "処理を開始します。"
     ml_answer_no = "操作を中止しました。"
     ml_answer_invalid = "Y または N を入力してください。"
-    ml_deleted_or_private = "{0[video_id]} {0[title]} は削除されているか非公開です。"
+    ml_deleted_or_private = "%(video_id)s %(title)s は削除されているか非公開です。"
 
-    ml_done_add = "[完了:追加] ({now}/{all}) 動画: {video_id}"
-    ml_done_delete = "[完了:削除] ({now}/{all}) 動画: {video_id}"
-    ml_done_copy = "[完了:コピー] ({now}/{all}) 動画ID: {video_id}"
-    ml_done_move = "[完了:移動] ({now}/{all}) 動画ID: {video_id}"
-    ml_done_purge = "[完了:マイリスト削除] 名前: {name}"
-    ml_done_create = ("[完了:マイリスト作成] ID: {_id}, 名前:"
-                      " {name} (公開: {pub}), 説明文: {desc}")
+    ml_done_add = "[完了:追加] (%s/%s) 動画: %s"
+    ml_done_delete = "[完了:削除] (%s/%s) 動画: %s"
+    ml_done_copy = "[完了:コピー] (%s/%s) 動画ID: %s"
+    ml_done_move = "[完了:移動] (%s/%s) 動画ID: %s"
+    ml_done_purge = "[完了:マイリスト削除] 名前: %s"
+    ml_done_create = "[完了:マイリスト作成] ID: %s, 名前: %s (公開: %s), 説明文: %s"
 
-    ml_will_add = "[作業内容:追加] 対象: {0}, 動画ID: {1}"
-    ml_will_delete = "[作業内容:削除] {0} から, 動画ID: {1}"
-    ml_will_copy = "[作業内容:コピー] {0} から {1} へ, 動画ID: {2}"
-    ml_will_move = "[作業内容:移動] {0} から {1} へ, 動画ID: {2}"
-    ml_will_purge = "[作業内容:マイリスト削除] マイリスト「{0}」を完全に削除します。"
+    ml_will_add = "[作業内容:追加] 対象: %s, 動画ID: %s"
+    ml_will_delete = "[作業内容:削除] %s から, 動画ID: %s"
+    ml_will_copy = "[作業内容:コピー] %s から %s へ, 動画ID: %s"
+    ml_will_move = "[作業内容:移動] %s から %s へ, 動画ID: %s"
+    ml_will_purge = "[作業内容:マイリスト削除] マイリスト「%s」を完全に削除します。"
 
 
 class Err:
     """ エラーメッセージ """
 
-    failed_operation = "以下の理由により操作は失敗しました: {desc}"
+    known_error = "[エラー] 動画: %s, コード: %s, 内容: %s"
+    unknown_error_itemid = "[エラー] (%s/%s) 動画: %s, サーバーからの返事: %s"
+    failed_to_create = "[エラー] %s の作成に失敗しました。 サーバーからの返事: %s"
+    failed_to_purge = "[エラー] %s の削除に失敗しました。 サーバーからの返事: %s"
+    failed_operation = "以下の理由により操作は失敗しました: %s"
+    name_replaced = ("作成しようとした名前「%s」は特殊文字を含むため、"
+                     "「%s」に置き換わっています。")
+    not_installed = "%s がインストールされていないため実行できません。"
+    item_not_contained = "[エラー] 以下の項目は %s に存在しません: %s"
+    remaining = "以下の項目は処理されませんでした: %s"
+
     waiting_for_permission = "アクセス制限が解除されるのを待っています…"
-    name_replaced = ("作成しようとした名前「{0}」は特殊文字を含むため、"
-                     "「{1}」に置き換わっています。")
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
-    not_installed = "{0} がインストールされていないため実行できません。"
     invalid_argument = "引数の型が間違っています。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"
@@ -740,7 +734,6 @@ class Err:
     only_perform_all = "[エラー] このコマンドには * のみ指定できます。"
     unexpected_commands = "このコマンドは使用できません。 {0}"
     no_commands = "[エラー] コマンドを指定してください。"
-    item_not_contained = "[エラー] 以下の項目は {0} に存在しません: {1}"
     name_ambiguous = ("同名のマイリストが {0}件あります。名前の代わりに"
                       "IDで(--id を使って)指定し直してください。")
     name_ambiguous_detail = ("ID: {id}, 名前: {name}, {publicity},"
@@ -748,13 +741,7 @@ class Err:
     mylist_not_exist = "[エラー] {0} という名前のマイリストは存在しません。"
     mylist_id_not_exist = "[エラー] {0} というIDのマイリストは存在しません。"
     over_load = "[エラー] {0} にはこれ以上追加できません。"
-    remaining = "以下の項目は処理されませんでした: {0}"
     already_exist = "[エラー]すでに存在しています。 ID: {0} (タイトル: {1})"
-    known_error = "[エラー] 動画: {0}, コード: {}, 内容: {1}"
-    unknown_error_itemid = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
-    unknown_error = "[エラー] ({0}/{1}) 動画: {2}, サーバーからの返事: {3}"
-    failed_to_create = "[エラー] {0} の作成に失敗しました。 サーバーからの返事: {1}"
-    failed_to_purge = "[エラー] {0} の削除に失敗しました。 サーバーからの返事: {1}"
     invalid_spec = ("[エラー] {0} は不正です。マイリストの名前"
                     "またはIDは文字列か整数で入力してください。")
     no_items = "[エラー] 指定した動画はいずれもこのマイリストには登録されていません。"
@@ -849,8 +836,6 @@ class KeyDmc:
     THUMBNAIL_URL   = "thumbnail_url"
     ECO             = "eco"             # int
     MOVIE_TYPE      = "movie_type"
-    # IS_DMC          = "is_dmc"          # int or None
-    DELETED         = "deleted"         # int
     IS_DELETED      = "is_deleted"      # bool
     IS_PUBLIC       = "is_public"       # bool
     IS_OFFICIAL     = "is_official"     # bool
@@ -923,6 +908,7 @@ class InheritedParser(ArgumentParser):
             else:
                 try:
                     # ↓文字コードを指定しないとCP932で開いてしまいエラーになる
+                    # todo: CP932 でも受け付けるようにする
                     with open(arg_string[1:], encoding="utf-8") as args_file:
                         arg_strings = []
                         for arg_line in args_file.read().splitlines():

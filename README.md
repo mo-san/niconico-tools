@@ -300,7 +300,7 @@ from nicotools.nicodown_async import Comment, Thumbnail
 
 mail = "<your mail address>"
 password = "<your password>"
-xml = True # True にするとXML形式で取ってくる。指定がなければ JSON。
+xml = True  # True にするとXML形式で取ってくる。指定がなければ JSON。
 
 # 動画IDのリスト
 video_ids = ["sm1", "sm2", "sm3"]
