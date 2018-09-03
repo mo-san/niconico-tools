@@ -102,7 +102,7 @@ class Info(utils.CanopyAsync):
                   if info[KeyDmc.IS_PUBLIC] and not info[KeyDmc.IS_DELETED]}
         bad = list(set(infos) - set(good))
         if len(bad) > 0:
-            self.logger.info(Msg.nd_deleted_or_private, bad)
+            self.logger.info(Msg.nd_deleted_or_private.format(bad))
         if self.__do_sieve:
             return good
         else:
@@ -234,8 +234,8 @@ class Info(utils.CanopyAsync):
         info = {
             KeyDmc.VIDEO_ID     : _video["id"],  # type: str
             KeyDmc.VIDEO_URL_SM : _video["smileInfo"]["url"],  # type: str
-            KeyDmc.TITLE        : _video["originalTitle"],  # type: str
-            KeyDmc.FILE_NAME    : utils.t2filename(_video["originalTitle"]),
+            KeyDmc.TITLE        : _video["title"],  # type: str
+            KeyDmc.FILE_NAME    : utils.t2filename(_video["title"]),
             KeyDmc.FILE_SIZE    : None,
             KeyDmc.THUMBNAIL_URL: _video["thumbnailURL"],  # type: str
             KeyDmc.ECO          : bool(j["context"]["isPeakTime"]),  # type: bool
@@ -295,7 +295,7 @@ class Info(utils.CanopyAsync):
             })
         return info
 
-    def _junction(self, content: str) -> Dict:
+    def _junction(self, content: str) -> Dict[str, Union[str, int, List[str], bool]]:
         """
         動画視聴ページのHTMLから必要な情報を取り出す。
 
@@ -425,7 +425,7 @@ class Thumbnail(utils.CanopyAsync):
 
             with file_path.open('wb') as f:
                 f.write(image_data)
-            self.logger.info(Msg.nd_download_done, file_path)
+            self.logger.info(Msg.nd_download_done.format(path=file_path))
 
     def _make_urls(self, video_ids: list, is_large: bool=True) -> list:
         """
@@ -440,7 +440,7 @@ class Thumbnail(utils.CanopyAsync):
             urls = [self.glossary[_id][KeyGTI.THUMBNAIL_URL] for _id in video_ids]
         return urls
 
-    async def _get_infos(self, queue: list) -> dict:
+    async def _get_infos(self, queue: List[str]) -> Dict[str, Dict]:
         """
         getthumbinfo APIから、細かな情報をもらってくる
 
@@ -456,7 +456,7 @@ class Thumbnail(utils.CanopyAsync):
         await asyncio.wait(tasks, loop=self.loop)
         bad = list(set(queue) - set(self.__bucket))
         if len(bad) > 0:
-            self.logger.info(Msg.nd_deleted_or_private, bad)
+            self.logger.info(Msg.nd_deleted_or_private.format(bad))
         result = self.__bucket
         del self.__bucket
         return result
@@ -576,9 +576,10 @@ class VideoSmile(utils.CanopyAsync):
         division = self.__division
         file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
 
-        self.logger.info(Msg.nd_download_video,
-            idx + 1, len(self.glossary), video_id,
-            self.glossary[video_id][KeyDmc.TITLE])
+        self.logger.info(
+            Msg.nd_download_video.format(
+                idx + 1, len(self.glossary), video_id,
+                self.glossary[video_id][KeyDmc.TITLE]))
 
         video_url = self.glossary[video_id][KeyDmc.VIDEO_URL_SM]
         file_size = self.glossary[video_id][KeyDmc.FILE_SIZE]
@@ -662,7 +663,7 @@ class VideoSmile(utils.CanopyAsync):
                     with open(name, "rb") as file:
                         fd.write(file.read())
                     os.remove(name)
-            self.logger.info(Msg.nd_download_done, file_path)
+            self.logger.info(Msg.nd_download_done.format(path=file_path))
 
 
 class VideoDmc(utils.CanopyAsync):
@@ -774,17 +775,12 @@ class VideoDmc(utils.CanopyAsync):
         ) as response:  # type: aiohttp.ClientResponse
             return await response.text()
 
-    def _make_param_xml(self, info: Dict) -> str:
-        """
-
-        :param Dict[str, str] info:
-        :rtype: str
-        """
+    def _make_param_xml(self, info: Dict[str, str]) -> str:
         info.update({
             "video_src_ids_xml": "".join(map(
-                lambda t: "<string>%s</string>" % t, info[KeyDmc.VIDEO_SRC_IDS])),
+                lambda _: "<string>{}</string>".format(_), info[KeyDmc.VIDEO_SRC_IDS])),
             "audio_src_ids_xml": "".join(map(
-                lambda t: "<string>%s</string>" % t, info[KeyDmc.AUDIO_SRC_IDS]))
+                lambda _: "<string>{}</string>".format(_), info[KeyDmc.AUDIO_SRC_IDS]))
         })
         xml = Template("""<session>
           <recipe_id>${recipe_id}</recipe_id>
@@ -844,12 +840,7 @@ class VideoDmc(utils.CanopyAsync):
         """)
         return xml.substitute(info)
 
-    def _make_param_json(self, info: Dict) -> str:  # pragma: no cover
-        """
-
-        :param Dict[str, Union[str, list, int]] info:
-        :rtype: str
-        """
+    def _make_param_json(self, info: Dict[str, Union[str, list, int]]) -> str:  # pragma: no cover
         param = {
             "session": {
                 "recipe_id": info[KeyDmc.RECIPE_ID],
@@ -909,7 +900,7 @@ class VideoDmc(utils.CanopyAsync):
     def _extract_video_url_xml(self, text: str) -> str:
         self.logger.debug("Returned XML data: %s", text)
         soup = BeautifulSoup(text, "html.parser")
-        url_tag = soup.content_uri
+        url_tag = soup.content_uri  # type: Tag
         return url_tag.text
 
     def _extract_video_url_json(self, text: str) -> str:  # pragma: no cover
@@ -920,7 +911,7 @@ class VideoDmc(utils.CanopyAsync):
 
     def _extract_session_id_xml(self, text: str) -> str:
         soup = BeautifulSoup(text, "html.parser")
-        id_tag = soup.session.id
+        id_tag = soup.session.id  # type: Tag
         self.logger.debug("Session ID: %s", id_tag.text)
         return id_tag.text
 
@@ -971,9 +962,10 @@ class VideoDmc(utils.CanopyAsync):
         division = self.__division
         file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
 
-        self.logger.info(Msg.nd_download_video,
-            idx + 1, len(self.glossary), video_id,
-            self.glossary[video_id][KeyDmc.TITLE])
+        self.logger.info(
+            Msg.nd_download_video.format(
+                idx + 1, len(self.glossary), video_id,
+                self.glossary[video_id][KeyDmc.TITLE]))
 
         file_size = await self._get_file_size(video_id, video_url)
         headers = [
@@ -1061,7 +1053,7 @@ class VideoDmc(utils.CanopyAsync):
                     with open(name, "rb") as file:
                         fd.write(file.read())
                     os.remove(name)
-            self.logger.info(Msg.nd_download_done, file_path)
+            self.logger.info(Msg.nd_download_done.format(path=file_path))
 
 
 class Comment(utils.CanopyAsync):
@@ -1208,7 +1200,7 @@ class Comment(utils.CanopyAsync):
         self.logger.debug("File Path: %s", file_path)
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
-        self.logger.info(Msg.nd_download_done, file_path)
+        self.logger.info(Msg.nd_download_done.format(path=file_path))
         return True
 
     async def get_thread_key(self, thread_id, needs_key):
