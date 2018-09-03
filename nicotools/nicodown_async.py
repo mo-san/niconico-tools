@@ -163,7 +163,7 @@ class Info(utils.CanopyAsync):
             KeyDmc.FILE_NAME    : utils.t2filename(flash_vars["videoTitle"]),
             KeyDmc.FILE_SIZE    : None,  # int
             KeyDmc.THUMBNAIL_URL: flash_vars["thumbImage"],  # str
-            KeyDmc.ECO          : bool(flash_vars.get("eco") or 0),  # bool
+            KeyDmc.ECO          : bool(flash_vars.get("eco", 0)),  # bool
             KeyDmc.MOVIE_TYPE   : flash_vars["movie_type"],  # str
             # KeyDmc.IS_DMC       : int(flash_vars["isDmc"]),  # int
             # KeyDmc.DELETED      : int(flash_vars["deleted"]),  # int
