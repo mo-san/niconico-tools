@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from nicotools import utils
-from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc, NotLoginError
+from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc
 
 
 class Info(utils.CanopyAsync):
@@ -25,9 +25,9 @@ class Info(utils.CanopyAsync):
                  logger: utils.NTLogger=None,
                  session: aiohttp.ClientSession=None,
                  limit: int=4,
-                 sieve=True,
+                 sieve: bool=True,
                  loop: asyncio.AbstractEventLoop=None,
-                 return_session=False,
+                 return_session: bool=False,
                  interval: Union[int, float]=5,
                  backoff: Union[int, float]=3,
                  retries: Union[int, float]=3,
@@ -163,10 +163,10 @@ class Info(utils.CanopyAsync):
             KeyDmc.FILE_NAME    : utils.t2filename(flash_vars["videoTitle"]),
             KeyDmc.FILE_SIZE    : None,  # int
             KeyDmc.THUMBNAIL_URL: flash_vars["thumbImage"],  # str
-            KeyDmc.ECO          : flash_vars.get("eco") or 0,  # int
+            KeyDmc.ECO          : bool(flash_vars.get("eco") or 0),  # bool
             KeyDmc.MOVIE_TYPE   : flash_vars["movie_type"],  # str
             # KeyDmc.IS_DMC       : int(flash_vars["isDmc"]),  # int
-            KeyDmc.DELETED      : int(flash_vars["deleted"]),  # int
+            # KeyDmc.DELETED      : int(flash_vars["deleted"]),  # int
             KeyDmc.IS_DELETED   : watch_api["videoDetail"]["isDeleted"],  # bool
             KeyDmc.IS_PUBLIC    : watch_api["videoDetail"]["is_public"],  # bool
             KeyDmc.IS_OFFICIAL  : watch_api["videoDetail"]["is_official"],  # bool
@@ -224,7 +224,7 @@ class Info(utils.CanopyAsync):
         """
         j = json.loads(content)
         _video = j["video"]
-        if "dmcInfo" in _video:
+        if "dmcInfo" in _video and _video["dmcInfo"] is not None:
             dmc_info = _video["dmcInfo"]
             session_api = dmc_info["session_api"]
         else:
@@ -238,9 +238,8 @@ class Info(utils.CanopyAsync):
             KeyDmc.FILE_NAME    : utils.t2filename(_video["originalTitle"]),
             KeyDmc.FILE_SIZE    : None,
             KeyDmc.THUMBNAIL_URL: _video["thumbnailURL"],  # type: str
-            KeyDmc.ECO          : j["context"]["isPeakTime"],  # type: bool
+            KeyDmc.ECO          : bool(j["context"]["isPeakTime"]),  # type: bool
             KeyDmc.MOVIE_TYPE   : _video["movieType"],  # type: str
-            KeyDmc.DELETED      : dmc_info["video"]["deleted"],  # type: int
             KeyDmc.IS_DELETED   : _video["isDeleted"],  # type: bool
             KeyDmc.IS_PUBLIC    : _video["isPublic"],  # type: bool
             KeyDmc.IS_OFFICIAL  : _video["isOfficial"],  # type: bool
@@ -275,6 +274,7 @@ class Info(utils.CanopyAsync):
 
         if dmc_info:
             info.update({
+                KeyDmc.IS_DELETED   : dmc_info["video"]["deleted"],  # type: int
                 KeyDmc.MSG_SERVER   : dmc_info["thread"]["server_url"],  # type: str
                 KeyDmc.THREAD_ID    : dmc_info["thread"]["thread_id"],  # type: int
                 KeyDmc.API_URL      : session_api["urls"][0]["url"],  # type: str
@@ -307,7 +307,8 @@ class Info(utils.CanopyAsync):
         soup = BeautifulSoup(content, "html.parser")
         _not_login = soup.select("#Login_nico")
         if _not_login:
-            raise NotLoginError("ログインしてないよ")
+            print("ログインできてない")
+            sys.exit()
         _data_api = soup.select("#js-initial-watch-data")
         _watch_api = soup.select("#watchAPIDataContainer")
         if _data_api:
@@ -350,9 +351,6 @@ class Thumbnail(utils.CanopyAsync):
     async def get_session(self) -> aiohttp.ClientSession:
         return aiohttp.ClientSession()
 
-    def close(self):
-        self.session.close()
-
     def start(self, glossary: Union[List, Dict],
               save_dir: Union[str, Path], is_large=True):
         """
@@ -382,7 +380,7 @@ class Thumbnail(utils.CanopyAsync):
                 self.loop.run_until_complete(self._download(self.undone, False))
             self.logger.debug("全部終わった")
         if not self.__return_session:
-            self.session.close()
+            self.close()
         return self
 
     async def _download(self, video_ids: list, islarge: bool=True) -> None:
@@ -522,9 +520,6 @@ class VideoSmile(utils.CanopyAsync):
             cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
             return aiohttp.ClientSession(cookies=cook)
 
-    def close(self):
-        self.session.close()
-
     def start(self,
               glossary: Union[list, dict],
               save_dir: Union[str, Path]):
@@ -549,7 +544,7 @@ class VideoSmile(utils.CanopyAsync):
         self.loop.run_until_complete(self._push_file_size())
         self.loop.run_until_complete(self._broker())
         if not self.__return_session:
-            self.session.close()
+            self.close()
         return self
 
     async def _push_file_size(self):
@@ -711,9 +706,6 @@ class VideoDmc(utils.CanopyAsync):
             cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
             return aiohttp.ClientSession(cookies=cook)
 
-    def close(self):
-        self.session.close()
-
     def start(self,
               glossary: Union[list, dict],
               save_dir: Union[str, Path],
@@ -734,7 +726,7 @@ class VideoDmc(utils.CanopyAsync):
 
         self.loop.run_until_complete(self._broker(xml))
         if not self.__return_session:
-            self.session.close()
+            self.close()
         return self
 
     async def _broker(self, xml: bool=True) -> None:
@@ -1110,9 +1102,6 @@ class Comment(utils.CanopyAsync):
             cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
             return aiohttp.ClientSession(cookies=cook)
 
-    def close(self):
-        self.session.close()
-
     def start(self, glossary, save_dir, xml=False, density: str="0-99999:9999,1000"):
         """
         ダウンロードを開始する。
@@ -1421,10 +1410,12 @@ def main(args):
     destination = utils.make_dir(args.dest[0])
 
     if args.thumbnail:
-        Thumbnail(logger=logger).start(videoid, destination)
+        if args.comment or args.video:
+            Thumbnail(logger=logger).start(videoid, destination)
         if not (args.comment or args.video):
             # サムネイルのダウンロードだけなら
             # ログインする必要がないのでここで終える。
+            Thumbnail(logger=logger).start(videoid, destination).close()
             return True
 
     info = Info(
@@ -1434,23 +1425,25 @@ def main(args):
     session = info.session
 
     if len(database) == 0:
-        session.close()
+        info.close()
         return True
 
     if args.comment:
-        (Comment(logger=logger, session=session)
-         .start(database, destination, args.xml))
+        if args.video:
+            (Comment(logger=logger, session=session)
+             .start(database, destination, args.xml))
+        else:
+            (Comment(logger=logger, session=session)
+             .start(database, destination, args.xml).close())
 
     if args.video:
         if args.smile:
-            (VideoSmile(logger=logger, session=session,
-                        division=args.limit, multiline=args.nomulti)
-             .start(database, destination))
+            (VideoSmile(logger=logger, session=session, division=args.limit, multiline=args.nomulti)
+             .start(database, destination).close())
         else:
-            (VideoDmc(logger=logger, session=session,
-                      division=args.limit, multiline=args.nomulti)
-             .start(database, destination))
+            (VideoDmc(logger=logger, session=session, division=args.limit, multiline=args.nomulti)
+             .start(database, destination).close())
 
-    if not session.closed:
-        session.close()
     return True
+
+# todo: --smile無しでdmcではない動画なら--smile付きでやり直す

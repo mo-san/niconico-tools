@@ -12,7 +12,7 @@ except ImportError:
     PrettyTable = False
 
 from nicotools import utils
-from nicotools.utils import Msg, Err, URL, KeyGTI, MKey, MylistNotFoundError, MylistAPIError
+from nicotools.utils import Msg, Err, URL, KeyGTI, MKey, MylistAPIError
 
 # TODO: purifyコマンド
 
@@ -305,7 +305,7 @@ class NicoMyList(utils.Canopy):
                 sys.exit()
             else:
                 # 存在しなかったとき
-                raise MylistNotFoundError(result.get("err_msg"))
+                print(result.get("err_msg"))
         else:
             list_id = result["list_id"]
             list_name = result["list_name"]
@@ -507,9 +507,9 @@ class NicoMyList(utils.Canopy):
         """
         utils.check_arg(locals())
         if utils.ALL_ITEM == mylist_name:
-            raise utils.MylistError(Err.cant_perform_all)
+            print(Err.cant_perform_all)
         if mylist_name == "" or mylist_name == utils.DEFAULT_NAME:
-            raise utils.MylistError(Err.cant_create)
+            print(Err.cant_create)
         res = self.get_response("create", is_public=is_public,
                                 mylist_name=mylist_name, description=description)
         if res["status"] != "ok":
@@ -535,11 +535,11 @@ class NicoMyList(utils.Canopy):
         """
         utils.check_arg(locals())
         if utils.ALL_ITEM == list_id:
-            raise utils.MylistError(Err.cant_perform_all)
+            print(Err.cant_perform_all)
         list_id, list_name = self._get_list_id(list_id)
 
         if list_id == utils.DEFAULT_ID:
-            raise utils.MylistError(Err.deflist_to_create_or_purge)
+            print(Err.deflist_to_create_or_purge)
         if not confident and not self._confirmation("purge", list_name):
             print(Msg.ml_answer_no)
             return False
@@ -563,7 +563,7 @@ class NicoMyList(utils.Canopy):
         """
         utils.check_arg(locals())
         if utils.ALL_ITEM == list_id or utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.cant_perform_all)
+            print(Err.cant_perform_all)
         list_id, list_name = self._get_list_id(list_id)
 
         to_def = (list_id == utils.DEFAULT_ID)
@@ -601,11 +601,11 @@ class NicoMyList(utils.Canopy):
         """
         utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.videoids_contain_all)
+            print(Err.videoids_contain_all)
         list_id_from, list_name_from = self._get_list_id(list_id_from)
         list_id_to, list_name_to = self._get_list_id(list_id_to)
         if list_id_from == list_id_to:
-            raise utils.MylistError(Err.list_names_are_same)
+            print(Err.list_names_are_same)
 
         to_def = (list_id_to == utils.DEFAULT_ID)
         from_def = (list_id_from == utils.DEFAULT_ID)
@@ -657,7 +657,7 @@ class NicoMyList(utils.Canopy):
         """
         utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.videoids_contain_all)
+            print(Err.videoids_contain_all)
         list_id_from, list_name_from = self._get_list_id(list_id_from)
         list_id_to, list_name_to = self._get_list_id(list_id_to)
 
@@ -729,7 +729,7 @@ class NicoMyList(utils.Canopy):
         """
         utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.videoids_contain_all)
+            print(Err.videoids_contain_all)
         list_id, list_name = self._get_list_id(list_id)
 
         from_def = (list_id == utils.DEFAULT_ID)

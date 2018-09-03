@@ -75,20 +75,18 @@ def id_and_name(instance):
         instance.create_mylist(TEST_LIST)
         result = instance.get_list_id(TEST_LIST)
 
-    class O:
+    class Obj:
         id = result["list_id"]
         name = result["list_name"]
 
         @classmethod
         def close(cls):
             # 終わったら片付けるための関数
-            try:
-                c = "{} --purge --id --yes".format(cls.id)
-                nicotools.main(param(c))
-            except utils.MylistNotFoundError:
-                pass
+            c = "{} --purge --id --yes".format(cls.id)
+            nicotools.main(param(c))
 
-    return O
+
+    return Obj
 
 
 # noinspection PyShadowingNames
@@ -99,19 +97,17 @@ def id_and_name_to(instance):
         instance.create_mylist(TEST_LIST_TO)
         result = instance.get_list_id(TEST_LIST_TO)
 
-    class O:
+    class Obj:
         id = result["list_id"]
         name = result["list_name"]
 
         @classmethod
         def close(cls):
             # 終わったら片付けるための関数
-            try:
-                c = "{} --purge --id --yes".format(cls.id)
-                nicotools.main(param(c))
-            except utils.MylistNotFoundError:
-                pass
-    return O
+            c = "{} --purge --id --yes".format(cls.id)
+            nicotools.main(param(c))
+
+    return Obj
 
 
 # noinspection PyShadowingNames
@@ -294,8 +290,9 @@ class TestOtherCommands:
         assert nicotools.main(param(c))
 
     def test_close(self, id_and_name, id_and_name_to):
-        id_and_name.close()
-        id_and_name_to.close()
+        with pytest.raises(SystemExit):
+            id_and_name.close()
+            id_and_name_to.close()
 
 
 # noinspection PyShadowingNames
@@ -336,41 +333,41 @@ class TestErrors:
             nicotools.main(param(c))
 
     def test_add_all_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.add(utils.ALL_ITEM, "sm9")
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.add(utils.DEFAULT_ID, utils.ALL_ITEM)
 
     def test_delete_ambiguous_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.delete(utils.DEFAULT_ID, utils.ALL_ITEM, "sm9")
 
     def test_copy_same_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.copy(1, 1, utils.ALL_ITEM)
 
     def test_copy_ambiguous_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.copy(utils.DEFAULT_ID, 1, utils.ALL_ITEM, "sm9")
 
     def test_create_allname_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.create_mylist(utils.DEFAULT_NAME)
 
     def test_create_null_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.create_mylist("")
 
     def test_purge_def_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.purge_mylist(utils.DEFAULT_NAME)
 
     def test_purge_all_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.create_mylist(utils.ALL_ITEM)
 
     def test_purge_null_internal(self, instance):
-        with pytest.raises(utils.MylistError):
+        with pytest.raises(SystemExit):
             instance.create_mylist("")
 
     def test_no_commands(self):
@@ -380,7 +377,7 @@ class TestErrors:
 
     def test_list_not_exists_and_create_special_characters_name(self, instance):
         c = "{} --show".format(INSANE_NAME)
-        with pytest.raises(utils.MylistNotFoundError):
+        with pytest.raises(SystemExit):
             nicotools.main(param(c))
         instance.create_mylist(INSANE_NAME)
         # 作ったばかりなのでマイリストIDは、手持ちの中で最大。

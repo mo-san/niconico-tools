@@ -244,23 +244,23 @@ if is_async:
             try:
                 db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
                 assert CommentAsync().start(db, SAVE_DIR_2)
-            except aiohttp.errors.HttpProcessingError:
+            except aiohttp.client_exceptions.ClientError:
                 pass
 
         def test_comment_multi(self):
             try:
                 db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
                 assert CommentAsync().start(db, SAVE_DIR_2, xml=True)
-            except aiohttp.errors.HttpProcessingError:
+            except aiohttp.client_exceptions.ClientError:
                 pass
 
         def test_comment_without_directory(self):
             try:
                 db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-                with pytest.raises(utils.MylistArgumentError):
+                with pytest.raises(SyntaxError):
                     # noinspection PyTypeChecker
                     CommentAsync().start(db, None)
-            except aiohttp.errors.HttpProcessingError:
+            except aiohttp.client_exceptions.ClientError:
                 pass
 
 
@@ -273,14 +273,14 @@ if is_async:
             try:
                 db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
                 assert ThumbnailAsync().start(db, SAVE_DIR_2)
-            except aiohttp.errors.HttpProcessingError:
+            except aiohttp.client_exceptions.ClientError:
                 pass
 
         def test_thumbnail_multi(self):
             try:
                 db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand(0))
                 assert ThumbnailAsync().start(db, SAVE_DIR_2)
-            except aiohttp.errors.HttpProcessingError:
+            except aiohttp.client_exceptions.ClientError:
                 pass
 
 
@@ -293,7 +293,7 @@ if is_async:
             try:
                 db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
                 assert VideoSmile(multiline=False).start(db, SAVE_DIR_2)
-            except aiohttp.errors.HttpProcessingError:
+            except aiohttp.client_exceptions.ClientError:
                 pass
 
         def test_video_smile_premium_multi(self):
@@ -301,7 +301,7 @@ if is_async:
                 try:
                     db = Info(AUTH_P[0], AUTH_P[1], LOGGER).get_data(rand(3))
                     assert VideoSmile(multiline=False).start(db, SAVE_DIR_2)
-                except aiohttp.errors.HttpProcessingError:
+                except aiohttp.client_exceptions.ClientError:
                     pass
 
 
@@ -314,7 +314,7 @@ if is_async:
             try:
                 db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
                 assert VideoDmc(multiline=False).start(db, SAVE_DIR_2)
-            except aiohttp.errors.HttpProcessingError:
+            except aiohttp.client_exceptions.ClientError:
                 pass
 
         def test_video_dmc_premium_multi(self):
@@ -322,7 +322,7 @@ if is_async:
                 try:
                     db = Info(AUTH_P[0], AUTH_P[1], LOGGER).get_data(rand(3))
                     assert VideoDmc(multiline=False).start(db, SAVE_DIR_2)
-                except aiohttp.errors.HttpProcessingError:
+                except aiohttp.client_exceptions.ClientError:
                     pass
 
 else:
@@ -337,7 +337,7 @@ else:
 
         def test_comment_without_directory(self):
             db = get_infos(rand()[0], LOGGER)
-            with pytest.raises(utils.MylistArgumentError):
+            with pytest.raises(SyntaxError):
                 # noinspection PyTypeChecker
                 Comment(AUTH_N[0], AUTH_N[1], LOGGER).start(db, None)
 

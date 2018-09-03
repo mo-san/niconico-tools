@@ -18,7 +18,7 @@ except ImportError:
     PrettyTable = False
 
 from nicotools import utils
-from nicotools.utils import Msg, Err, URL, KeyGTI, MKey, MylistNotFoundError, MylistAPIError
+from nicotools.utils import Msg, Err, URL, KeyGTI, MKey, MylistAPIError
 
 
 class NicoMyList(utils.CanopyAsync):
@@ -113,9 +113,6 @@ class NicoMyList(utils.CanopyAsync):
         self.token = login.token
         self.logger.debug("cookie (nicoml_async): %s", id(cook))
         return aiohttp.ClientSession(cookies=cook)
-
-    def close(self):
-        self.session.close()
 
     @classmethod
     def _confirmation(cls, mode, list_name, contents_to_be_deleted=None):
@@ -256,17 +253,6 @@ class NicoMyList(utils.CanopyAsync):
         """
         return str(datetime.fromtimestamp(timestamp, timezone(timedelta(hours=+9))))[:-6]
 
-    # @classmethod
-    # def _get_utime(cls):
-    #     """
-    #     現在の UNIXTIME を返す。
-    #
-    #     '2016-08-13 19:27:00' -> 1471084020
-    #
-    #     :rtype: int
-    #     """
-    #     return datetime.now().timestamp()
-
     def get_list_id(self, search_for):
         """
         指定されたIDまたは名前を持つマイリストのIDを得る。
@@ -327,7 +313,8 @@ class NicoMyList(utils.CanopyAsync):
                 sys.exit()
             else:
                 # 存在しなかったとき
-                raise MylistNotFoundError(result.get("err_msg"))
+                print(result.get("err_msg"))
+                sys.exit()
         else:
             list_id = result["list_id"]
             list_name = result["list_name"]
@@ -532,9 +519,11 @@ class NicoMyList(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         if utils.ALL_ITEM == mylist_name:
-            raise utils.MylistError(Err.cant_perform_all)
+            print(Err.cant_perform_all)
+            sys.exit()
         if mylist_name == "" or mylist_name == utils.DEFAULT_NAME:
-            raise utils.MylistError(Err.cant_create)
+            print(Err.cant_create)
+            sys.exit()
 
         return self.loop.run_until_complete(self._create_mylist(mylist_name, is_public, description))
 
@@ -544,7 +533,8 @@ class NicoMyList(utils.CanopyAsync):
         if res["status"] != "ok":
             self.logger.error(Err.failed_to_create, mylist_name, res)
             error = res["error"]
-            raise MylistAPIError(code=error["code"], msg=error["description"])
+            print("code: {}; {}".format(error["code"], error["description"]))
+            sys.exit()
         else:
             self.mylists = await self._get_mylists_info()
             item = self.mylists[res[MKey.ID]]
@@ -565,14 +555,16 @@ class NicoMyList(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         if utils.ALL_ITEM == list_id:
-            raise utils.MylistError(Err.cant_perform_all)
+            print(Err.cant_perform_all)
+            sys.exit()
         list_id, list_name = self._get_list_id(list_id)
 
         return self.loop.run_until_complete(self._purge_mylist(list_id, list_name, confident))
 
     async def _purge_mylist(self, list_id, list_name, confident=False):
         if list_id == utils.DEFAULT_ID:
-            raise utils.MylistError(Err.deflist_to_create_or_purge)
+            print(Err.deflist_to_create_or_purge)
+            sys.exit()
         if not confident and not self._confirmation("purge", list_name):
             print(Msg.ml_answer_no)
             return False
@@ -581,7 +573,8 @@ class NicoMyList(utils.CanopyAsync):
         if res["status"] != "ok":
             self.logger.error(Err.failed_to_purge, list_name, res["status"])
             error = res["error"]
-            raise MylistAPIError(code=error["code"], msg=error["description"])
+            print("{}{}".format(error["code"], error["description"]))
+            sys.exit()
         else:
             self.logger.info(Msg.ml_done_purge, list_name)
             del self.mylists[list_id]
@@ -599,7 +592,8 @@ class NicoMyList(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         if utils.ALL_ITEM == list_id or utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.cant_perform_all)
+            print(Err.cant_perform_all)
+            sys.exit()
 
         if onetime:
             return self.loop.run_until_complete(self._add_onetime(list_id, *videoids))
@@ -662,11 +656,13 @@ class NicoMyList(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.videoids_contain_all)
+            print(Err.videoids_contain_all)
+            sys.exit()
         list_id_from, list_name_from = self._get_list_id(list_id_from)
         list_id_to, list_name_to = self._get_list_id(list_id_to)
         if list_id_from == list_id_to:
-            raise utils.MylistError(Err.list_names_are_same)
+            print(Err.list_names_are_same)
+            sys.exit()
         if onetime:
             return self.loop.run_until_complete(
                 self._copy_onetime(list_id_from, list_name_from, list_id_to, list_name_to, *videoids))
@@ -760,7 +756,8 @@ class NicoMyList(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.videoids_contain_all)
+            print(Err.videoids_contain_all)
+            sys.exit()
         list_id_from, list_name_from = self._get_list_id(list_id_from)
         list_id_to, list_name_to = self._get_list_id(list_id_to)
 
@@ -888,7 +885,8 @@ class NicoMyList(utils.CanopyAsync):
         """
         utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
-            raise utils.MylistError(Err.videoids_contain_all)
+            print(Err.videoids_contain_all)
+            sys.exit()
         list_id, list_name = self._get_list_id(list_id)
 
         if onetime:
@@ -1242,8 +1240,6 @@ class NicoMyList(utils.CanopyAsync):
         utils.check_arg(locals())
         if len(container) == 0:
             return ""
-        elif not PrettyTable:
-            raise ImportError(Err.not_installed, "PrettyTable")
         else:
             column_names = container.pop(0)
             table = PrettyTable(column_names)
@@ -1272,7 +1268,7 @@ class NicoMyList(utils.CanopyAsync):
             enco = utils.get_encoding()
             _text = text.encode(enco, utils.BACKSLASH).decode(enco) + "\n"
             print(_text)
-        return _text
+        return True
 
 
 def linting(args, dest: Optional[str], source: Union[str, int]) -> None:

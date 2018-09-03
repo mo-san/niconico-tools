@@ -11,6 +11,7 @@ from os.path import join, expanduser
 from pathlib import Path
 from urllib.parse import parse_qs
 
+import aiohttp
 import requests
 from requests import cookies
 
@@ -97,7 +98,8 @@ def validator(input_list):
         input_list = [input_list]
 
     if not isinstance(input_list, (list, tuple, set)):
-        raise MylistArgumentError(Err.invalid_argument.format(input_list))
+        print(Err.invalid_argument.format(input_list))
+        sys.exit()
 
     if "\t" in input_list[0]:
         for line in input_list[1:]:
@@ -178,7 +180,7 @@ def check_arg(parameters):
     """
     for _name, _value in parameters.items():
         if _value is None:
-            raise MylistArgumentError(Err.not_specified.format(_name))
+            raise SyntaxError(Err.not_specified.format(_name))
 
 
 def sizeof_fmt(num):
@@ -267,22 +269,7 @@ def extract_getflv(content):
     return result
 
 
-class MylistError(Exception):
-    """ マイリスト操作で誤りがあったときに発生させるエラー """
-    pass
-
-
-class MylistNotFoundError(MylistError):
-    """ マイリストが見つからなかったときに発生させるエラー """
-    pass
-
-
-class MylistArgumentError(MylistError):
-    """ 引数が誤っていたときに発生させるエラー """
-    pass
-
-
-class MylistAPIError(MemoryError):
+class MylistAPIError(Exception):
     """ APIの操作の結果が好ましくない場合に発生させるエラー """
     def __init__(self, code=None, msg=None, ok=False):
         """
@@ -293,11 +280,6 @@ class MylistAPIError(MemoryError):
         self.code = code
         self.msg = msg
         self.ok = ok
-
-
-class NotLoginError(Exception):
-    """ ログインしていない、できなかったときに発生させるエラー """
-    pass
 
 
 class Canopy:
@@ -338,11 +320,17 @@ class Canopy:
 class CanopyAsync(Canopy):
     def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
         super().__init__(logger=logger)
-        self.loop = loop or asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
         self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
-        self.session = None
+        self.session = None  # type: aiohttp.ClientSession
+
+    def close(self):
+        async def _close():
+            await self.session.close()
+
+        self.loop.run_until_complete(_close())
 
 
 class LogIn:
@@ -848,8 +836,6 @@ class KeyDmc:
     THUMBNAIL_URL   = "thumbnail_url"
     ECO             = "eco"             # int
     MOVIE_TYPE      = "movie_type"
-    # IS_DMC          = "is_dmc"          # int or None
-    DELETED         = "deleted"         # int
     IS_DELETED      = "is_deleted"      # bool
     IS_PUBLIC       = "is_public"       # bool
     IS_OFFICIAL     = "is_official"     # bool
@@ -922,6 +908,7 @@ class InheritedParser(ArgumentParser):
             else:
                 try:
                     # ↓文字コードを指定しないとCP932で開いてしまいエラーになる
+                    # todo: CP932 でも受け付けるようにする
                     with open(arg_string[1:], encoding="utf-8") as args_file:
                         arg_strings = []
                         for arg_line in args_file.read().splitlines():
