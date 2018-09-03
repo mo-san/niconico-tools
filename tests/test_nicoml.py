@@ -8,24 +8,9 @@ import tempfile
 import pytest
 
 import nicotools
+from nicotools import mylist as nicoml, utils
 
-if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
-    if int(os.getenv("TEST_ASYNC", 0)):
-        is_async = True
-        waiting = 10
-    else:
-        waiting = 1
-        is_async = False
-    from nicotools import nicoml_async as nicoml, utils
-else:
-    is_async = False
-    waiting = 1
-    Info = None
-    VideoDmc = None
-    VideoSmile = None
-    CommentAsync = None
-    ThumbnailAsync = None
-    from nicotools import nicoml, utils
+Waiting = 10
 
 # ランダムな8桁の数字
 TEST_LIST = "TEST_{}".format(int(random.uniform(10**7, 10**8-1)))
@@ -50,10 +35,7 @@ __ids = {
     "watch/sm500873": "組曲『ニコニコ動画』 "
 }
 # "sm9 sm8628149 ... sm500873" のようにただの文字列
-if is_async:
-    VIDEO_ID = " ".join(list(__ids))
-else:
-    VIDEO_ID = " ".join(random.sample(list(__ids), 3))
+VIDEO_ID = " ".join(list(__ids))
 
 
 def param(cond):

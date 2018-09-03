@@ -45,24 +45,6 @@ def get_encoding():
     return sys.stdout.encoding or "UTF-8"
 
 
-def print_info(queue, file_name=None):
-    """
-    GetThumbInfo にアクセスして返ってきたXMLをそのまま表示する。
-
-    :param list queue:
-    :param str | Path | None file_name:
-    :return: bool
-    """
-    text = "\n\n".join([requests.get(URL.URL_Info + video_id).text for video_id in queue])
-    if file_name:
-        file_name = make_dir(file_name)
-        with file_name.open(encoding="utf-8", mode="w") as fd:
-            fd.write(text + "\n")
-    else:
-        print(text.encode(get_encoding(), BACKSLASH).decode(get_encoding()))
-    return True
-
-
 def validator(input_list):
     """
     動画IDが適切なものか確認する。 重複があれば除外する。
@@ -636,7 +618,6 @@ class Msg:
     nd_help_password = "パスワード"
     nd_help_mail = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
-    nd_help_outfile = "--getthumbinfo の結果をそのファイル名で テキストファイルに出力します。"
     nd_help_sieve = ("指定すると、動画とコメントについて、"
                      "非公開や削除済みの項目でもダウンロードを試みます。")
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
@@ -645,8 +626,6 @@ class Msg:
     nd_help_xml = ("指定すると、コメントをXML形式でダウンロードします。"
                    "チャンネル動画の場合は無視されます。")
 
-    # getthumbinfo API から動画の情報のみを ダウンロードします。
-    nd_help_info = "デバッグ用"
     nd_help_what = "コマンドの確認用。 引数の内容を書き出すだけです。"
     nd_help_loglevel = "ログ出力の詳細さ。 デフォルトは INFO です。"
     nd_help_nomulti = "指定すると、プログレスバーを複数行で表示しません。"

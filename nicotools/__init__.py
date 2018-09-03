@@ -2,21 +2,15 @@
 import os
 import sys
 
-from . import nicodown, nicoml
 from .utils import Msg, Err, InheritedParser
-
-if sys.version_info >= (3, 5):
-    from . import nicodown_async, nicoml_async
-else:
-    nicodown_async, nicoml_async = None, None
+from . import download, mylist
 
 
-def main(arguments=None, async_=True):
+def main(arguments=None):
     """
     メイン。
 
     :param arguments: 引数の文字列
-    :param bool async_:
     :rtype: bool
     """
     choices = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -31,10 +25,7 @@ def main(arguments=None, async_=True):
 
 
     parser_nd = subparsers.add_parser("download", aliases=["d"], help=Msg.nd_description)
-    if async_ and nicodown_async is not None:
-        parser_nd.set_defaults(func=nicodown_async.main)
-    else:
-        parser_nd.set_defaults(func=nicodown.main)
+    parser_nd.set_defaults(func=download.main)
     parser_nd.add_argument("VIDEO_ID", nargs="+", type=str, help=Msg.nd_help_video_id)
     parser_nd.add_argument("--loglevel", type=str.upper, default="INFO", help=Msg.nd_help_loglevel, choices=choices)
     parser_nd.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
@@ -45,21 +36,15 @@ def main(arguments=None, async_=True):
     parser_nd.add_argument("-v", "--video", action="store_true", help=Msg.nd_help_video)
     parser_nd.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
     parser_nd.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
-    parser_nd.add_argument("-o", "--out", nargs=1, help=Msg.nd_help_outfile, metavar="FILE")
-    parser_nd.add_argument("--getthumbinfo", action="store_true", help=Msg.nd_help_info)
-    if async_ and nicodown_async is not None:
-        parser_nd.add_argument("--smile", action="store_true", help=Msg.nd_help_smile)
-        parser_nd.add_argument("--dmc", action="store_true", help=Msg.nd_help_dmc, default=True)
-        parser_nd.add_argument("--limit", type=int, help=Msg.nd_help_limit, default=4)
-        parser_nd.add_argument("--nomulti", action="store_false", help=Msg.nd_help_nomulti, dest="nomulti")
-        parser_nd.add_argument("--nosieve", action="store_false", help=Msg.nd_help_sieve)
+    parser_nd.add_argument("--smile", action="store_true", help=Msg.nd_help_smile)
+    parser_nd.add_argument("--dmc", action="store_true", help=Msg.nd_help_dmc, default=True)
+    parser_nd.add_argument("--limit", type=int, help=Msg.nd_help_limit, default=4)
+    parser_nd.add_argument("--nomulti", action="store_false", help=Msg.nd_help_nomulti, dest="nomulti")
+    parser_nd.add_argument("--nosieve", action="store_false", help=Msg.nd_help_sieve)
 
 
     parser_ml = subparsers.add_parser("mylist", aliases=["m"], help=Msg.ml_description)
-    if async_ and nicoml_async is not None:
-        parser_ml.set_defaults(func=nicoml_async.main)
-    else:
-        parser_ml.set_defaults(func=nicoml.main)
+    parser_ml.set_defaults(func=mylist.main)
     parser_ml.add_argument("src", nargs=1, help=Msg.ml_help_src, metavar="マイリスト名")
     parser_ml.add_argument("--loglevel", type=str.upper, default="INFO", help=Msg.nd_help_loglevel, choices=choices)
     parser_ml.add_argument("-w", "--what", action="store_true", help=Msg.nd_help_what)
@@ -68,8 +53,7 @@ def main(arguments=None, async_=True):
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
     parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="FILE")
     parser_ml.add_argument("--yes", action="store_true", help=Msg.ml_help_yes)
-    if async_ and nicoml_async is not None:
-        parser_ml.add_argument("--each", action="store_true", help=Msg.ml_help_each)
+    parser_ml.add_argument("--each", action="store_true", help=Msg.ml_help_each)
 
     group_one = parser_ml.add_argument_group(Msg.ml_help_group_a)
     group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")

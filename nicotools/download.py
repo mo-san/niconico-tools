@@ -12,7 +12,7 @@ from typing import Dict, Union, Optional, List
 from urllib.parse import parse_qs, unquote
 
 import aiohttp
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from tqdm import tqdm
 
 from nicotools import utils
@@ -1386,13 +1386,8 @@ def main(args):
     videoid = utils.validator(args.VIDEO_ID)
     if not videoid:
         sys.exit(Err.invalid_videoid)
-    if not (args.getthumbinfo or args.thumbnail or args.comment or args.video):
+    if not (args.thumbnail or args.comment or args.video):
         sys.exit(Err.not_specified.format("--thumbnail、 --comment、 --video のいずれか"))
-
-    if args.getthumbinfo:
-        file_name = args.out[0] if isinstance(args.out, list) else None
-        utils.print_info(videoid, file_name)
-        sys.exit()
 
     #
     # 本筋
