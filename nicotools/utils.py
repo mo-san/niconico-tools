@@ -18,8 +18,7 @@ from requests import cookies
 ALL_ITEM = "*"
 DEFAULT_NAME = "とりあえずマイリスト"
 DEFAULT_ID = 0
-LOG_FILE_ND = "nicotools_download.log"
-LOG_FILE_ML = "nicotools_mylist.log"
+LOG_FILE = "nicotools.log"
 IS_DEBUG = int(os.getenv("PYTHON_TEST", 0))
 if IS_DEBUG:
     __os_name = os.getenv("TRAVIS_OS_NAME", os.name)
@@ -453,7 +452,7 @@ class LogIn:
 
 
 class NTLogger(logging.Logger):
-    def __init__(self, file_name=LOG_FILE_ND, name=__name__, log_level=logging.INFO):
+    def __init__(self, file_name=LOG_FILE, name=__name__, log_level=logging.INFO):
         """
         ログ出力のためのクラス。
 
@@ -608,7 +607,6 @@ class Msg:
                           "全てのマイリストの情報をまとめて取得します。")
     ml_help_yes = ("これを指定すると、マイリスト自体の削除や"
                    "マイリスト内の全項目の削除の時に確認しません。")
-    ml_help_each = "指定すると、登録や削除を、まとめずに一つずつ行います。"
 
     ''' 動画ダウンロードコマンドのヘルプメッセージ '''
     nd_description = "動画のいろいろをダウンロードします。"
@@ -687,7 +685,6 @@ class Err:
                      "「{1}」に置き換わっています。")
     cant_create = "この名前のマイリストは作成できません。"
     deflist_to_create_or_purge = "とりあえずマイリストは操作の対象にできません。"
-    not_installed = "{0} がインストールされていないため実行できません。"
     invalid_argument = "引数の型が間違っています。"
     invalid_dirname = "このフォルダー名 {0} はシステム上使えません。他の名前を指定してください。"
     invalid_auth = "メールアドレスとパスワードを入力してください。"

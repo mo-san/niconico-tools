@@ -53,7 +53,6 @@ def main(arguments=None):
     parser_ml.add_argument("-i", "--id", action="store_true", help=Msg.ml_help_id)
     parser_ml.add_argument("-o", "--out", nargs=1, help=Msg.ml_help_outfile, metavar="FILE")
     parser_ml.add_argument("--yes", action="store_true", help=Msg.ml_help_yes)
-    parser_ml.add_argument("--each", action="store_true", help=Msg.ml_help_each)
 
     group_one = parser_ml.add_argument_group(Msg.ml_help_group_a)
     group_one.add_argument("-t", "--to", nargs=1, help=Msg.ml_help_to, metavar="To")

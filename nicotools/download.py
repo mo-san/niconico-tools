@@ -1393,7 +1393,7 @@ def main(args):
     # 本筋
     #
     log_level = "DEBUG" if is_debug else args.loglevel
-    logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ND)
+    logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE)
     destination = utils.make_dir(args.dest[0])
 
     if args.thumbnail:

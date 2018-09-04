@@ -1336,7 +1336,7 @@ def main(args):
     """
     is_debug = int(os.getenv("PYTHON_TEST", 0))
     log_level = "DEBUG" if is_debug else args.loglevel
-    logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE_ML)
+    logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE)
 
     mailadrs = args.mail[0] if args.mail else None
     password = args.password[0] if args.password else None
@@ -1374,13 +1374,13 @@ def main(args):
     elif args.purge:
         res = instnc.purge_mylist(source, confident=args.yes)
     elif args.add:
-        res = instnc.add(source, *operand, onetime=args.each)
+        res = instnc.add(source, *operand)
     elif args.copy:
-        res = instnc.copy(source, dest, *operand, onetime=args.each)
+        res = instnc.copy(source, dest, *operand)
     elif args.move:
-        res = instnc.move(source, dest, *operand, onetime=args.each)
+        res = instnc.move(source, dest, *operand)
     else:
-        res = instnc.delete(source, *operand, confident=args.yes, onetime=args.each)
+        res = instnc.delete(source, *operand, confident=args.yes)
 
     instnc.close()
     return res

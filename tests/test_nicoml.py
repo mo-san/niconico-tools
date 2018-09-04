@@ -45,7 +45,7 @@ def param(cond):
 
 @pytest.fixture(scope="class")
 def instance():
-    logger = utils.NTLogger(file_name=utils.LOG_FILE_ML, log_level=logging.DEBUG)
+    logger = utils.NTLogger(file_name=utils.LOG_FILE, log_level=logging.DEBUG)
     return nicoml.NicoMyList(AUTH_N[0], AUTH_N[1], logger=logger)
 
 
