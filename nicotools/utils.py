@@ -264,10 +264,12 @@ class MylistAPIError(Exception):
 
 
 class Canopy:
-    def __init__(self, logger=None):
+    def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
         self.glossary = None
         self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
+        self.loop = loop or asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
+        self.session = None  # type: aiohttp.ClientSession
 
     def make_name(self, video_id, ext):
         """
@@ -297,15 +299,6 @@ class Canopy:
         else:
             return logger
 
-
-class CanopyAsync(Canopy):
-    def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
-        super().__init__(logger=logger)
-        self.loop = loop or asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
-        self.glossary = None
-        self.save_dir = None  # type: Path
-        self.logger = self.get_logger(logger)  # type: NTLogger
-        self.session = None  # type: aiohttp.ClientSession
 
     def close(self):
         async def _close():

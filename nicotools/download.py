@@ -19,7 +19,7 @@ from nicotools import utils
 from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc
 
 
-class Info(utils.CanopyAsync):
+class Info(utils.Canopy):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -324,7 +324,7 @@ class Info(utils.CanopyAsync):
                                  " You can safely delete it.".format(file_name))
 
 
-class Thumbnail(utils.CanopyAsync):
+class Thumbnail(utils.Canopy):
     def __init__(self,
                  logger: utils.NTLogger=None,
                  limit: int=8,
@@ -476,7 +476,7 @@ class Thumbnail(utils.CanopyAsync):
                 }
 
 
-class VideoSmile(utils.CanopyAsync):
+class VideoSmile(utils.Canopy):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -666,7 +666,7 @@ class VideoSmile(utils.CanopyAsync):
             self.logger.info(Msg.nd_download_done.format(path=file_path))
 
 
-class VideoDmc(utils.CanopyAsync):
+class VideoDmc(utils.Canopy):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,
@@ -1056,7 +1056,7 @@ class VideoDmc(utils.CanopyAsync):
             self.logger.info(Msg.nd_download_done.format(path=file_path))
 
 
-class Comment(utils.CanopyAsync):
+class Comment(utils.Canopy):
     def __init__(self,
                  mail: str=None, password: str=None,
                  logger: utils.NTLogger=None,

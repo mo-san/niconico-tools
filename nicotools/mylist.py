@@ -21,7 +21,7 @@ from nicotools import utils
 from nicotools.utils import Msg, Err, URL, KeyGTI, MKey, MylistAPIError
 
 
-class NicoMyList(utils.CanopyAsync):
+class NicoMyList(utils.Canopy):
     WHY_DELETED = {
         "0": "公開",
         "1": "削除",

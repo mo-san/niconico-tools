@@ -9,7 +9,7 @@ install:
 
 script:
   - export PYTHON_TEST=1
-  - py.test --cov=nicotools tests/test_nicodown.py tests/test_nicoml.py
+  - py.test --cov=nicotools tests/test_download.py tests/test_mylist.py
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
