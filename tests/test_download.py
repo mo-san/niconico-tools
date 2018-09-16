@@ -271,5 +271,4 @@ class TestVideoDmc:
 
 
 def test_okatadsuke():
-    for _parh in (SAVE_DIR, SAVE_DIR):
-        shutil.rmtree(str(utils.make_dir(_parh)))
+    shutil.rmtree(str(utils.make_dir(SAVE_DIR)))

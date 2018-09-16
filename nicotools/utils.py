@@ -7,7 +7,6 @@ import re
 import sys
 from argparse import ArgumentParser
 from getpass import getpass
-from os.path import join, expanduser
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -178,41 +177,6 @@ def sizeof_fmt(num):
             return "{:3.2f}{:s}".format(num, unit)
         num /= 1024.0
     return "{:.2f}Gb".format(num)
-
-
-def get_from_getflv(video_id, session, logger=None):
-    """
-    GetFlv APIから情報を得る。
-
-    * GetFlvのサンプル:
-
-    thread_id=1406370428
-    &l=314
-    &url=http%3A%2F%2Fsmile-pom32.nicovideo.jp%2Fsmile%3Fm%3D24093152.45465
-    &ms=http%3A%2F%2Fmsg.nicovideo.jp%2F27%2Fapi%2F
-    &ms_sub=http%3A%2F%2Fsub.msg.nicovideo.jp%2F27%2Fapi%2F
-    &user_id=<ユーザーIDの数字>
-    &is_premium=1
-    &nickname=<URLエンコードされたユーザー名の文字列>
-    &time=1475176067845
-    &done=true
-    &ng_rv=220
-    &userkey=1475177867.%7E1%7EhPBJrVv78e251OPzyAiSs1fYAJhYIzDPOq5LNiNqZxs
-
-    * 但しアクセス制限がかかったときには:
-
-    error=access_locked&done=true
-
-    :param str video_id:
-    :param requests.Session session:
-    :param NTLogger logger:
-    :rtype: dict[str, str] | None
-    """
-    check_arg(locals())
-    suffix = {"as3": 1} if video_id.startswith("nm") else None
-    response = session.get(URL.URL_GetFlv + video_id, params=suffix)
-    if logger: logger.debug("GetFLV Response: {}".format(response.text))
-    return extract_getflv(response.text)
 
 
 def extract_getflv(content):
@@ -482,7 +446,7 @@ class NTLogger(logging.Logger):
                     filename=str(file_name), encoding="utf-8")
             else:
                 log_file = logging.FileHandler(encoding="utf-8",
-                    filename=join(expanduser("~"), file_name))
+                    filename=str(Path.home() / file_name))
             log_file.setLevel(log_level)
             formatter = self.get_formatter("file")
             log_file.setFormatter(formatter)
