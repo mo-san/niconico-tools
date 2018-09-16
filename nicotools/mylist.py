@@ -111,7 +111,7 @@ class NicoMyList(utils.Canopy):
         login = utils.LogIn(mail=self.__mail, password=self.__password)
         cook = login.cookie
         self.token = login.token
-        self.logger.debug("cookie (nicoml_async): %s", id(cook))
+        self.logger.debug(f"cookie (nicoml_async): {id(cook)}")
         return aiohttp.ClientSession(cookies=cook)
 
     @classmethod
@@ -238,7 +238,6 @@ class NicoMyList(utils.Canopy):
                 MKey.SINCE: self._get_jst_from_utime(item["create_time"]),  # type: str
                 MKey.DESCRIPTION: description,
             }
-        self.logger.debug("Mylists infos: %s", candidate)
         return candidate
 
     @classmethod
@@ -263,7 +262,7 @@ class NicoMyList(utils.Canopy):
         def composer(_err=False, _id=None, _name=None, _msg=None, _dic=None):
             res = {"error": _err, "list_id": _id, "list_name": _name,
                    "err_msg": _msg, "err_dic": _dic}
-            self.logger.debug("List IDs: %s", res)
+            self.logger.debug(f"List IDs: {res}")
             return res
 
         if search_for == utils.DEFAULT_NAME or search_for == utils.DEFAULT_ID:
@@ -318,7 +317,7 @@ class NicoMyList(utils.Canopy):
         else:
             list_id = result["list_id"]
             list_name = result["list_name"]
-            self.logger.debug("List_id: %s, List_name: %s", list_id, list_name)
+            self.logger.debug(f"List_id: {list_id}, List_name: {list_name}")
             return list_id, list_name
 
     def get_item_ids(self, list_id, *videoids) -> dict:
@@ -346,7 +345,7 @@ class NicoMyList(utils.Canopy):
             whole = True
         else:
             whole = False
-        self.logger.debug("Is in whole mode?: %s", whole)
+        self.logger.debug(f"Is in whole mode?: {whole}")
 
         if list_id == utils.DEFAULT_ID:
             async with self.session.get(URL.URL_ListDef) as resp:
@@ -354,7 +353,7 @@ class NicoMyList(utils.Canopy):
         else:
             async with self.session.get(URL.URL_ListOne, params={"group_id": list_id}) as resp:
                 jtext = json.loads(await resp.text())
-        self.logger.debug("Response: %s", jtext)
+        self.logger.debug(f"Response: {jtext}")
 
         results = {}
         for item in jtext["mylistitem"]:
@@ -419,7 +418,7 @@ class NicoMyList(utils.Canopy):
         utils.check_arg(locals())
         assert mode.lower() in ("add", "delete", "copy", "move", "purge", "create")
 
-        self.logger.debug("Query components: %s", kwargs)
+        self.logger.debug(f"Query components: {kwargs}")
         to_def = kwargs.get("to_def")  # type: bool
         from_def = kwargs.get("from_def")  # type: bool
         is_public = kwargs.get("is_public")  # type: bool
@@ -500,11 +499,11 @@ class NicoMyList(utils.Canopy):
             }
             url = URL.URL_AddMyList
 
-        self.logger.debug("URL: %s", url)
-        self.logger.debug("Query to post: %s", payload)
+        self.logger.debug(f"URL: {url}")
+        self.logger.debug(f"Query to post: {payload}")
         async with self.session.get(url, params=payload) as resp:
             res = json.loads(await resp.text())
-        self.logger.debug("Response: %s", res)
+        self.logger.debug(f"Response: {res}")
         return res
 
     def create_mylist(self, mylist_name, is_public=False, description=""):
@@ -1054,7 +1053,7 @@ class NicoMyList(utils.Canopy):
         else:
             async with self.session.get(URL.URL_ListOne, params={"group_id": list_id}) as resp:
                 jtext = json.loads(await resp.text())
-        self.logger.debug("Returned: %s", jtext)
+        self.logger.debug(f"Returned: {jtext}")
 
         if with_header:
             container = [[
@@ -1085,7 +1084,6 @@ class NicoMyList(utils.Canopy):
                 list_name,
                 # data[KeyGTI.LAST_RES_BODY],
             ])
-        self.logger.debug("Mylists info: %s", container)
         return container
 
     async def fetch_all(self, with_info=True):

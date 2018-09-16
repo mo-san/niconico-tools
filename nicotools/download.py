@@ -84,6 +84,8 @@ class Info(utils.Canopy):
             asyncio.gather(*[self._retrieve_info(_id) for _id in video_ids]))
         result = {_id: _info for _id, _info in zip(video_ids, infos)}
         sieved_result = self.siever(result)
+
+        self.close()
         return sieved_result
 
     def siever(self, infos: Dict) -> Dict:
@@ -366,6 +368,7 @@ class Thumbnail(utils.Canopy):
             self.loop.run_until_complete(self._download(list(self.glossary), is_large))
             while len(self.undone) > 0:
                 self.loop.run_until_complete(self._download(self.undone, False))
+        self.close()
         return self
 
     async def _download(self, video_ids: list, islarge: bool=True) -> None:
@@ -521,7 +524,8 @@ class VideoSmile(utils.Canopy):
         # まず各動画のファイルサイズを集める。
         self.loop.run_until_complete(self._push_file_size())
         self.loop.run_until_complete(self._broker())
-        return self
+        self.close()
+        return True
 
     async def _push_file_size(self):
         video_ids = sorted(self.glossary)
@@ -693,7 +697,8 @@ class VideoDmc(utils.Canopy):
         self.glossary = glossary
 
         self.loop.run_until_complete(self._broker(xml))
-        return self
+        self.close()
+        return True
 
     async def _broker(self, xml: bool=True) -> None:
         for idx, video_id in enumerate(self.glossary):
@@ -1077,7 +1082,8 @@ class Comment(utils.Canopy):
             futures.append(f)
 
         self.loop.run_until_complete(asyncio.wait(futures, loop=self.loop))
-        return self
+        self.close()
+        return True
 
     async def _download(self, idx: int, info: dict, is_xml: bool, density: str) -> str:
         utils.check_arg(locals())
@@ -1329,49 +1335,34 @@ def main(args):
     if not videoid:
         sys.exit(Err.invalid_videoid)
     if not (args.thumbnail or args.comment or args.video):
-        sys.exit(Err.not_specified.format("--thumbnail、 --comment、 --video のいずれか"))
+        sys.exit(Err.not_specified.format("--thumbnail or --comment or --video"))
 
     #
     # 本筋
     #
     log_level = "DEBUG" if is_debug else args.loglevel
-    logger = utils.NTLogger(log_level=log_level, file_name=utils.LOG_FILE)
+    logger = utils.NTLogger(log_level=log_level)
     destination = utils.make_dir(args.dest[0])
 
     if args.thumbnail:
-        if args.comment or args.video:
-            Thumbnail(logger=logger).start(videoid, destination)
+        Thumbnail(logger=logger).start(videoid, destination)
         if not (args.comment or args.video):
-            # サムネイルのダウンロードだけなら
-            # ログインする必要がないのでここで終える。
-            Thumbnail(logger=logger).start(videoid, destination).close()
+            # サムネイルのダウンロードだけならここで終える。
             return True
 
-    info = Info(
-        mail=mailadrs, password=password,
-        logger=logger, sieve=args.nosieve)
-    database = info.get_data(videoid)
-    session = info.session
+    database = Info(mail=mailadrs, password=password, logger=logger, sieve=args.nosieve).get_data(videoid)
 
     if len(database) == 0:
-        info.close()
         return True
 
     if args.comment:
-        if args.video:
-            (Comment(logger=logger, session=session)
-             .start(database, destination, args.xml))
-        else:
-            (Comment(logger=logger, session=session)
-             .start(database, destination, args.xml).close())
+        (Comment(logger=logger).start(database, destination, args.xml))
 
     if args.video:
         if args.smile:
-            (VideoSmile(logger=logger, session=session, division=args.limit, multiline=args.nomulti)
-             .start(database, destination).close())
+            (VideoSmile(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination))
         else:
-            (VideoDmc(logger=logger, session=session, division=args.limit, multiline=args.nomulti)
-             .start(database, destination).close())
+            (VideoDmc(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination))
 
     return True
 
