@@ -60,3 +60,4 @@ external/
 /requests_cookie
 *.sublime-workspace
 pyinst_working/
+.pytest_cache/
