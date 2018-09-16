@@ -64,7 +64,6 @@ def validator(input_list):
     :param list[str] | tuple[str] | set[str] input_list:
     :rtype: list[str]
     """
-    check_arg(locals())
     matcher = re.compile(
         """\s*(?:
         {0}|  # 「全て」を指定するときの記号
@@ -105,7 +104,6 @@ def make_dir(directory):
     :param str | Path directory: フォルダー名
     :rtype: Path
     """
-    check_arg(locals())
     if isinstance(directory, str):
         directory = Path(directory)
     if directory.suffix:
@@ -149,18 +147,6 @@ def t2filename(text):
     # pattern = re.compile("|".join(re.escape(key) for key in mydic.keys()))
     # return pattern.sub(lambda x: mydic[x.group()], text)
     return text
-
-
-def check_arg(parameters):
-    """
-    None を許容しない引数が None を含んでいないか検査する。
-
-    :param dict[str, Object] parameters: パラメーターの名前と値の辞書
-    :rtype: None
-    """
-    for _name, _value in parameters.items():
-        if _value is None:
-            raise SyntaxError(Err.not_specified.format(_name))
 
 
 def sizeof_fmt(num):
@@ -243,7 +229,6 @@ class Canopy:
         :param str ext:
         :rtype: Path
         """
-        check_arg(locals())
         file_name =  Msg.nd_file_name.format(
             vid=video_id, ext=ext,
             name=self.glossary[video_id][KeyGTI.FILE_NAME])
@@ -425,9 +410,9 @@ class NTLogger(logging.Logger):
         if (IS_DEBUG or
             isinstance(log_level, str) and log_level == "DEBUG" or
             isinstance(log_level, int) and log_level <= logging.DEBUG):
-            self._is_debug = True
+            self.is_debug = True
         else:
-            self._is_debug = False
+            self.is_debug = False
 
         logging.Logger.__init__(self, name, log_level)
         self.logger = logging.getLogger(name=name)
@@ -462,7 +447,7 @@ class NTLogger(logging.Logger):
         if mode == "stdout":
             fmt = logging.Formatter("[{levelname: ^7}]\t{message}", style="{")
         else:  # file
-            if self._is_debug:
+            if self.is_debug:
                 fmt = logging.Formatter("[{asctime}|{levelname: ^7}|{message}", style="{")
             else:
                 fmt = logging.Formatter("[{asctime}|{levelname: ^7}]\t{message}", style="{")
@@ -470,7 +455,7 @@ class NTLogger(logging.Logger):
 
     def forwarding(self, level, msg, *args, **kwargs):
         _enco = get_encoding()
-        if self._is_debug:
+        if self.is_debug:
             # [YYYY-MM-DD hh:mm:ss,ms| level |line:n|<...> from <...> from <...>]\t{message}
             history = inspect.stack()
             funcs = "line:{}|{}".format(
@@ -573,8 +558,6 @@ class Msg:
     nd_help_password = "パスワード"
     nd_help_mail = "メールアドレス"
     nd_help_destination = "ダウンロードしたものを保存する フォルダーへのパス。"
-    nd_help_sieve = ("指定すると、動画とコメントについて、"
-                     "非公開や削除済みの項目でもダウンロードを試みます。")
     nd_help_comment = "指定すると、 コメントをダウンロードします。"
     nd_help_video = "指定すると、 動画をダウンロードします。"
     nd_help_thumbnail = "指定すると、 サムネイルをダウンロードします。"
@@ -595,9 +578,9 @@ class Msg:
     ''' ログに書くメッセージ '''
     nd_start_download = "{count} 件の情報を取りに行きます。: {ids}"
     nd_download_done = "{path} に保存しました。"
-    nd_download_video = "({0}/{1}) ID: {2} (タイトル:{3}) の動画をダウンロードします。"
-    nd_download_pict = "({0}/{1}) ID: {2} (タイトル:{3}) のサムネイルをダウンロードします。"
-    nd_download_comment = "({0}/{1}) ID: {2} (タイトル:{3}) のコメントをダウンロードします。"
+    nd_download_video = "({0}/{1}) ID: {2} ({3}) の動画をダウンロードします。"
+    nd_download_pict = "({0}/{1}) ID: {2} ({3}) のサムネイルをダウンロードします。"
+    nd_download_comment = "({0}/{1}) ID: {2} ({3}) のコメントをダウンロードします。"
     nd_start_dl_video = "{count} 件の動画をダウンロードします。: {ids}"
     nd_start_dl_pict = "{count} 件のサムネイルをダウンロードします。: {ids}"
     nd_start_dl_comment = "{count} 件のコメントをダウンロードします。: {ids}"
@@ -649,7 +632,6 @@ class Err:
                        "http://www.nicovideo.jp/watch/sm1234, "
                        "sm1234, nm1234, so1234,  123456, watch/123456")
     connection_404 = "404エラーです。 ID: {0} (タイトル: {1})"
-    connection_timeout = "接続が時間切れになりました。 ID: {0}"
     keyboard_interrupt = "操作を中断しました。"
     not_specified = "[エラー] {0} を指定してください。"
     videoids_contain_all = "通常の動画IDと * を混ぜないでください。"

@@ -25,7 +25,6 @@ class Info(utils.Canopy):
                  logger: utils.NTLogger=None,
                  session: aiohttp.ClientSession=None,
                  limit: int=4,
-                 sieve: bool=True,
                  loop: asyncio.AbstractEventLoop=None,
                  interval: Union[int, float]=5,
                  backoff: Union[int, float]=3,
@@ -39,7 +38,6 @@ class Info(utils.Canopy):
         :param T <= logging.logger logger: ロガーのインスタンス
         :param aiohttp.ClientSession session:
         :param int limit: 同時にアクセスする最大数
-        :param bool sieve: 非公開や削除済み動画を除外するかどうか
         :param asyncio.AbstractEventLoop loop: イベントループ
         :param Union[int, float] interval: うまくいかなかった場合の待ち時間
         :param Union[int, float] backoff: 待ち時間の増大倍率
@@ -50,7 +48,6 @@ class Info(utils.Canopy):
         self.__password = password
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__parallel_limit = limit
-        self.__do_sieve = sieve
         self.interval = interval
         self.backoff = backoff
         self.retries = retries
@@ -80,15 +77,16 @@ class Info(utils.Canopy):
         :param List video_ids:
         :rtype: Dict
         """
+        video_ids = utils.validator(video_ids)
         infos = self.loop.run_until_complete(
             asyncio.gather(*[self._retrieve_info(_id) for _id in video_ids]))
         result = {_id: _info for _id, _info in zip(video_ids, infos)}
-        sieved_result = self.siever(result)
+        sieved_result = self.sieve(result)
 
         self.close()
         return sieved_result
 
-    def siever(self, infos: Dict) -> Dict:
+    def sieve(self, infos: Dict) -> Dict:
         """
         非公開や削除済み動画をふるいにかける。
 
@@ -96,47 +94,36 @@ class Info(utils.Canopy):
         :rtype: Dict
         """
         good = {_id: info for _id, info in infos.items()
-                  if info[KeyDmc.IS_PUBLIC] and not info[KeyDmc.IS_DELETED]}
+                  if isinstance(info, dict) and info[KeyDmc.IS_PUBLIC] and not info[KeyDmc.IS_DELETED]}
         bad = list(set(infos) - set(good))
         if len(bad) > 0:
             self.logger.info(Msg.nd_deleted_or_private.format(bad))
-        if self.__do_sieve:
-            return good
-        else:
-            return infos
+        return good
 
     async def _retrieve_info(self, video_id: str) -> Dict:
         interval = self.interval
         backoff = self.backoff
         attempt = max(0, self.retries) + 1
         url = URL.URL_Watch + video_id
-        self.logger.debug(f"_worker: {locals()}")
 
         async with asyncio.Semaphore(self.__parallel_limit):
-            st = 0
             while attempt > 0:
                 attempt -= 1
                 async with self.session.get(url) as response:  # type: aiohttp.ClientResponse
-                    self.logger.debug(f"Video ID: {video_id}, Status Code: {response.status}")
                     if response.status == 200:
                         info_data = await response.text()
                         return self._junction(info_data)
-                    # ステータスコードが400番台なら例外を出す
                     elif 400 <= response.status < 500:
-                        response.raise_for_status()
+                        break
                     elif 500 <= response.status < 600:
                         await asyncio.sleep(interval/2)
                         print(Err.waiting_for_permission)
                         await asyncio.sleep(interval/2)
                         interval *= backoff
-                        st = response.status
                     else:
-                        st = response.status
                         break
-            raise aiohttp.client_exceptions.ServerTimeoutError(
-                code=st, message=Err.connection_timeout.format(video_id))
 
-    def _pick_info_from_watch_api(self, content: str) -> Dict:
+    def _read_from_watch_api(self, content: str) -> Dict:
         """
         watchAPIDataContainer を含む HTML から情報を取り出す。
 
@@ -212,7 +199,7 @@ class Info(utils.Canopy):
             })
         return info
 
-    def _pick_info_from_data_api(self, content: str) -> Dict:  # pragma: no cover
+    def _read_from_data_api(self, content: str) -> Dict:  # pragma: no cover
         """
         data-api-data 属性を持つタグがあるHTMLから情報を取り出す。
 
@@ -221,12 +208,11 @@ class Info(utils.Canopy):
         """
         j = json.loads(content)
         _video = j["video"]
-        if "dmcInfo" in _video and _video["dmcInfo"] is not None:
+        dmc_info = None
+        session_api = None
+        if _video.get("dmcInfo", None):
             dmc_info = _video["dmcInfo"]
             session_api = dmc_info["session_api"]
-        else:
-            dmc_info = None
-            session_api = None
 
         info = {
             KeyDmc.VIDEO_ID     : _video["id"],  # type: str
@@ -302,22 +288,20 @@ class Info(utils.Canopy):
         :rtype: Dict[str, Union[str, int, List[str], bool]]
         """
         soup = BeautifulSoup(content, "html.parser")
-        _not_login = soup.select("#Login_nico")
-        if _not_login:
-            print("ログインできてない")
+        if soup.select("#Login_nico"):
+            print("Login Failed")
             sys.exit()
         _data_api = soup.select("#js-initial-watch-data")
         _watch_api = soup.select("#watchAPIDataContainer")
         if _data_api:
-            return self._pick_info_from_data_api(_data_api[0]["data-api-data"])
+            return self._read_from_data_api(_data_api[0]["data-api-data"])
         elif _watch_api:
-            return self._pick_info_from_watch_api(_watch_api[0].text)
+            return self._read_from_watch_api(_watch_api[0].text)
         else:
-            file_name = "_#_niconico_#_.html"
-            with open(file_name, "w", encoding="utf-8") as fd:
-                fd.write(content)
-            raise AttributeError(f"Unknown HTML. For debug purpose, the content has been saved in {file_name}."
-                                 f"You can safely  delete it.")
+            if self.logger.is_debug:
+                file_name = "_#_niconico_#_.html"
+                with open(file_name, "w", encoding="utf-8") as fd:
+                    fd.write(content)
 
 
 class Thumbnail(utils.Canopy):
@@ -337,6 +321,7 @@ class Thumbnail(utils.Canopy):
         """
         super().__init__(loop=loop, logger=logger)
         self.undone = []
+        self.done = []
         self.__bucket = {}
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__parallel_limit = limit
@@ -353,10 +338,8 @@ class Thumbnail(utils.Canopy):
          動画の情報が入った辞書またはIDのリスト
         :param str | Path save_dir:
         :param bool is_large: 大きいサムネイルを取りに行くかどうか
-        :rtype: bool | aiohttp.ClientSession
+        :rtype: list
         """
-        utils.check_arg(locals())
-
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
             glossary = self.loop.run_until_complete(self._get_infos(glossary))
@@ -369,7 +352,7 @@ class Thumbnail(utils.Canopy):
             while len(self.undone) > 0:
                 self.loop.run_until_complete(self._download(self.undone, False))
         self.close()
-        return self
+        return self.done
 
     async def _download(self, video_ids: list, islarge: bool=True) -> None:
         urls = self._make_urls(video_ids, islarge)
@@ -395,12 +378,9 @@ class Thumbnail(utils.Canopy):
                         if video_id in self.undone:
                             self.undone.remove(video_id)
                         return await response.content.read()
-                    else:
+                    elif response.status == 404:
                         self.undone.append(video_id)
-                        return None
             except asyncio.TimeoutError:
-                self.logger.warning(f"{video_id} が時間切れ")
-                self.undone.append(video_id)
                 return None
 
     def _saver(self, video_id: str, coroutine: asyncio.Task) -> None:
@@ -412,6 +392,7 @@ class Thumbnail(utils.Canopy):
             with file_path.open('wb') as f:
                 f.write(image_data)
             self.logger.info(Msg.nd_download_done.format(path=file_path))
+            self.done.append(video_id)
 
     def _make_urls(self, video_ids: list, is_large: bool=True) -> list:
         """
@@ -1062,14 +1043,11 @@ class Comment(utils.Canopy):
         :param bool xml:
         :param str density: ダウンロードするコメントの密度。
         """
-        utils.check_arg(locals())
         self.save_dir = utils.make_dir(save_dir)
 
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
-            info = Info(
-                mail=self.__mail, password=self.__password,
-                session=self.session)
+            info = Info(mail=self.__mail, password=self.__password, session=self.session)
             glossary = info.get_data(glossary)
             self.session = info.session
         self.glossary = glossary
@@ -1086,13 +1064,12 @@ class Comment(utils.Canopy):
         return True
 
     async def _download(self, idx: int, info: dict, is_xml: bool, density: str) -> str:
-        utils.check_arg(locals())
-
         video_id        = info[KeyDmc.VIDEO_ID]
         thread_id       = info[KeyDmc.THREAD_ID]
         msg_server      = info[KeyDmc.MSG_SERVER]
         user_id         = info[KeyDmc.USER_ID]
         user_key        = info[KeyDmc.USER_KEY]
+        is_official     = info[KeyDmc.IS_OFFICIAL]
 
         # 以下は公式動画で必要
         opt_thread_id   = info[KeyDmc.OPT_THREAD_ID]    # int なければ None
@@ -1102,9 +1079,6 @@ class Comment(utils.Canopy):
 
         self.logger.info(Msg.nd_download_comment.format(
             idx + 1, len(self.glossary), video_id, info[KeyGTI.TITLE]))
-
-
-        is_official = re.match("^(?:so|\d)", info[KeyDmc.VIDEO_ID]) is not None
 
         if is_official:
             thread_key, force_184 = await self.get_thread_key(thread_id, needs_key)
@@ -1143,7 +1117,6 @@ class Comment(utils.Canopy):
             return result.replace("}, ", "},\n")
 
     def saver(self, video_id: str, is_xml: bool, coroutine: asyncio.Task) -> bool:
-        utils.check_arg(locals())
         comment_data = coroutine.result()
         if is_xml:
             extention = "xml"
@@ -1164,7 +1137,6 @@ class Comment(utils.Canopy):
         :param str needs_key:
         :rtype: tuple[str, str]
         """
-        utils.check_arg(locals())
         if not int(needs_key) == 1:
             self.logger.debug(f"needs_key is not 1. Video ID (or Thread ID): {thread_id},"
                               f" needs_key: {needs_key}")
@@ -1203,7 +1175,6 @@ class Comment(utils.Canopy):
         :param str density: 取りに行くコメントの密度。 0-99999:9999,1000 のような形式。
         :rtype: str
         """
-        utils.check_arg({"thread_id": thread_id, "user_id": user_id})
         wbk = f'waybackkey="{waybackkey}"' if waybackkey else ""
         if thread_key:
             return (
@@ -1248,8 +1219,6 @@ class Comment(utils.Canopy):
         :param str density: 取りに行くコメントの密度。 0-99999:9999,1000 のような形式。
         :rtype: str
         """
-        utils.check_arg({"official_video": official_video, "user_id": user_id,
-                         "user_key": user_key, "thread_id": thread_id})
         result = [
             {"ping": {"content": "rs:0"}},
             {"ping": {"content": "ps:0"}},
@@ -1344,25 +1313,22 @@ def main(args):
     logger = utils.NTLogger(log_level=log_level)
     destination = utils.make_dir(args.dest[0])
 
-    if args.thumbnail:
-        Thumbnail(logger=logger).start(videoid, destination)
-        if not (args.comment or args.video):
-            # サムネイルのダウンロードだけならここで終える。
-            return True
-
-    database = Info(mail=mailadrs, password=password, logger=logger, sieve=args.nosieve).get_data(videoid)
+    database = Info(mail=mailadrs, password=password, logger=logger).get_data(videoid)
 
     if len(database) == 0:
         return True
+
+    if args.thumbnail:
+        Thumbnail(logger=logger).start(videoid, destination)
 
     if args.comment:
         (Comment(logger=logger).start(database, destination, args.xml))
 
     if args.video:
         if args.smile:
-            (VideoSmile(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination))
+            VideoSmile(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination)
         else:
-            (VideoDmc(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination))
+            VideoDmc(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination)
 
     return True
 

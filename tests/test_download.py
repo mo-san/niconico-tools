@@ -11,7 +11,7 @@ import nicotools
 from nicotools import utils
 from nicotools.download import Info, VideoDmc, VideoSmile, Comment, Thumbnail
 
-Waiting = 10
+Waiting = 5
 SAVE_DIR = "tests/downloads/"
 
 # "N" は一般会員の認証情報、 "P" はプレミアム会員の認証情報
@@ -110,38 +110,38 @@ class TestLogin:
         assert "-" in utils.LogIn(*AUTH_N).token
 
 
-class TestNicodown:
-    def send_param(self, cond, **kwargs):
+class TestDownload:
+    def make_param(self, cond, **kwargs):
         cond = "download --nomulti -l {_mail} -p {_pass} -d {save_dir} --loglevel DEBUG " + cond
         params = {"_mail"   : AUTH_N[0], "_pass": AUTH_N[1],
-                  "save_dir": SAVE_DIR, "video_id": " ".join(rand(0))}
+                  "save_dir": SAVE_DIR, "video_id": rand(1)[0]}
         params.update(kwargs)
         time.sleep(1)
-        return nicotools.main(cond.format(**params).split(" "))
+        return cond.format(**params).split(" ")
 
     def test_video_smile(self):
-        c = "--smile -v {video_id}"
-        assert self.send_param(c, video_id=rand()[0])
+        cond = "--smile -v {video_id}"
+        assert nicotools.main(self.make_param(cond))
 
     def test_video_dmc(self):
-        c = "--dmc -v {video_id}"
-        assert self.send_param(c, video_id=rand()[0])
+        cond = "--dmc -v {video_id}"
+        assert nicotools.main(self.make_param(cond))
 
     def test_sleep_1(self):
         # アクセス制限回避のためすこし待つ
         time.sleep(Waiting)
 
     def test_video_smile_more(self):
-        c = "--smile --limit 10 -v {video_id}"
-        assert self.send_param(c, video_id=rand()[0])
+        cond = "--smile --limit 10 -v {video_id}"
+        assert nicotools.main(self.make_param(cond))
 
     def test_video_dmc_more(self):
-        c = "--dmc --limit 10 -v {video_id}"
-        assert self.send_param(c, video_id=rand()[0])
+        cond = "--dmc --limit 10 -v {video_id}"
+        assert nicotools.main(self.make_param(cond))
 
 
-class TestNicodownError:
-    def send_param(self, cond, **kwargs):
+class TestDownloadError:
+    def make_param(self, cond, **kwargs):
         arg = cond
         if isinstance(cond, str):
             cond = "download -l {_mail} -p {_pass} -d {save_dir} --loglevel DEBUG " + cond
@@ -149,41 +149,39 @@ class TestNicodownError:
                       "save_dir": SAVE_DIR, "video_id": " ".join(rand(0))}
             params.update(kwargs)
             arg = cond.format(**params).split(" ")
-        return nicotools.main(arg)
+        return arg
 
     def test_without_commands(self):
         with pytest.raises(SystemExit):
-            c = "{video_id}"
-            self.send_param(c)
+            nicotools.main(self.make_param("{video_id}"))
 
     def test_invalid_directory_on_windows(self):
         if os.name == "nt":
-            c = "-c {video_id}"
             with pytest.raises(NameError):
-                self.send_param(c, save_dir="nul")
+                nicotools.main(self.make_param("-c {video_id}", save_dir="nul"))
 
     def test_no_args(self):
         with pytest.raises(SystemExit):
-            self.send_param(None)
+            nicotools.main(self.make_param(cond=None))
 
     def test_one_arg(self):
         with pytest.raises(SystemExit):
-            self.send_param(["download"])
+            nicotools.main(self.make_param(["download"]))
 
     def test_what_command(self):
         with pytest.raises(SystemExit):
-            self.send_param(["download", "-c", "sm9", "-w"])
+            nicotools.main(self.make_param(["download", "-c", "sm9", "-w"]))
 
     def test_invalid_videoid(self):
         with pytest.raises(SystemExit):
-            self.send_param(["download", "-c", "sm9", "hello"])
+            nicotools.main(self.make_param(["download", "-c", "sm9", "hello"]))
+
+    def test_notexisting(self):
+        cond = "-v {video_id}"
+        assert nicotools.main(self.make_param(cond, video_id="sm3"))
 
 
-class TestThumbAsync:
-    def test_sleep(self):
-        # アクセス制限回避のためすこし待つ
-        time.sleep(Waiting)
-
+class TestThumbnail:
     def test_thumbnail_single(self):
         try:
             db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
@@ -199,11 +197,7 @@ class TestThumbAsync:
             pass
 
 
-class TestCommentAsync:
-    def test_sleep(self):
-        # アクセス制限回避のためすこし待つ
-        time.sleep(Waiting)
-
+class TestComment:
     def test_comment_single(self):
         try:
             db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
@@ -221,7 +215,7 @@ class TestCommentAsync:
     def test_comment_without_directory(self):
         try:
             db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            with pytest.raises(SyntaxError):
+            with pytest.raises(AttributeError):
                 # noinspection PyTypeChecker
                 Comment().start(db, None)
         except aiohttp.client_exceptions.ClientError:

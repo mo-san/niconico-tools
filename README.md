@@ -1,7 +1,5 @@
 [![Build Status](https://travis-ci.org/mo-san/niconico-tools.svg?branch=master)](https://travis-ci.org/mo-san/niconico-tools)
-[![codecov](https://codecov.io/gh/mo-san/niconico-tools/branch/master/graph/badge.svg)](https://codecov.io/gh/mo-san/niconico-tools)
 [![Coverage Status](https://coveralls.io/repos/github/mo-san/niconico-tools/badge.svg?branch=master)](https://coveralls.io/github/mo-san/niconico-tools?branch=master)
-[![Code Health](https://landscape.io/github/mo-san/niconico-tools/master/landscape.svg?style=flat)](https://landscape.io/github/mo-san/niconico-tools/master)
 [![PyPI version](https://badge.fury.io/py/nicotools.svg)](https://pypi.python.org/pypi/nicotools)
 
 Here is a description page written in Japanese.
@@ -35,7 +33,7 @@ a niconico oriented tool.
 * マイリストに動画を追加・削除・移動・コピー
 
 # How It Works
-![how it works](https://raw.github.com/wiki/mo-san/niconico-tools/images/nicotools_running_sample.gif)
+![how it works](https://user-images.githubusercontent.com/8792364/45593949-bff87c00-b9cc-11e8-8d51-13a530f7564e.gif)
 
 
 # Installation
@@ -46,12 +44,7 @@ pip install nicotools
 
 ### Requirements
 
-* Python >= 3.4
-* requests
-* prettytable
-* bs4 (BeautifulSoup4)
-* aiohttp
-* tqdm
+* Python >= 3.6
 
 
 # Usage
@@ -140,8 +133,8 @@ optional arguments:
 usage: nicotools download [-h]
                           [--loglevel {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                           [-w] [-l MAIL] [-p WORD] [-d DEST] [-c] [-v] [-t]
-                          [-i] [-x] [-o FILE] [--smile] [--dmc]
-                          [--limit LIMIT] [--nomulti] [--nosieve]
+                          [-x] [-o FILE] [--smile] [--dmc]
+                          [--limit LIMIT] [--nomulti]
                           VIDEO_ID [VIDEO_ID ...]
    
    positional arguments:
@@ -160,7 +153,6 @@ usage: nicotools download [-h]
      -c, --comment         指定すると、 コメントをダウンロードします。
      -v, --video           指定すると、 動画をダウンロードします。
      -t, --thumbnail       指定すると、 サムネイルをダウンロードします。
-     -i, --getthumbinfo    getthumbinfo API から動画の情報のみを ダウンロードします。
      -x, --xml             指定すると、コメントをXML形式でダウンロードします。
                            チャンネル動画の場合は無視されます。
      -o FILE, --out FILE   --getthumbinfo の結果をそのファイル名で テキストファイルに出力します。
@@ -169,8 +161,6 @@ usage: nicotools download [-h]
      --limit LIMIT         サムネイルとコメントについては同時ダウンロードを、
                            動画については1つあたりの分割数をこの数に制限します。標準は 4 です。
      --nomulti             指定すると、プログレスバーを複数行で表示しません。
-     --nosieve             指定すると、動画とコメントについて、非公開や削除済みの
-                           項目でもダウンロードを試みます。
 ```
 
 
@@ -292,11 +282,8 @@ nicotools download -v sm9 --mail "mail@example.com" --pass "password"
 
 ## Usage as a module
 
-``_async`` がつかない ``nicodown`` や ``nicoml`` は 非同期処理をしません。
-
 ```python
-from nicotools.nicodown_async import VideoDmc, VideoSmile
-from nicotools.nicodown_async import Comment, Thumbnail
+from nicotools.download import VideoDmc, VideoSmile, Comment, Thumbnail
 
 mail = "<your mail address>"
 password = "<your password>"

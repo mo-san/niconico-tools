@@ -300,7 +300,6 @@ class NicoMyList(utils.Canopy):
         :param int | str search_for: マイリスト名またはマイリストID
         :rtype: (int, str)
         """
-        utils.check_arg(locals())
         result = self.get_list_id(search_for)
 
         if result.get("error") is True:
@@ -335,7 +334,6 @@ class NicoMyList(utils.Canopy):
         :param list[str] | tuple[str] videoids:
         :rtype: dict[str, str]
         """
-        utils.check_arg(locals())
         list_id, _ = self._get_list_id(list_id)
 
         # *videoids が要素数1のタプル ("*") or
@@ -375,7 +373,6 @@ class NicoMyList(utils.Canopy):
         :param str video_id: 動画ID
         :rtype:str
         """
-        utils.check_arg(locals())
         async with self.session.get(URL.URL_Info + video_id) as resp:
             soup = BeautifulSoup(await resp.text(), "html.parser")
         # 「status="ok"」 なら動画は生存 / 存在しない動画には「status="fail"」が返る
@@ -415,7 +412,6 @@ class NicoMyList(utils.Canopy):
         :param str mode: "add", "copy", "move", "delete", "purge", "create" のいずれか
         :rtype: dict
         """
-        utils.check_arg(locals())
         assert mode.lower() in ("add", "delete", "copy", "move", "purge", "create")
 
         self.logger.debug(f"Query components: {kwargs}")
@@ -515,7 +511,6 @@ class NicoMyList(utils.Canopy):
         :param str description: マイリストの説明文
         :rtype: bool
         """
-        utils.check_arg(locals())
         if utils.ALL_ITEM == mylist_name:
             print(Err.cant_perform_all)
             sys.exit()
@@ -551,7 +546,6 @@ class NicoMyList(utils.Canopy):
         :param bool confident:
         :rtype: bool
         """
-        utils.check_arg(locals())
         if utils.ALL_ITEM == list_id:
             print(Err.cant_perform_all)
             sys.exit()
@@ -588,7 +582,6 @@ class NicoMyList(utils.Canopy):
                              する場合、結果は、全て成功または全て失敗かのどちらか。
         :rtype: bool
         """
-        utils.check_arg(locals())
         if utils.ALL_ITEM == list_id or utils.ALL_ITEM in videoids:
             print(Err.cant_perform_all)
             sys.exit()
@@ -654,7 +647,6 @@ class NicoMyList(utils.Canopy):
                              する場合、結果は、全て成功または全て失敗かのどちらか。
         :rtype: bool
         """
-        utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
             print(Err.videoids_contain_all)
             sys.exit()
@@ -756,7 +748,6 @@ class NicoMyList(utils.Canopy):
                              する場合、結果は、全て成功または全て失敗かのどちらか。
         :rtype: bool
         """
-        utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
             print(Err.videoids_contain_all)
             sys.exit()
@@ -887,7 +878,6 @@ class NicoMyList(utils.Canopy):
                              する場合、結果は、全て成功または全て失敗かのどちらか。
         :rtype: bool
         """
-        utils.check_arg(locals())
         if len(videoids) > 1 and utils.ALL_ITEM in videoids:
             print(Err.videoids_contain_all)
             sys.exit()
@@ -993,7 +983,6 @@ class NicoMyList(utils.Canopy):
         :param bool with_header:
         :rtype: list[list[str]]
         """
-        utils.check_arg(locals())
         self.logger.info(Msg.ml_loading_mylists)
 
         # とりあえずマイリストのデータ
@@ -1043,7 +1032,6 @@ class NicoMyList(utils.Canopy):
         :param bool with_header:
         :rtype: list[list[str]]
         """
-        utils.check_arg(locals())
         list_id, list_name = self._get_list_id(list_id)
 
         self.logger.info(Msg.ml_showing_mylist.format(list_name))
@@ -1093,7 +1081,6 @@ class NicoMyList(utils.Canopy):
         :param bool with_info:
         :rtype: list[list[str]]
         """
-        utils.check_arg(locals())
 
         task_def = self.fetch_one(utils.DEFAULT_ID, with_header=with_info)
         tasks = [self.fetch_one(l_id, False) for l_id in self.mylists.keys()]
@@ -1118,7 +1105,6 @@ class NicoMyList(utils.Canopy):
         return self.loop.run_until_complete(self._show(list_id, file_name, table, survey))
 
     async def _show(self, list_id, file_name=None, table=False, survey=False):
-        utils.check_arg({"list_id": list_id, "table": table, "survey": survey})
         if file_name:
             file_name = utils.make_dir(file_name)
         if table:  # 表形式の場合
@@ -1151,7 +1137,6 @@ class NicoMyList(utils.Canopy):
         return self.loop.run_until_complete(self._export(list_id, file_name, survey))
 
     async def _export(self, list_id, file_name=None, survey=False):
-        utils.check_arg({"list_id": list_id, "survey": survey})
         if file_name:
             file_name = utils.make_dir(file_name)
         if list_id == utils.ALL_ITEM:
@@ -1171,7 +1156,6 @@ class NicoMyList(utils.Canopy):
         :param list[list[str]] container: 表示したい動画IDのリスト。
         :rtype: str
         """
-        utils.check_arg(locals())
         if len(container) == 0:
             return ""
         else:
@@ -1187,7 +1171,6 @@ class NicoMyList(utils.Canopy):
         :param list[list[str]] container: 表示したいIDの入ったリスト。
         :rtype: str
         """
-        utils.check_arg(locals())
         if len(container) == 0:
             return ""
         else:
@@ -1203,7 +1186,6 @@ class NicoMyList(utils.Canopy):
         :param list[list[str]] container: 表示したい内容を含むリスト。
         :rtype: str
         """
-        utils.check_arg(locals())
         if len(container) == 0:
             return ""
         else:
@@ -1242,7 +1224,6 @@ class NicoMyList(utils.Canopy):
         :param list[list[str]] container: 表示したい内容を含むリスト。
         :rtype: str
         """
-        utils.check_arg(locals())
         if len(container) == 0:
             return ""
         else:
@@ -1262,7 +1243,6 @@ class NicoMyList(utils.Canopy):
         :param str | Path | None file_name: ファイル名またはそのパス
         :rtype: str
         """
-        utils.check_arg({"text": text})
         if file_name:
             file_name = utils.make_dir(file_name)
             _text = "{}\n".format(text)

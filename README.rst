@@ -1,12 +1,7 @@
 .. image:: https://travis-ci.org/mo-san/niconico-tools.svg?branch=master
     :target: https://travis-ci.org/mo-san/niconico-tools
-.. image:: https://codecov.io/gh/mo-san/niconico-tools/branch/master/graph/badge.svg
-    :target: https://codecov.io/gh/mo-san/niconico-tools
 .. image:: https://coveralls.io/repos/github/mo-san/niconico-tools/badge.svg?branch=master
     :target: https://coveralls.io/github/mo-san/niconico-tools?branch=master
-.. image:: https://landscape.io/github/mo-san/niconico-tools/master/landscape.svg?style=flat
-    :target: https://landscape.io/github/mo-san/niconico-tools/master
-    :alt: Code Health
 .. image:: https://badge.fury.io/py/nicotools.svg
     :target: https://badge.fury.io/py/nicotools
 
@@ -32,12 +27,7 @@ Installation
 Requirements
 ************
 
-* Python >= 3.4
-* requests
-* prettytable
-* bs4 (BeautifulSoup4)
-* aiohttp
-* tqdm
+* Python >= 3.6
 
 =====
 Usage
@@ -162,8 +152,7 @@ Usage as a module
 *****************
 ::
 
-    from nicotools.nicodown_async import VideoDmc, VideoSmile
-    from nicotools.nicodown_async import Comment, Thumbnail
+    from nicotools.download import VideoDmc, VideoSmile, Comment, Thumbnail
 
     mail = "<your mail address>"
     password = "<your password>"
@@ -182,8 +171,3 @@ Usage as a module
 
     VideoDmc(mail, password).start(video_ids, DIR_PATH)
 
-==========
-Change log
-==========
-
-v1.0.0 Initial Version
