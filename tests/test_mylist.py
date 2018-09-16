@@ -184,7 +184,7 @@ class TestNicomlDeflist:
         caplog.set_level(logging.DEBUG)
         c = "{} --add {}".format("とりあえずマイリスト", VIDEO_ID)
         try:
-            assert nicotools.main(param(c))
+            nicotools.main(param(c))
         except utils.MylistAPIError as error:
             if not error.ok:
                 print(error, file=sys.stderr)
@@ -193,7 +193,7 @@ class TestNicomlDeflist:
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --move {}".format("とりあえずマイリスト", id_and_name_to.name, VIDEO_ID)
         try:
-            assert nicotools.main(param(c))
+            nicotools.main(param(c))
         except utils.MylistAPIError as error:
             if not error.ok:
                 print(error, file=sys.stderr)
@@ -202,7 +202,7 @@ class TestNicomlDeflist:
         caplog.set_level(logging.DEBUG)
         c = "{} --to {} --copy {}".format(id_and_name_to.name, "とりあえずマイリスト", VIDEO_ID)
         try:
-            assert nicotools.main(param(c))
+            nicotools.main(param(c))
         except utils.MylistAPIError as error:
             if not error.ok:
                 print(error, file=sys.stderr)
@@ -211,7 +211,7 @@ class TestNicomlDeflist:
         caplog.set_level(logging.DEBUG)
         c = "* --show --everything"
         try:
-            assert nicotools.main(param(c))
+            nicotools.main(param(c))
         except utils.MylistAPIError as error:
             if not error.ok:
                 print(error, file=sys.stderr)
@@ -220,7 +220,7 @@ class TestNicomlDeflist:
         caplog.set_level(logging.DEBUG)
         c = "{} --delete {}".format("とりあえずマイリスト", VIDEO_ID)
         try:
-            assert nicotools.main(param(c))
+            nicotools.main(param(c))
         except utils.MylistAPIError as error:
             if not error.ok:
                 print(error, file=sys.stderr)

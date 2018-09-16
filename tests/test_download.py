@@ -179,6 +179,26 @@ class TestNicodownError:
             self.send_param(["download", "-c", "sm9", "hello"])
 
 
+class TestThumbAsync:
+    def test_sleep(self):
+        # アクセス制限回避のためすこし待つ
+        time.sleep(Waiting)
+
+    def test_thumbnail_single(self):
+        try:
+            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+            assert Thumbnail().start(db, SAVE_DIR)
+        except aiohttp.client_exceptions.ClientError:
+            pass
+
+    def test_thumbnail_multi(self):
+        try:
+            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand(0))
+            assert Thumbnail().start(db, SAVE_DIR)
+        except aiohttp.client_exceptions.ClientError:
+            pass
+
+
 class TestCommentAsync:
     def test_sleep(self):
         # アクセス制限回避のためすこし待つ
@@ -204,26 +224,6 @@ class TestCommentAsync:
             with pytest.raises(SyntaxError):
                 # noinspection PyTypeChecker
                 Comment().start(db, None)
-        except aiohttp.client_exceptions.ClientError:
-            pass
-
-
-class TestThumbAsync:
-    def test_sleep(self):
-        # アクセス制限回避のためすこし待つ
-        time.sleep(Waiting)
-
-    def test_thumbnail_single(self):
-        try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert Thumbnail().start(db, SAVE_DIR)
-        except aiohttp.client_exceptions.ClientError:
-            pass
-
-    def test_thumbnail_multi(self):
-        try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand(0))
-            assert Thumbnail().start(db, SAVE_DIR)
         except aiohttp.client_exceptions.ClientError:
             pass
 
@@ -271,5 +271,4 @@ class TestVideoDmc:
 
 
 def test_okatadsuke():
-    for _parh in (SAVE_DIR, SAVE_DIR):
-        shutil.rmtree(str(utils.make_dir(_parh)))
+    shutil.rmtree(str(utils.make_dir(SAVE_DIR)))
