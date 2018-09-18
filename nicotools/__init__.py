@@ -37,7 +37,6 @@ def main(arguments=None):
     parser_nd.add_argument("-t", "--thumbnail", action="store_true", help=Msg.nd_help_thumbnail)
     parser_nd.add_argument("-x", "--xml", action="store_true", help=Msg.nd_help_xml)
     parser_nd.add_argument("--smile", action="store_true", help=Msg.nd_help_smile)
-    parser_nd.add_argument("--dmc", action="store_true", help=Msg.nd_help_dmc, default=True)
     parser_nd.add_argument("--limit", type=int, help=Msg.nd_help_limit, default=4)
     parser_nd.add_argument("--nomulti", action="store_false", help=Msg.nd_help_nomulti, dest="nomulti")
 

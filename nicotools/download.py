@@ -16,16 +16,17 @@ from bs4 import BeautifulSoup, Tag
 from tqdm import tqdm
 
 from nicotools import utils
-from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc
+from nicotools.utils import Msg, Err, URL, KeyGetFlv, KeyGTI, KeyDmc, DataKey
 
 
 class Info(utils.Canopy):
     def __init__(self,
-                 mail: str=None, password: str=None,
-                 logger: utils.NTLogger=None,
-                 session: aiohttp.ClientSession=None,
+                 mail: Optional[str]=None,
+                 password: Optional[str]=None,
+                 logger: Optional[utils.NTLogger]=None,
+                 session: Optional[aiohttp.ClientSession]=None,
                  limit: int=4,
-                 loop: asyncio.AbstractEventLoop=None,
+                 loop: Optional[asyncio.AbstractEventLoop]=None,
                  interval: Union[int, float]=5,
                  backoff: Union[int, float]=3,
                  retries: Union[int, float]=3,
@@ -58,17 +59,20 @@ class Info(utils.Canopy):
 
         :rtype: aiohttp.ClientSession
         """
-        if self.session:
-            return self.session
+        login = utils.LogIn(mail=self.__mail, password=self.__password)
+        if login.is_login:
+            cook = login.cookie
         else:
-            login = utils.LogIn(mail=self.__mail, password=self.__password)
-            if login.is_login:
-                cook = login.cookie
-            else:
-                login.get_session(utils.LogIn.ask_credentials())
-                cook = login.cookie
-            self.logger.debug(f"Object ID of cookie (Info): {id(cook)}")
-            return aiohttp.ClientSession(cookies=cook)
+            login.get_session(utils.LogIn.ask_credentials())
+            cook = login.cookie
+        self.logger.debug(f"Object ID of cookie (Info): {id(cook)}")
+        return aiohttp.ClientSession(cookies=cook)
+
+    def close(self):
+        async def _close():
+            await self.session.close()
+
+        self.loop.run_until_complete(_close())
 
     def get_data(self, video_ids: List) -> Dict:
         """
@@ -123,83 +127,34 @@ class Info(utils.Canopy):
                     else:
                         break
 
-    def _read_from_watch_api(self, content: str) -> Dict:
+    def _junction(self, content: str) -> Dict[str, Union[str, int, List[str], bool]]:
         """
-        watchAPIDataContainer を含む HTML から情報を取り出す。
+        動画視聴ページのHTMLから必要な情報を取り出す。
 
-        :param str content: HTMLの文字列
+        HTML構造は複数あり、ものによって内容が異なる。適切な担当者へ振り向ける。
+
+        :param str content:
         :rtype: Dict[str, Union[str, int, List[str], bool]]
         """
-        watch_api = json.loads(content)
-        flash_vars = watch_api["flashvars"]
-        flvinfo = utils.extract_getflv(unquote(flash_vars["flvInfo"]))
-        if "dmcInfo" in flash_vars:
-            dmc_info = json.loads(unquote(flash_vars["dmcInfo"]))
-            session_api = dmc_info["session_api"]
+        soup = BeautifulSoup(content, "html.parser")
+        if soup.select("#Login_nico"):
+            print("Login Failed", file=sys.stderr)
+            sys.exit()
+        _data_api = soup.select("#js-initial-watch-data")
+        _watch_api = soup.select("#watchAPIDataContainer")
+        if _data_api:
+            return self._read_from_data_api(_data_api[0]["data-api-data"])
+        elif _watch_api:
+            return self._read_from_watch_api(_watch_api[0].text)
         else:
-            dmc_info = None
-            session_api = None
+            if self.logger.is_debug:
+                file_name = "_#_niconico_#_.html"
+                with open(file_name, "w", encoding="utf-8") as fd:
+                    fd.write(content)
+                print(f"Unknown HTML structure has been met."
+                      f" It's exported for debugging at {Path.cwd()/file_name}.", file=sys.stderr)
 
-        info = {
-            KeyDmc.VIDEO_ID     : flash_vars["videoId"],  # str
-            KeyDmc.VIDEO_URL_SM : flvinfo[KeyGetFlv.VIDEO_URL],  # str
-            KeyDmc.TITLE        : flash_vars["videoTitle"],  # str
-            KeyDmc.FILE_NAME    : utils.t2filename(flash_vars["videoTitle"]),
-            KeyDmc.FILE_SIZE    : None,  # int
-            KeyDmc.THUMBNAIL_URL: flash_vars["thumbImage"],  # str
-            KeyDmc.ECO          : bool(flash_vars.get("eco", 0)),  # bool
-            KeyDmc.MOVIE_TYPE   : flash_vars["movie_type"],  # str
-            # KeyDmc.IS_DMC       : int(flash_vars["isDmc"]),  # int
-            # KeyDmc.DELETED      : int(flash_vars["deleted"]),  # int
-            KeyDmc.IS_DELETED   : watch_api["videoDetail"]["isDeleted"],  # bool
-            KeyDmc.IS_PUBLIC    : watch_api["videoDetail"]["is_public"],  # bool
-            KeyDmc.IS_OFFICIAL  : watch_api["videoDetail"]["is_official"],  # bool
-            KeyDmc.IS_PREMIUM   : watch_api["viewerInfo"]["isPremium"],  # bool
-
-            # この6つはコメントのダウンロードに必要
-            KeyDmc.USER_ID      : flvinfo[KeyGetFlv.USER_ID],  # int
-            KeyDmc.USER_KEY     : flvinfo[KeyGetFlv.USER_KEY],  # str
-            KeyDmc.MSG_SERVER   : flvinfo[KeyGetFlv.MSG_SERVER],  # str
-            KeyDmc.THREAD_ID    : flvinfo[KeyGetFlv.THREAD_ID],  # int
-            KeyDmc.OPT_THREAD_ID: flvinfo[KeyGetFlv.OPT_THREAD_ID],  # int なければ None
-            KeyDmc.NEEDS_KEY    : flvinfo[KeyGetFlv.NEEDS_KEY],  # int なければ None
-
-            # DMCサーバーからの動画のダウンロードに必要
-            KeyDmc.API_URL      : None,
-            KeyDmc.RECIPE_ID    : None,
-            KeyDmc.CONTENT_ID   : None,
-            KeyDmc.VIDEO_SRC_IDS: None,
-            KeyDmc.AUDIO_SRC_IDS: None,
-            KeyDmc.HEARTBEAT    : None,
-            KeyDmc.TOKEN        : None,
-            KeyDmc.SIGNATURE    : None,
-            KeyDmc.AUTH_TYPE    : None,
-            KeyDmc.C_K_TIMEOUT  : None,
-            KeyDmc.SVC_USER_ID  : None,
-            KeyDmc.PLAYER_ID    : None,
-            KeyDmc.PRIORITY     : None,
-        }
-        if dmc_info:
-            info.update({
-                KeyDmc.API_URL      : session_api["api_urls"][0],  # str
-                KeyDmc.RECIPE_ID    : session_api["recipe_id"],  # str
-                KeyDmc.CONTENT_ID   : session_api["content_id"],  # str
-                KeyDmc.VIDEO_SRC_IDS: session_api["videos"],  # List[str]
-                KeyDmc.AUDIO_SRC_IDS: session_api["audios"],  # List[str]
-                KeyDmc.HEARTBEAT    : session_api["heartbeat_lifetime"],  # int
-                KeyDmc.TOKEN        : session_api["token"],  # str
-                KeyDmc.SIGNATURE    : session_api["signature"],  # str
-                KeyDmc.AUTH_TYPE    : session_api["auth_types"]["http"],  # str
-                KeyDmc.C_K_TIMEOUT  : session_api["content_key_timeout"],  # int
-                KeyDmc.SVC_USER_ID  : info[KeyDmc.USER_ID],
-                KeyDmc.PLAYER_ID    : session_api["player_id"],  # str
-                KeyDmc.PRIORITY     : session_api["priority"],  # int
-                # KeyDmc.OPT_THREAD_ID: dmc_info["thread"]["optional_thread_id"],  # int
-                # KeyDmc.NEEDS_KEY    : dmc_info["thread"]["thread_key_required"],  # bool
-            })
-        return info
-
-    def _read_from_data_api(self, content: str) -> Dict:  # pragma: no cover
+    def _read_from_data_api(self, content: str) -> Dict:
         """
         data-api-data 属性を持つタグがあるHTMLから情報を取り出す。
 
@@ -218,8 +173,8 @@ class Info(utils.Canopy):
             KeyDmc.VIDEO_ID     : _video["id"],  # type: str
             KeyDmc.VIDEO_URL_SM : _video["smileInfo"]["url"],  # type: str
             KeyDmc.TITLE        : _video["title"],  # type: str
-            KeyDmc.FILE_NAME    : utils.t2filename(_video["title"]),
-            KeyDmc.FILE_SIZE    : None,
+            KeyDmc.FILE_NAME    : utils.t2filename(_video["title"]),  # type: str
+            KeyDmc.FILE_SIZE    : None,  # type: Optional[int]
             KeyDmc.THUMBNAIL_URL: _video["thumbnailURL"],  # type: str
             KeyDmc.ECO          : bool(j["context"]["isPeakTime"]),  # type: bool
             KeyDmc.MOVIE_TYPE   : _video["movieType"],  # type: str
@@ -227,37 +182,37 @@ class Info(utils.Canopy):
             KeyDmc.IS_PUBLIC    : _video["isPublic"],  # type: bool
             KeyDmc.IS_OFFICIAL  : _video["isOfficial"],  # type: bool
             KeyDmc.IS_PREMIUM   : j["viewer"]["isPremium"],  # type: bool
-            # KeyDmc.IS_DMC       : None,
 
             # この6つはコメントのダウンロードに必要
             KeyDmc.USER_ID      : j["viewer"]["id"],  # type: int
             KeyDmc.USER_KEY     : j["context"]["userkey"],  # type: str
-            KeyDmc.OPT_THREAD_ID: None,  # int なければ None
-            KeyDmc.NEEDS_KEY    : None,  # int なければ None
+            KeyDmc.OPT_THREAD_ID: None,  # type: Optional[int]
+            KeyDmc.NEEDS_KEY    : None,  # type: Optional[int]
             # ただしこの2つは dmcInfo にしかない。
             # watchAPI版との整合性のために初期化しておく。
             KeyDmc.MSG_SERVER   : None,
             KeyDmc.THREAD_ID    : None,
 
             # DMCサーバーからの動画のダウンロードに必要
-            KeyDmc.API_URL      : None,
-            KeyDmc.RECIPE_ID    : None,
-            KeyDmc.CONTENT_ID   : None,
-            KeyDmc.VIDEO_SRC_IDS: None,
-            KeyDmc.AUDIO_SRC_IDS: None,
-            KeyDmc.HEARTBEAT    : None,
-            KeyDmc.TOKEN        : None,
-            KeyDmc.SIGNATURE    : None,
-            KeyDmc.AUTH_TYPE    : None,
-            KeyDmc.C_K_TIMEOUT  : None,
-            KeyDmc.SVC_USER_ID  : None,
-            KeyDmc.PLAYER_ID    : None,
-            KeyDmc.PRIORITY     : None,
+            KeyDmc.IS_DMC       : False,  # type: bool
+            KeyDmc.API_URL      : None,  # type: Optional[str]
+            KeyDmc.RECIPE_ID    : None,  # type: Optional[str]
+            KeyDmc.CONTENT_ID   : None,  # type: Optional[str]
+            KeyDmc.VIDEO_SRC_IDS: None,  # type: Optional[List[str]]
+            KeyDmc.AUDIO_SRC_IDS: None,  # type: Optional[List[str]]
+            KeyDmc.HEARTBEAT    : None,  # type: Optional[int]
+            KeyDmc.TOKEN        : None,  # type: Optional[str]
+            KeyDmc.SIGNATURE    : None,  # type: Optional[str]
+            KeyDmc.AUTH_TYPE    : None,  # type: Optional[str]
+            KeyDmc.C_K_TIMEOUT  : None,  # type: Optional[int]
+            KeyDmc.SVC_USER_ID  : None,  # type: Optional
+            KeyDmc.PLAYER_ID    : None,  # type: Optional[str]
+            KeyDmc.PRIORITY     : None,  # type: Optional[int]
         }
 
         if dmc_info:
             info.update({
-                KeyDmc.IS_DELETED   : dmc_info["video"]["deleted"],  # type: int
+                KeyDmc.IS_DMC       : True,  # type: bool
                 KeyDmc.MSG_SERVER   : dmc_info["thread"]["server_url"],  # type: str
                 KeyDmc.THREAD_ID    : dmc_info["thread"]["thread_id"],  # type: int
                 KeyDmc.API_URL      : session_api["urls"][0]["url"],  # type: str
@@ -278,38 +233,89 @@ class Info(utils.Canopy):
             })
         return info
 
-    def _junction(self, content: str) -> Dict[str, Union[str, int, List[str], bool]]:
+    def _read_from_watch_api(self, content: str) -> Dict:
         """
-        動画視聴ページのHTMLから必要な情報を取り出す。
+        watchAPIDataContainer を含む HTML から情報を取り出す。
 
-        HTML構造は複数あり、ものによって内容が異なる。適切な担当者へ振り向ける。
-
-        :param str content:
+        :param str content: HTMLの文字列
         :rtype: Dict[str, Union[str, int, List[str], bool]]
         """
-        soup = BeautifulSoup(content, "html.parser")
-        if soup.select("#Login_nico"):
-            print("Login Failed")
-            sys.exit()
-        _data_api = soup.select("#js-initial-watch-data")
-        _watch_api = soup.select("#watchAPIDataContainer")
-        if _data_api:
-            return self._read_from_data_api(_data_api[0]["data-api-data"])
-        elif _watch_api:
-            return self._read_from_watch_api(_watch_api[0].text)
+        watch_api = json.loads(content)
+        flash_vars = watch_api["flashvars"]
+        flvinfo = utils.extract_getflv(unquote(flash_vars["flvInfo"]))
+        if "dmcInfo" in flash_vars:
+            dmc_info = json.loads(unquote(flash_vars["dmcInfo"]))
+            session_api = dmc_info["session_api"]
         else:
-            if self.logger.is_debug:
-                file_name = "_#_niconico_#_.html"
-                with open(file_name, "w", encoding="utf-8") as fd:
-                    fd.write(content)
+            dmc_info = None
+            session_api = None
+
+        info = {
+            KeyDmc.VIDEO_ID     : flash_vars["videoId"],  # type: str
+            KeyDmc.VIDEO_URL_SM : flvinfo[KeyGetFlv.VIDEO_URL],  # type: str
+            KeyDmc.TITLE        : flash_vars["videoTitle"],  # type: str
+            KeyDmc.FILE_NAME    : utils.t2filename(flash_vars["videoTitle"]),
+            KeyDmc.FILE_SIZE    : None,  # type: Optional[int]
+            KeyDmc.THUMBNAIL_URL: flash_vars["thumbImage"],  # type: str
+            KeyDmc.ECO          : bool(flash_vars.get("eco", 0)),  # type: bool
+            KeyDmc.MOVIE_TYPE   : flash_vars["movie_type"],  # type: str
+            KeyDmc.IS_DELETED   : watch_api["videoDetail"]["isDeleted"],  # type: bool
+            KeyDmc.IS_PUBLIC    : watch_api["videoDetail"]["is_public"],  # type: bool
+            KeyDmc.IS_OFFICIAL  : watch_api["videoDetail"]["is_official"],  # type: bool
+            KeyDmc.IS_PREMIUM   : watch_api["viewerInfo"]["isPremium"],  # type: bool
+
+            # この6つはコメントのダウンロードに必要
+            KeyDmc.USER_ID      : flvinfo[KeyGetFlv.USER_ID],  # type: int
+            KeyDmc.USER_KEY     : flvinfo[KeyGetFlv.USER_KEY],  # type: str
+            KeyDmc.MSG_SERVER   : flvinfo[KeyGetFlv.MSG_SERVER],  # type: str
+            KeyDmc.THREAD_ID    : flvinfo[KeyGetFlv.THREAD_ID],  # type: int
+            KeyDmc.OPT_THREAD_ID: flvinfo[KeyGetFlv.OPT_THREAD_ID],  # type: Optional[int]
+            KeyDmc.NEEDS_KEY    : flvinfo[KeyGetFlv.NEEDS_KEY],  # type: Optional[int]
+
+            # DMCサーバーからの動画のダウンロードに必要
+            KeyDmc.IS_DMC       : False,  # type: bool
+            KeyDmc.API_URL      : None,  # type: Optional[str]
+            KeyDmc.RECIPE_ID    : None,  # type: Optional[str]
+            KeyDmc.CONTENT_ID   : None,  # type: Optional[str]
+            KeyDmc.VIDEO_SRC_IDS: None,  # type: Optional[List[str]]
+            KeyDmc.AUDIO_SRC_IDS: None,  # type: Optional[List[str]]
+            KeyDmc.HEARTBEAT    : None,  # type: Optional[int]
+            KeyDmc.TOKEN        : None,  # type: Optional[str]
+            KeyDmc.SIGNATURE    : None,  # type: Optional[str]
+            KeyDmc.AUTH_TYPE    : None,  # type: Optional[str]
+            KeyDmc.C_K_TIMEOUT  : None,  # type: Optional[int]
+            KeyDmc.SVC_USER_ID  : None,  # type: Optional
+            KeyDmc.PLAYER_ID    : None,  # type: Optional[str]
+            KeyDmc.PRIORITY     : None,  # type: Optional[int]
+        }
+        if dmc_info:
+            info.update({
+                KeyDmc.IS_DMC       : True,  # type: bool
+                KeyDmc.API_URL      : session_api["api_urls"][0],  # type: str
+                KeyDmc.RECIPE_ID    : session_api["recipe_id"],  # type: str
+                KeyDmc.CONTENT_ID   : session_api["content_id"],  # type: str
+                KeyDmc.VIDEO_SRC_IDS: session_api["videos"],  # type: List[str]
+                KeyDmc.AUDIO_SRC_IDS: session_api["audios"],  # type: List[str]
+                KeyDmc.HEARTBEAT    : session_api["heartbeat_lifetime"],  # type: int
+                KeyDmc.TOKEN        : session_api["token"],  # type: str
+                KeyDmc.SIGNATURE    : session_api["signature"],  # type: str
+                KeyDmc.AUTH_TYPE    : session_api["auth_types"]["http"],  # type: str
+                KeyDmc.C_K_TIMEOUT  : session_api["content_key_timeout"],  # type: int
+                KeyDmc.SVC_USER_ID  : info[KeyDmc.USER_ID],
+                KeyDmc.PLAYER_ID    : session_api["player_id"],  # type: str
+                KeyDmc.PRIORITY     : session_api["priority"],  # type: int
+                # KeyDmc.OPT_THREAD_ID: dmc_info["thread"]["optional_thread_id"],  # type: int
+                # KeyDmc.NEEDS_KEY    : dmc_info["thread"]["thread_key_required"],  # type: bool
+            })
+        return info
 
 
 class Thumbnail(utils.Canopy):
     def __init__(self,
-                 logger: utils.NTLogger=None,
+                 logger: Optional[utils.NTLogger]=None,
                  limit: int=8,
-                 session: aiohttp.ClientSession=None,
-                 loop: asyncio.AbstractEventLoop=None,
+                 session: Optional[aiohttp.ClientSession]=None,
+                 loop: Optional[asyncio.AbstractEventLoop]=None,
                  ):
         """
         サムネイル画像をダウンロードする。
@@ -325,12 +331,20 @@ class Thumbnail(utils.Canopy):
         self.__bucket = {}
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__parallel_limit = limit
+        self.glossary = {}
+        self.save_dir = None  # type: Path
 
     async def get_session(self) -> aiohttp.ClientSession:
         return aiohttp.ClientSession()
 
+    def close(self):
+        async def _close():
+            await self.session.close()
+
+        self.loop.run_until_complete(_close())
+
     def start(self, glossary: Union[List, Dict],
-              save_dir: Union[str, Path], is_large=True):
+              save_dir: Union[str, Path], is_large: bool=True):
         """
         ダウンロードを開始する。
 
@@ -345,7 +359,7 @@ class Thumbnail(utils.Canopy):
             glossary = self.loop.run_until_complete(self._get_infos(glossary))
         self.glossary = glossary
 
-        self.save_dir = utils.make_dir(save_dir)
+        self.save_dir = utils.get_dir(save_dir)
 
         if len(self.glossary) > 0:
             self.loop.run_until_complete(self._download(list(self.glossary), is_large))
@@ -386,7 +400,7 @@ class Thumbnail(utils.Canopy):
     def _saver(self, video_id: str, coroutine: asyncio.Task) -> None:
         image_data = coroutine.result()
         if image_data:
-            file_path = self.make_name(video_id, "jpg")
+            file_path = utils.make_name(self.glossary[video_id], self.save_dir, extention="jpg")
             self.logger.debug(f"File Path: {file_path}")
 
             with file_path.open('wb') as f:
@@ -443,69 +457,102 @@ class Thumbnail(utils.Canopy):
                 }
 
 
-class VideoSmile(utils.Canopy):
+class Video(utils.Canopy):
     def __init__(self,
-                 mail: str=None, password: str=None,
-                 logger: utils.NTLogger=None,
-                 session: aiohttp.ClientSession=None,
+                 videoids: Union[List, Dict],
+                 save_dir: Union[str, Path]=None,
+                 mail: Optional[str]=None,
+                 password: Optional[str]=None,
+                 logger: Optional[utils.NTLogger]=None,
+                 chunk_size: int=1024*50,
+                 multiline: bool=True,
+                 smile: bool=False,
                  division: int=4,
-                 limit: int=4,
-                 chunk_size=1024*50,
-                 multiline=True,
-                 loop: asyncio.AbstractEventLoop=None,
+                 loop: Optional[asyncio.AbstractEventLoop]=None,
                  ):
         """
-        Smileサーバーから動画をダウンロードする。
+        動画をダウンロードする。
 
         :param mail: メールアドレス
         :param password: パスワード
         :param logger: ロガー
-        :param session: セッション
         :param division: いくつに分割するか
-        :param limit: (実際のダウンロード前のファイルサイズの確認で)同時にアクセスする最大数
         :param chunk_size: サーバーに一度に要求するデータ量
         :param multiline: プログレスバーを複数行で表示するか
         :param loop: イベントループ
         """
         super().__init__(loop=loop, logger=logger)
-        self.__mail = mail
-        self.__password = password
-        self.__downloaded_size = None  # type: List[int]
-        self.__multiline = multiline
-        self.__division = division
-        self.session = session or self.loop.run_until_complete(self.get_session())
-        self.__parallel_limit = limit
-        self.__chunk_size = chunk_size
+        self.session = self.loop.run_until_complete(self.get_session(mail, password))
+        self.commons = {
+            DataKey.SESSION     : self.session,
+            DataKey.LOGGER      : self.logger,
+            DataKey.LOOP        : self.loop,
+            DataKey.CHUNK_SIZE  : chunk_size,
+            DataKey.IS_MULTILINE: multiline,
+            DataKey.IS_SMILE    : smile,
+            DataKey.DIVISION    : division,
+            DataKey.SAVE_DIR    : utils.get_dir(save_dir)
+        }  # type: Dict[str, Union[int, bool, Path, aiohttp.ClientSession, asyncio.AbstractEventLoop, utils.NTLogger]]
 
-    async def get_session(self) -> aiohttp.ClientSession:
-        if self.session:
-            return self.session
+        self.glossary = videoids
+        if isinstance(videoids, list):
+            info = Info(mail=mail, password=password, session=self.commons[DataKey.SESSION])
+            self.glossary = info.get_data(utils.validator(videoids))
+            self.commons[DataKey.SESSION] = info.session
+
+
+    async def get_session(self, mail: str, password: str) -> aiohttp.ClientSession:
+        cook = utils.LogIn(mail=mail, password=password).cookie
+        return aiohttp.ClientSession(cookies=cook)
+
+    def start(self):
+        if self.commons[DataKey.IS_SMILE]:
+            VideoSmile(self.glossary, self.commons).callee()
         else:
-            cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
-            return aiohttp.ClientSession(cookies=cook)
+            dmc_list = {key: val for key, val in self.glossary.items() if val[KeyDmc.IS_DMC] is True}
+            sml_list = {key: val for key, val in self.glossary.items() if val[KeyDmc.IS_DMC] is False}
+            VideoDmc(dmc_list, self.commons).callee()
+            VideoSmile(sml_list, self.commons).callee()
 
-    def start(self,
-              glossary: Union[list, dict],
-              save_dir: Union[str, Path]):
-        # TODO Downloading in Economy mode
-        self.save_dir = utils.make_dir(save_dir)
+        self.close()
+        return True
+
+    def close(self):
+        async def _close():
+            await self.session.close()
+
+        self.loop.run_until_complete(_close())
+
+
+
+class VideoSmile:
+    def __init__(self,
+                 glossary: Dict[str, Union[str, int, bool, List]],
+                 common: Dict[str, Union[int, bool, Path, aiohttp.ClientSession,
+                         asyncio.AbstractEventLoop, utils.NTLogger]]):
+        """
+        Smileサーバーから動画をダウンロードする。
+
+        """
+        self.glossary = glossary
+        self.session = common[DataKey.SESSION]
+        self.logger = common[DataKey.LOGGER]
+        self.loop = common[DataKey.LOOP]
+        self.save_dir = common[DataKey.SAVE_DIR]
+        self.chunk_size = common[DataKey.CHUNK_SIZE]
+        self.multiline = common[DataKey.IS_MULTILINE]
+        self.smile = common[DataKey.IS_SMILE]
+        self.division = common[DataKey.DIVISION]
+        # (実際のダウンロード前のファイルサイズの確認で)同時にアクセスする最大数
+        self.__parallel_limit = 4
         # 分割数と同じだけの要素を持つリストを作り、各要素にそれぞれが
         # 保存したファイルサイズを記録する。プログレスバーに利用する。
-        self.__downloaded_size = [0] * self.__division
+        self.__downloaded_size = [0] * common[DataKey.DIVISION]  # type: List[int]
 
-        if isinstance(glossary, list):
-            glossary = utils.validator(glossary)
-            info = Info(
-                mail=self.__mail, password=self.__password,
-                session=self.session)
-            glossary = info.get_data(glossary)
-            self.session = info.session
-        self.glossary = glossary
-
+    def callee(self):
         # まず各動画のファイルサイズを集める。
         self.loop.run_until_complete(self._push_file_size())
         self.loop.run_until_complete(self._broker())
-        self.close()
         return True
 
     async def _push_file_size(self):
@@ -529,13 +576,13 @@ class VideoSmile(utils.Canopy):
         for idx, video_id in enumerate(self.glossary):
             coro = self._download(idx, video_id)
             f = asyncio.ensure_future(coro)
-            f.add_done_callback(functools.partial(self._combiner, video_id))
+            f.add_done_callback(self._combiner)
             futures.append(f)
         await asyncio.wait(futures, loop=self.loop)
 
     async def _download(self, idx: int, video_id: str):
-        division = self.__division
-        file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
+        division = self.glossary[DataKey.DIVISION]
+        file_path = utils.make_name(self.glossary, self.save_dir)
 
         self.logger.info(Msg.nd_download_video.format(
             idx + 1, len(self.glossary), video_id, self.glossary[video_id][KeyDmc.TITLE]))
@@ -549,7 +596,7 @@ class VideoSmile(utils.Canopy):
         for i, h in enumerate(headers):
             self.logger.debug(f"Header {i}: {str(h)}")
 
-        if self.__multiline:
+        if self.glossary[DataKey.IS_MULTILINE]:
             progress_bars = [tqdm(total=int(file_size / division),
                                   leave=False, position=order,
                                   unit="B", unit_scale=True,
@@ -576,7 +623,7 @@ class VideoSmile(utils.Canopy):
             async with self.session.get(url=video_url, headers=header) as video_data:
                 self.logger.debug(f"Started! Header: {header}, Video URL: {video_url}")
                 while True:
-                    data = await video_data.content.read(self.__chunk_size)
+                    data = await video_data.content.read(self.glossary[DataKey.CHUNK_SIZE])
                     if not data:
                         break
                     downloaded_size = fd.write(data)
@@ -604,16 +651,15 @@ class VideoSmile(utils.Canopy):
                 oldsize = newsize
                 await asyncio.sleep(interval)
 
-    def _combiner(self, video_id: str, coroutine: asyncio.Task):
+    def _combiner(self, coroutine: asyncio.Task):
         """
         ダウンロードが終わった後に分割したそれぞれを一つにまとめる関数。
 
-        :param str video_id:
         :param asyncio.Task coroutine: 動画をダウンロードしたタスク
         """
         if coroutine.done() and not coroutine.cancelled():
-            file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
-            file_names = [f"{file_path}.{order:03}" for order in range(self.__division)]
+            file_path = utils.make_name(self.glossary, self.save_dir)
+            file_names = [f"{file_path}.{order:03}" for order in range(self.glossary[DataKey.DIVISION])]
             self.logger.debug(f"File names: {file_names}")
             with file_path.open("wb") as fd:
                 for name in file_names:
@@ -623,70 +669,35 @@ class VideoSmile(utils.Canopy):
             self.logger.info(Msg.nd_download_done.format(path=file_path))
 
 
-class VideoDmc(utils.Canopy):
+class VideoDmc:
     def __init__(self,
-                 mail: str=None, password: str=None,
-                 logger: utils.NTLogger=None,
-                 session: aiohttp.ClientSession=None,
-                 division: int=4,
-                 chunk_size=1024*50,
-                 multiline=True,
-                 loop: asyncio.AbstractEventLoop=None,
-                 ):
+                 glossary: Dict[str, Union[str, int, bool, List]],
+                 common: Dict[str, Union[int, bool, Path, aiohttp.ClientSession,
+                                         asyncio.AbstractEventLoop, utils.NTLogger]]):
         """
         DMCサーバーから動画をダウンロードする。
-
-        :param mail: メールアドレス
-        :param password: パスワード
-        :param logger: ロガー
-        :param session: セッション
-        :param division: いくつに分割するか
-        :param chunk_size: 一度にサーバーに要求するデータ量
-        :param multiline: プログレスバーを複数行で表示するか
-        :param loop: イベントループ
         """
-        super().__init__(loop=loop, logger=logger)
-        self.__mail = mail
-        self.__password = password
-        self.__downloaded_size = None  # type: List[int]
-        self.__multiline = multiline
-        self.__division = division
-        self.session = session or self.loop.run_until_complete(self.get_session())
-        self.__chunk_size = chunk_size
-
-    async def get_session(self) -> aiohttp.ClientSession:
-        if self.session:
-            return self.session
-        else:
-            cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
-            return aiohttp.ClientSession(cookies=cook)
-
-    def start(self,
-              glossary: Union[list, dict],
-              save_dir: Union[str, Path],
-              xml: bool=True):
-        self.save_dir = utils.make_dir(save_dir)
-        self.__downloaded_size = [0] * self.__division
-
-        if isinstance(glossary, list):
-            glossary = utils.validator(glossary)
-            info = Info(
-                mail=self.__mail, password=self.__password,
-                session=self.session)
-            glossary = info.get_data(glossary)
-            self.session = info.session
         self.glossary = glossary
+        self.session = common[DataKey.SESSION]
+        self.loop = common[DataKey.LOOP]
+        self.logger = common[DataKey.LOGGER]
+        self.session = common[DataKey.SESSION]
+        self.logger = common[DataKey.LOGGER]
+        self.loop = common[DataKey.LOOP]
+        self.save_dir = common[DataKey.SAVE_DIR]
+        self.chunk_size = common[DataKey.CHUNK_SIZE]
+        self.multiline = common[DataKey.IS_MULTILINE]
+        self.smile = common[DataKey.IS_SMILE]
+        self.division = common[DataKey.DIVISION]
+        self.glossary = glossary
+        self.__downloaded_size = [0] * common[DataKey.DIVISION]  # type: List[int]
 
+    def callee(self, xml: bool=True):
         self.loop.run_until_complete(self._broker(xml))
-        self.close()
         return True
 
     async def _broker(self, xml: bool=True) -> None:
         for idx, video_id in enumerate(self.glossary):
-            if self.glossary[video_id][KeyDmc.API_URL] is None:
-                self.logger.warning(f"{video_id} はDMC動画ではありません。従来サーバーの動画を"
-                                    "ダウンロードする場合は --smile をコマンドに指定してください。")
-                continue
             if xml:
                 res_xml = await self._first_nego_xml(video_id)
                 video_url = self._extract_video_url_xml(res_xml)
@@ -699,12 +710,12 @@ class VideoDmc(utils.Canopy):
             self.logger.debug(f"動画URL: {video_url}")
             coro_download = asyncio.ensure_future(self._download(idx, video_id, video_url))
             coro_download.add_done_callback(functools.partial(self._canceler, coro_heartbeat))
-            coro_download.add_done_callback(functools.partial(self._combiner, video_id))
+            coro_download.add_done_callback(self._combiner)
             tasks = [coro_download, coro_heartbeat]
             await asyncio.gather(*tasks)
 
     async def _first_nego_xml(self, video_id: str) -> str:
-        payload = self._make_param_xml(self.glossary[video_id])
+        payload = self._make_param_xml(self.glossary)
         async with self.session.post(
                 url=self.glossary[video_id][KeyDmc.API_URL],
                 params={"_format": "xml"},
@@ -713,7 +724,7 @@ class VideoDmc(utils.Canopy):
             return await response.text()
 
     async def _first_nego_json(self, video_id: str) -> str:  # pragma: no cover
-        payload = self._make_param_json(self.glossary[video_id])
+        payload = self._make_param_json(self.glossary)
         async with self.session.post(
                 url=self.glossary[video_id][KeyDmc.API_URL],
                 params={"_format": "json"},
@@ -879,12 +890,12 @@ class VideoDmc(utils.Canopy):
         :param text:
         """
         try:
-            self.logger.debug(f"返ってきたXML: {text}")
-            api_url = self.glossary[video_id][KeyDmc.API_URL]
+            self.logger.debug(f"Returned XML: {text}")
+            api_url = self.glossary[video_id][KeyDmc.API_URL]  # type: str
             # 1分ちょうどで送ると遅れるので、待ち時間を少し早める
             waiting = (self.glossary[video_id][KeyDmc.HEARTBEAT] / 1000) - 5
-            companion = self._extract_session_tag(text)
-            session_id = self._extract_session_id_xml(text)
+            companion = self._extract_session_tag(text)  # type: str
+            session_id = self._extract_session_id_xml(text)  # type: str
             await asyncio.sleep(waiting)
             async with self.session.post(
                     url=api_url + "/" + session_id,
@@ -904,8 +915,8 @@ class VideoDmc(utils.Canopy):
             return int(headers["content-length"])
 
     async def _download(self, idx: int, video_id: str, video_url: str):
-        division = self.__division
-        file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
+        division = self.glossary[DataKey.DIVISION]
+        file_path = utils.make_name(self.glossary, self.save_dir)
 
         self.logger.info(Msg.nd_download_video.format(
             idx + 1, len(self.glossary), video_id, self.glossary[video_id][KeyDmc.TITLE]))
@@ -918,7 +929,7 @@ class VideoDmc(utils.Canopy):
         for o, h in zip(range(division), headers):
             self.logger.debug(f"Order {o}: {h}")
 
-        if self.__multiline:
+        if self.glossary[DataKey.IS_MULTILINE]:
             progress_bars = [tqdm(total=int(file_size / division),
                                   leave=False, position=order,
                                   unit="B", unit_scale=True,
@@ -946,7 +957,7 @@ class VideoDmc(utils.Canopy):
             async with self.session.get(url=video_url, headers=header) as video_data:
                 self.logger.debug(f"Started! Header: {header}, Video URL: {video_url}")
                 while True:
-                    data = await video_data.content.read(self.__chunk_size)
+                    data = await video_data.content.read(self.glossary[DataKey.CHUNK_SIZE])
                     if not data:
                         break
                     downloaded_size = fd.write(data)
@@ -978,16 +989,15 @@ class VideoDmc(utils.Canopy):
                 oldsize = newsize
                 await asyncio.sleep(interval)
 
-    def _combiner(self, video_id: str, coroutine: asyncio.Task):
+    def _combiner(self, coroutine: asyncio.Task):
         """
         ダウンロードが終わった後に分割したそれぞれを一つにまとめる関数。
 
-        :param str video_id:
         :param asyncio.Task coroutine:
         """
         if coroutine.done() and not coroutine.cancelled():
-            file_path = self.make_name(video_id, self.glossary[video_id][KeyDmc.MOVIE_TYPE])
-            file_names = [f"{file_path}.{order:03}" for order in range(self.__division)]
+            file_path = utils.make_name(self.glossary, self.save_dir)
+            file_names = [f"{file_path}.{order:03}" for order in range(self.glossary[DataKey.DIVISION])]
             with file_path.open("wb") as fd:
                 for name in file_names:
                     with open(name, "rb") as file:
@@ -1023,6 +1033,8 @@ class Comment(utils.Canopy):
         self.session = session or self.loop.run_until_complete(self.get_session())
         self.__parallel_limit = limit
         self.__wayback = wayback
+        self.glossary = {}
+        self.save_dir = None  # type: Path
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self.session:
@@ -1030,6 +1042,12 @@ class Comment(utils.Canopy):
         else:
             cook = utils.LogIn(mail=self.__mail, password=self.__password).cookie
             return aiohttp.ClientSession(cookies=cook)
+
+    def close(self):
+        async def _close():
+            await self.session.close()
+
+        self.loop.run_until_complete(_close())
 
     def start(self, glossary, save_dir, xml=False, density: str="0-99999:9999,1000"):
         """
@@ -1043,7 +1061,7 @@ class Comment(utils.Canopy):
         :param bool xml:
         :param str density: ダウンロードするコメントの密度。
         """
-        self.save_dir = utils.make_dir(save_dir)
+        self.save_dir = utils.get_dir(save_dir)
 
         if isinstance(glossary, list):
             glossary = utils.validator(glossary)
@@ -1123,7 +1141,7 @@ class Comment(utils.Canopy):
         else:
             extention = "json"
 
-        file_path = self.make_name(video_id, extention)
+        file_path = utils.make_name(self.glossary[video_id], self.save_dir, extention=extention)
         with file_path.open("w", encoding="utf-8") as f:
             f.write(comment_data + "\n")
         self.logger.info(Msg.nd_download_done.format(path=file_path))
@@ -1311,7 +1329,7 @@ def main(args):
     #
     log_level = "DEBUG" if is_debug else args.loglevel
     logger = utils.NTLogger(log_level=log_level)
-    destination = utils.make_dir(args.dest[0])
+    destination = utils.get_dir(args.dest[0])
 
     database = Info(mail=mailadrs, password=password, logger=logger).get_data(videoid)
 
@@ -1322,14 +1340,10 @@ def main(args):
         Thumbnail(logger=logger).start(videoid, destination)
 
     if args.comment:
-        (Comment(logger=logger).start(database, destination, args.xml))
+        Comment(logger=logger).start(database, destination, args.xml)
 
     if args.video:
-        if args.smile:
-            VideoSmile(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination)
-        else:
-            VideoDmc(logger=logger, division=args.limit, multiline=args.nomulti).start(database, destination)
+        Video(videoids=database, save_dir=destination,
+              logger=logger, division=args.limit, multiline=args.nomulti, smile=args.smile).start()
 
     return True
-
-# todo: --smile無しでdmcではない動画なら--smile付きでやり直す

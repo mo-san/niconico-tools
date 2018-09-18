@@ -10,7 +10,6 @@ from getpass import getpass
 from pathlib import Path
 from urllib.parse import parse_qs
 
-import aiohttp
 import requests
 from requests import cookies
 
@@ -97,17 +96,20 @@ def validator(input_list):
             for item in set(input_list) if matcher(item) or ALL_ITEM in item]
 
 
-def make_dir(directory):
+def get_dir(directory):
     """
     保存場所に指定されたフォルダーがない場合にはつくり、その絶対パスを返す。
 
     :param str | Path directory: フォルダー名
     :rtype: Path
     """
+    if directory is None:
+        return Path().cwd()
+
     if isinstance(directory, str):
         directory = Path(directory)
     if directory.suffix:
-        return make_dir(directory.parent) / directory.name
+        return get_dir(directory.parent) / directory.name
     try:
         if not directory.is_dir():
             directory.mkdir(parents=True)
@@ -126,7 +128,8 @@ def make_dir(directory):
             # [WinError 183] 既に存在するファイルを作成することはできません。
             FileExistsError
     ):
-        raise NameError(Err.invalid_dirname.format(directory))
+        print(Err.invalid_dirname.format(directory), file=sys.stderr)
+        sys.exit()
 
 
 def t2filename(text):
@@ -213,26 +216,26 @@ class MylistAPIError(Exception):
         self.ok = ok
 
 
+def make_name(data: dict, save_dir: Path, extention: str=None):
+    """
+    ファイル名を返す。
+
+    :param dict data: 動画アイテムひとつ分の情報
+    :param Path save_dir: 保存場所
+    :param str extention: 拡張子
+    :rtype: Path
+    """
+    ext = data[KeyDmc.MOVIE_TYPE]
+    if extention:
+        ext = extention
+    file_name =  Msg.nd_file_name.format(vid=data[KeyDmc.VIDEO_ID], ext=ext, name=data[KeyGTI.FILE_NAME])
+    return Path(save_dir).resolve() / file_name
+
+
 class Canopy:
     def __init__(self, loop: asyncio.AbstractEventLoop=None, logger=None):
-        self.glossary = None
-        self.save_dir = None  # type: Path
         self.logger = self.get_logger(logger)  # type: NTLogger
         self.loop = loop or asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
-        self.session = None  # type: aiohttp.ClientSession
-
-    def make_name(self, video_id, ext):
-        """
-        ファイル名を返す。
-
-        :param str video_id:
-        :param str ext:
-        :rtype: Path
-        """
-        file_name =  Msg.nd_file_name.format(
-            vid=video_id, ext=ext,
-            name=self.glossary[video_id][KeyGTI.FILE_NAME])
-        return Path(self.save_dir).resolve() / file_name
 
     def get_logger(self, logger):
         """
@@ -247,13 +250,6 @@ class Canopy:
             return NTLogger()
         else:
             return logger
-
-
-    def close(self):
-        async def _close():
-            await self.session.close()
-
-        self.loop.run_until_complete(_close())
 
 
 class LogIn:
@@ -372,7 +368,7 @@ class LogIn:
         """
         # Python 3.5以上専用の書き方。
         cook = {key: val for key, val in requests_cookiejar.items()}
-        file_path = make_dir(Path.home() / file_name)
+        file_path = get_dir(Path.home() / file_name)
         file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
         return cook
 
@@ -386,7 +382,7 @@ class LogIn:
         """
         # Python 3.5以上専用の書き方。
         try:
-            file_path = make_dir(Path.home() / file_name)
+            file_path = get_dir(Path.home() / file_name)
             return {line.split("\t")[0]: line.split("\t")[1]
                     for line in file_path.read_text().split("\n")}
         except (FileNotFoundError, EOFError):
@@ -569,7 +565,6 @@ class Msg:
     nd_help_nomulti = "指定すると、プログレスバーを複数行で表示しません。"
     nd_help_limit = ("サムネイルとコメントについては同時ダウンロードを、"
                      "動画については1つあたりの分割数をこの数に制限します。標準は 4 です。")
-    nd_help_dmc = "動画をDMCサーバー(いわゆる新サーバー)からダウンロードします。標準はこちらです。"
     nd_help_smile = "動画をsmileサーバー(いわゆる従来サーバー)からダウンロードします。"
 
     input_mail = "メールアドレスを入力してください。"
@@ -740,6 +735,7 @@ class KeyGTI:
 
 
 class KeyDmc:
+    IS_DMC          = "DMC_video"       # bool
     FILE_NAME       = "file_name"
     FILE_SIZE       = "file_size"
 
@@ -804,6 +800,18 @@ class MKey:
     SINCE       = "since"
     DESCRIPTION = "description"
     ITEM_DATA   = "item_data"
+
+
+class DataKey:
+    CHUNK_SIZE      = "CHUNK_SIZE"
+    DIVISION        = "DIVISION"
+    IS_MULTILINE    = "MULTILINE"
+    IS_SMILE        = "SMILE"
+    LOGGER          = "LOGGER"
+    LOOP            = "LOOP"
+    SAVE_DIR        = "SAVE_DIR"
+    SESSION         = "SESSION"
+
 
 
 class InheritedParser(ArgumentParser):

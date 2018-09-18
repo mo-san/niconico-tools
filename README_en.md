@@ -152,7 +152,7 @@ nicotools download -v sm9 --mail "mail@example.com" --pass "password"
 ## Usage as a module
 
 ```python
-from nicotools.download import VideoDmc, VideoSmile, Comment, Thumbnail
+from nicotools.download import Video, Comment, Thumbnail
 
 mail = "<your mail address>"
 password = "<your password>"
@@ -161,12 +161,11 @@ xml = True  # Set to True if you want in XML format, default is JSON
 # a list of video ids
 video_ids = ["sm1", "sm2", "sm3"]
 # directory path to save files in
-DIR_PATH = "./downloads/"
+dir_path = "./downloads/"
 
-Thumbnail().start(video_ids, DIR_PATH)
+Thumbnail().start(video_ids, dir_path)
 
-Comment(mail, password).start(video_ids, DIR_PATH, xml)
+Comment(mail, password).start(video_ids, dir_path, xml)
 
-VideoSmile(mail, password).start(video_ids, DIR_PATH)
-VideoDmc(mail, password).start(video_ids, DIR_PATH)
+Video(video_ids, dir_path, mail=mail, password=password).start()
 ```
