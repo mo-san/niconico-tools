@@ -5,7 +5,7 @@ with open('README.rst') as f:
 
 setup(
     name='nicotools',
-    version='1.0.3',
+    version='1.0.4',
     packages=['nicotools'],
     url='https://github.com/mo-san/niconico-tools',
     license='MIT License',

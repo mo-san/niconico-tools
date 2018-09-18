@@ -152,7 +152,7 @@ Usage as a module
 *****************
 ::
 
-    from nicotools.download import VideoDmc, VideoSmile, Comment, Thumbnail
+    from nicotools.download import Video, Comment, Thumbnail
 
     mail = "<your mail address>"
     password = "<your password>"
@@ -163,11 +163,9 @@ Usage as a module
     # directory path to save files in
     DIR_PATH = "./downloads/"
 
-    Thumbnail().start(video_ids, DIR_PATH)
+    Thumbnail(video_ids, dir_path).start()
 
-    Comment(mail, password).start(video_ids, DIR_PATH, xml)
+    Comment(video_ids, mail=mail, password=password, save_dir=dir_path, xml=xml).start()
 
-    VideoSmile(mail, password).start(video_ids, DIR_PATH)
-
-    VideoDmc(mail, password).start(video_ids, DIR_PATH)
+    Video(video_ids, save_dir=dir_path, mail=mail, password=password).start()
 

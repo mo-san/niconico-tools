@@ -163,9 +163,9 @@ video_ids = ["sm1", "sm2", "sm3"]
 # directory path to save files in
 dir_path = "./downloads/"
 
-Thumbnail().start(video_ids, dir_path)
+Thumbnail(video_ids, dir_path).start()
 
-Comment(mail, password).start(video_ids, dir_path, xml)
+Comment(video_ids, mail=mail, password=password, save_dir=dir_path, xml=xml).start()
 
-Video(video_ids, dir_path, mail=mail, password=password).start()
+Video(video_ids, save_dir=dir_path, mail=mail, password=password).start()
 ```
