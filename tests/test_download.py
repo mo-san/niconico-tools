@@ -9,7 +9,7 @@ import pytest
 
 import nicotools
 from nicotools import utils
-from nicotools.download import Info, VideoDmc, VideoSmile, Comment, Thumbnail
+from nicotools.download import Info, Video, Comment, Thumbnail
 
 Waiting = 5
 SAVE_DIR = "tests/downloads/"
@@ -65,7 +65,7 @@ class TestUtils:
 
     def test_make_dir(self):
         save_dir = ["test", "foo", "foo/bar", "some/thing/text.txt"]
-        paths = [utils.make_dir(name) for name in save_dir]
+        paths = [utils.get_dir(name) for name in save_dir]
         try:
             for participant, result in zip(save_dir, paths):
                 assert str(result).replace("\\", "/").replace("//", "/").endswith(participant)
@@ -87,11 +87,11 @@ class TestUtilsError:
         if os.name == "nt":
             save_dir = ["con", ":"]
             for name in save_dir:
-                with pytest.raises(NameError):
-                    utils.make_dir(name)
+                with pytest.raises(SystemExit):
+                    utils.get_dir(name)
         else:
-            with pytest.raises(NameError):
-                utils.make_dir("/{}/downloads".format(__name__))
+            with pytest.raises(SystemExit):
+                utils.get_dir("/{}/downloads".format(__name__))
 
 
 class TestLogin:
@@ -124,7 +124,7 @@ class TestDownload:
         assert nicotools.main(self.make_param(cond))
 
     def test_video_dmc(self):
-        cond = "--dmc -v {video_id}"
+        cond = "-v {video_id}"
         assert nicotools.main(self.make_param(cond))
 
     def test_sleep_1(self):
@@ -136,7 +136,7 @@ class TestDownload:
         assert nicotools.main(self.make_param(cond))
 
     def test_video_dmc_more(self):
-        cond = "--dmc --limit 10 -v {video_id}"
+        cond = "--limit 10 -v {video_id}"
         assert nicotools.main(self.make_param(cond))
 
 
@@ -157,7 +157,7 @@ class TestDownloadError:
 
     def test_invalid_directory_on_windows(self):
         if os.name == "nt":
-            with pytest.raises(NameError):
+            with pytest.raises(SystemExit):
                 nicotools.main(self.make_param("-c {video_id}", save_dir="nul"))
 
     def test_no_args(self):
@@ -184,15 +184,15 @@ class TestDownloadError:
 class TestThumbnail:
     def test_thumbnail_single(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert Thumbnail().start(db, SAVE_DIR)
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
+            assert Thumbnail(db, save_dir=SAVE_DIR).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
     def test_thumbnail_multi(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand(0))
-            assert Thumbnail().start(db, SAVE_DIR)
+            db = Info(rand(0), AUTH_N[0], AUTH_N[1], logger=LOGGER).info
+            assert Thumbnail(db, save_dir=SAVE_DIR).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
@@ -200,69 +200,39 @@ class TestThumbnail:
 class TestComment:
     def test_comment_single(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert Comment().start(db, SAVE_DIR)
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
+            assert Comment(db, save_dir=SAVE_DIR).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
     def test_comment_multi(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert Comment().start(db, SAVE_DIR, xml=True)
-        except aiohttp.client_exceptions.ClientError:
-            pass
-
-    def test_comment_without_directory(self):
-        try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            with pytest.raises(AttributeError):
-                # noinspection PyTypeChecker
-                Comment().start(db, None)
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
+            assert Comment(db, save_dir=SAVE_DIR, xml=True).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
 
-class TestVideoSmile:
+class TestVideo:
     def test_sleep(self):
         # アクセス制限回避のためすこし待つ
         time.sleep(Waiting)
 
-    def test_video_smile_normal_single(self):
+    def test_video_normal_single(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert VideoSmile(multiline=False).start(db, SAVE_DIR)
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
+            assert Video(db, save_dir=SAVE_DIR, multiline=False).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
-    def test_video_smile_premium_multi(self):
+    def test_video_premium_multi(self):
         if AUTH_P[0] is not None:
             try:
-                db = Info(AUTH_P[0], AUTH_P[1], LOGGER).get_data(rand(3))
-                assert VideoSmile(multiline=False).start(db, SAVE_DIR)
-            except aiohttp.client_exceptions.ClientError:
-                pass
-
-
-class TestVideoDmc:
-    def test_sleep(self):
-        # アクセス制限回避のためすこし待つ
-        time.sleep(Waiting)
-
-    def test_video_dmc_normal_single(self):
-        try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert VideoDmc(multiline=False).start(db, SAVE_DIR)
-        except aiohttp.client_exceptions.ClientError:
-            pass
-
-    def test_video_dmc_premium_multi(self):
-        if AUTH_P[0] is not None:
-            try:
-                db = Info(AUTH_P[0], AUTH_P[1], LOGGER).get_data(rand(3))
-                assert VideoDmc(multiline=False).start(db, SAVE_DIR)
+                db = Info(rand(3), mail=AUTH_P[0], password=AUTH_P[1], logger=LOGGER).info
+                assert Video(db, save_dir=SAVE_DIR, multiline=False).start()
             except aiohttp.client_exceptions.ClientError:
                 pass
 
 
 def test_okatadsuke():
-    shutil.rmtree(str(utils.make_dir(SAVE_DIR)))
+    shutil.rmtree(str(utils.get_dir(SAVE_DIR)))

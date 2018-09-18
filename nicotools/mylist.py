@@ -30,8 +30,7 @@ class NicoMyList(utils.Canopy):
         "8": "非公開",
     }
 
-    def __init__(self, mail: str=None, password: str=None,
-                 logger: utils.NTLogger=None, return_session=False):
+    def __init__(self, mail: str=None, password: str=None, logger: utils.NTLogger=None):
         """
         使い方:
 
@@ -97,22 +96,25 @@ class NicoMyList(utils.Canopy):
         :rtype: None
         """
         super().__init__(logger=logger)
-        self.__mail = mail
-        self.__password = password
         self.token = None  # type: str
-        self.session = self.get_session()  # type: aiohttp.ClientSession
-        self.__return_session = return_session
+        self.session = self.get_session(mail, password)  # type: aiohttp.ClientSession
         self.mylists = self.get_mylists_info()  # type: Dict[int, Dict]
 
-    def get_session(self) -> aiohttp.ClientSession:
-        return self.loop.run_until_complete(self._get_session())
+    def get_session(self, mail: str, password: str) -> aiohttp.ClientSession:
+        return self.loop.run_until_complete(self._get_session(mail, password))
 
-    async def _get_session(self) -> aiohttp.ClientSession:
-        login = utils.LogIn(mail=self.__mail, password=self.__password)
+    async def _get_session(self, mail: str, password: str) -> aiohttp.ClientSession:
+        login = utils.LogIn(mail=mail, password=password)
         cook = login.cookie
         self.token = login.token
         self.logger.debug(f"cookie (nicoml_async): {id(cook)}")
         return aiohttp.ClientSession(cookies=cook)
+
+    def close(self):
+        async def _close():
+            await self.session.close()
+
+        self.loop.run_until_complete(_close())
 
     @classmethod
     def _confirmation(cls, mode, list_name, contents_to_be_deleted=None):
@@ -1106,7 +1108,7 @@ class NicoMyList(utils.Canopy):
 
     async def _show(self, list_id, file_name=None, table=False, survey=False):
         if file_name:
-            file_name = utils.make_dir(file_name)
+            file_name = utils.get_dir(file_name)
         if table:  # 表形式の場合
             if list_id == utils.ALL_ITEM:
                 if survey:
@@ -1138,7 +1140,7 @@ class NicoMyList(utils.Canopy):
 
     async def _export(self, list_id, file_name=None, survey=False):
         if file_name:
-            file_name = utils.make_dir(file_name)
+            file_name = utils.get_dir(file_name)
         if list_id == utils.ALL_ITEM:
             if survey:
                 cont = self._construct_id(await self.fetch_all(False))
@@ -1244,7 +1246,7 @@ class NicoMyList(utils.Canopy):
         :rtype: str
         """
         if file_name:
-            file_name = utils.make_dir(file_name)
+            file_name = utils.get_dir(file_name)
             _text = "{}\n".format(text)
             with file_name.open(mode="w", encoding="utf-8") as fd:
                 fd.write(_text)
