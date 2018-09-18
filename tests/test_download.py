@@ -184,15 +184,15 @@ class TestDownloadError:
 class TestThumbnail:
     def test_thumbnail_single(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert Thumbnail().start(db, SAVE_DIR)
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
+            assert Thumbnail(db, save_dir=SAVE_DIR).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
     def test_thumbnail_multi(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand(0))
-            assert Thumbnail().start(db, SAVE_DIR)
+            db = Info(rand(0), AUTH_N[0], AUTH_N[1], logger=LOGGER).info
+            assert Thumbnail(db, save_dir=SAVE_DIR).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
@@ -200,24 +200,15 @@ class TestThumbnail:
 class TestComment:
     def test_comment_single(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert Comment().start(db, SAVE_DIR)
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
+            assert Comment(db, save_dir=SAVE_DIR).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
     def test_comment_multi(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            assert Comment().start(db, SAVE_DIR, xml=True)
-        except aiohttp.client_exceptions.ClientError:
-            pass
-
-    def test_comment_without_directory(self):
-        try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
-            with pytest.raises(AttributeError):
-                # noinspection PyTypeChecker
-                Comment().start(db, None)
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
+            assert Comment(db, save_dir=SAVE_DIR, xml=True).start()
         except aiohttp.client_exceptions.ClientError:
             pass
 
@@ -229,7 +220,7 @@ class TestVideo:
 
     def test_video_normal_single(self):
         try:
-            db = Info(AUTH_N[0], AUTH_N[1], LOGGER).get_data(rand())
+            db = Info(rand(), mail=AUTH_N[0], password=AUTH_N[1], logger=LOGGER).info
             assert Video(db, save_dir=SAVE_DIR, multiline=False).start()
         except aiohttp.client_exceptions.ClientError:
             pass
@@ -237,7 +228,7 @@ class TestVideo:
     def test_video_premium_multi(self):
         if AUTH_P[0] is not None:
             try:
-                db = Info(AUTH_P[0], AUTH_P[1], LOGGER).get_data(rand(3))
+                db = Info(rand(3), mail=AUTH_P[0], password=AUTH_P[1], logger=LOGGER).info
                 assert Video(db, save_dir=SAVE_DIR, multiline=False).start()
             except aiohttp.client_exceptions.ClientError:
                 pass
