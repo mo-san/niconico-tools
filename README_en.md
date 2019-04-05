@@ -85,7 +85,7 @@ nicotools download -v sm9 --mail "mail@example.com" --pass "password"
 
     ``nicotools mylist 12345678 --id --add sm1 sm2 sm3``
 
-* to dleete items from MYLIST:
+* to delete items from MYLIST:
 
     ``nicotools mylist MYLIST --delete sm1 sm2 sm3``
 
