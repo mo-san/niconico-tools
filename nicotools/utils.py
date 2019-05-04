@@ -9,7 +9,9 @@ from argparse import ArgumentParser
 from getpass import getpass
 from pathlib import Path
 from urllib.parse import parse_qs
+from http.cookiejar import LWPCookieJar
 
+from appdirs import user_data_dir
 import requests
 from requests import cookies
 
@@ -286,6 +288,10 @@ class LogIn:
         else:
             self.session = self.get_session(self.ask_credentials(mail=mail, password=password))
 
+    @staticmethod
+    def cookie_filepath():
+        return Path(user_data_dir("nicotools")) / COOKIE_FILE_NAME
+
     def get_session(self, auth=None):
         """
         クッキーを読み込み、必要ならばログインし、そのセッションを返す。
@@ -296,14 +302,25 @@ class LogIn:
 
         session = requests.session()
         cook = self.load_cookies()
-        if auth or cook:
-            if cook:
-                session.cookies = cookies.cookiejar_from_dict(cook)
-            else:
+
+        if cook:
+            expired = next(cookie for cookie in cook
+                           if cookie.name == 'user_session').is_expired()
+        else:
+            expired = True
+
+        if auth is not None or cook:
+
+            session.cookies = cook
+
+            if expired:
                 session.post(URL.URL_LogIn, params=auth)
+
             self.token = self.get_token(session)
+
             if self.token:
                 # if self._we_have_logged_in(res.text):
+                session.cookies.save(ignore_discard=True)
                 self.cookie = self.save_cookies(session.cookies)
                 self.is_login = True
             else:
@@ -367,9 +384,10 @@ class LogIn:
         :rtype: dict
         """
         # Python 3.5以上専用の書き方。
-        cook = {key: val for key, val in requests_cookiejar.items()}
-        file_path = get_dir(Path.home() / file_name)
-        file_path.write_text("\n".join([k + "\t" + v for k, v in cook.items()]))
+
+        requests_cookiejar.save(ignore_discard=True)
+        cook = {cookie.name: cookie.value for cookie in requests_cookiejar}
+
         return cook
 
     @classmethod
@@ -378,15 +396,19 @@ class LogIn:
         クッキーを読み込む。名前、値をタブで区切ったテキストファイルから。
 
         :param str file_name:
-        :rtype: dict | None
+        :rtype: cookielib.LWPCookieJar
         """
         # Python 3.5以上専用の書き方。
-        try:
-            file_path = get_dir(Path.home() / file_name)
-            return {line.split("\t")[0]: line.split("\t")[1]
-                    for line in file_path.read_text().split("\n")}
-        except (FileNotFoundError, EOFError):
-            return None
+
+        file_path = get_dir(cls.cookie_filepath())
+        cookiejar = LWPCookieJar(str(file_path))
+
+        if not file_path.exists():
+            cookiejar.save()
+
+        cookiejar.load()
+
+        return cookiejar
 
 
 class NTLogger(logging.Logger):

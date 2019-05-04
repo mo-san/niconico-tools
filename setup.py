@@ -30,7 +30,8 @@ setup(
         'bs4',
         'aiohttp',
         'tqdm',
-        'multidict'
+        'multidict',
+        'appdirs'
     ],
     entry_points={
         'console_scripts': ['nicotools = nicotools.__init__:main']
