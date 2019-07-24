@@ -52,7 +52,7 @@ nicotools download -v sm9 --mail "mail@example.com" --pass "password"
 
 * To download thumbnails of video ids of sm1, ... sm5:
 
-    ``nicotools downlaod --thumbnail --dest "./Downloads" sm1 sm2 sm3 sm4 sm5``
+    ``nicotools download --thumbnail --dest "./Downloads" sm1 sm2 sm3 sm4 sm5``
 
 * To downalod thumbnails, comments and videos of those:
 
