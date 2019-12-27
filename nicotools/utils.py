@@ -303,11 +303,13 @@ class LogIn:
         session = requests.session()
         cook = self.load_cookies()
 
+        expired = True
+
         if cook:
-            expired = next(cookie for cookie in cook
-                           if cookie.name == 'user_session').is_expired()
-        else:
-            expired = True
+            for cookie in cook:
+                if cookie.name == "user_session":
+                    expired = cookie.is_expired()
+                    break
 
         if auth is not None or cook:
 
